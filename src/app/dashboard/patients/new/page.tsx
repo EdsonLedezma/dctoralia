@@ -1,0 +1,258 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import { Button } from "~/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
+import { Textarea } from "~/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import { Calendar, ArrowLeft, Save } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+
+export default function NewPatientPage() {
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    birthDate: "",
+    gender: "",
+    address: "",
+    emergencyContact: "",
+    emergencyPhone: "",
+    medicalHistory: "",
+    allergies: "",
+    currentMedications: "",
+    insuranceProvider: "",
+    insuranceNumber: "",
+  })
+  const router = useRouter()
+
+  useEffect(() => {
+    const isLoggedIn = localStorage.getItem("doctor_logged_in")
+    if (!isLoggedIn) {
+      router.push("/login")
+    }
+  }, [router])
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    // Aquí se guardaría el paciente en la base de datos
+    console.log("Nuevo paciente:", formData)
+    router.push("/dashboard/patients")
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b">
+        <div className="px-6 py-4 flex items-center space-x-4">
+          <Link href="/dashboard/patients">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Volver
+            </Button>
+          </Link>
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">MediCare Pro</span>
+          </div>
+          <div className="text-gray-600">|</div>
+          <h1 className="text-xl font-semibold">Nuevo Paciente</h1>
+        </div>
+      </header>
+
+      <div className="p-6">
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
+          {/* Información Personal */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Información Personal</CardTitle>
+              <CardDescription>Datos básicos del paciente</CardDescription>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">Nombre</Label>
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => handleInputChange("firstName", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Apellido</Label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => handleInputChange("lastName", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Teléfono</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="birthDate">Fecha de Nacimiento</Label>
+                <Input
+                  id="birthDate"
+                  type="date"
+                  value={formData.birthDate}
+                  onChange={(e) => handleInputChange("birthDate", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gender">Género</Label>
+                <Select onValueChange={(value) => handleInputChange("gender", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar género" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="masculino">Masculino</SelectItem>
+                    <SelectItem value="femenino">Femenino</SelectItem>
+                    <SelectItem value="otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="address">Dirección</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => handleInputChange("address", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contacto de Emergencia */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contacto de Emergencia</CardTitle>
+              <CardDescription>Información de contacto en caso de emergencia</CardDescription>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="emergencyContact">Nombre del Contacto</Label>
+                <Input
+                  id="emergencyContact"
+                  value={formData.emergencyContact}
+                  onChange={(e) => handleInputChange("emergencyContact", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emergencyPhone">Teléfono de Emergencia</Label>
+                <Input
+                  id="emergencyPhone"
+                  value={formData.emergencyPhone}
+                  onChange={(e) => handleInputChange("emergencyPhone", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Información Médica */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Información Médica</CardTitle>
+              <CardDescription>Historial y condiciones médicas</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="medicalHistory">Historial Médico</Label>
+                <Textarea
+                  id="medicalHistory"
+                  placeholder="Describe el historial médico del paciente..."
+                  value={formData.medicalHistory}
+                  onChange={(e) => handleInputChange("medicalHistory", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="allergies">Alergias</Label>
+                <Textarea
+                  id="allergies"
+                  placeholder="Lista de alergias conocidas..."
+                  value={formData.allergies}
+                  onChange={(e) => handleInputChange("allergies", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="currentMedications">Medicamentos Actuales</Label>
+                <Textarea
+                  id="currentMedications"
+                  placeholder="Medicamentos que toma actualmente..."
+                  value={formData.currentMedications}
+                  onChange={(e) => handleInputChange("currentMedications", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Información del Seguro */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Información del Seguro</CardTitle>
+              <CardDescription>Datos de la cobertura médica</CardDescription>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="insuranceProvider">Proveedor de Seguro</Label>
+                <Input
+                  id="insuranceProvider"
+                  value={formData.insuranceProvider}
+                  onChange={(e) => handleInputChange("insuranceProvider", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="insuranceNumber">Número de Póliza</Label>
+                <Input
+                  id="insuranceNumber"
+                  value={formData.insuranceNumber}
+                  onChange={(e) => handleInputChange("insuranceNumber", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botones de Acción */}
+          <div className="flex justify-end space-x-4">
+            <Link href="/dashboard/patients">
+              <Button variant="outline">Cancelar</Button>
+            </Link>
+            <Button type="submit">
+              <Save className="w-4 h-4 mr-2" />
+              Guardar Paciente
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
