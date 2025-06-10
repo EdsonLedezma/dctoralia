@@ -41,7 +41,7 @@ export default function LoginPage() {
       // Obtener la sesión para verificar el rol
       const session = await getSession()
 
-      if (session?.user?.name === "DOCTOR") {
+      if (session?.user?.role === "DOCTOR") {
         router.push("/dashboard")
       } else {
         router.push("/patient/dashboard")
