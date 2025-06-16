@@ -1,23 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
 import { Calendar, Clock, Plus, User, Phone, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import DashboardWrapper from "../../../components/auth/DashboardWrapper"
 
 export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
-  const router = useRouter()
-
-  useEffect(() => {
-    const isLoggedIn = localStorage.getItem("doctor_logged_in")
-    if (!isLoggedIn) {
-      router.push("/login")
-    }
-  }, [router])
 
   const appointments = [
     {
@@ -125,155 +117,153 @@ export default function AppointmentsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
-            <Link href="/dashboard">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-white" />
+    <DashboardWrapper allowedRoles={["DOCTOR"]}>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b">
+          <div className="px-6 py-4 flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <Link href="/dashboard">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-xl font-bold">MediCare Pro</span>
                 </div>
-                <span className="text-xl font-bold">MediCare Pro</span>
-              </div>
-            </Link>
-            <div className="text-gray-600">|</div>
-            <h1 className="text-xl font-semibold">Agenda de Citas</h1>
-          </div>
-          <Link href="/dashboard/appointments/new">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva Cita
-            </Button>
-          </Link>
-        </div>
-      </header>
-
-      <div className="p-6">
-        {/* Date Navigation */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <Button variant="outline" size="sm" onClick={previousDay}>
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <div className="text-center">
-                <h2 className="text-lg font-semibold">{formatDate(currentDate)}</h2>
-                <p className="text-sm text-gray-600">{todayAppointments.length} citas programadas</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={nextDay}>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+              </Link>
+              <div className="text-gray-600">|</div>
+              <h1 className="text-xl font-semibold">Agenda de Citas</h1>
             </div>
-          </CardContent>
-        </Card>
+            <Link href="/dashboard/appointments/new">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Cita
+              </Button>
+            </Link>
+          </div>
+        </header>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Calendar View */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Horarios del Día</CardTitle>
-              <CardDescription>Vista detallada de la agenda</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {timeSlots.map((time) => {
-                  const appointment = todayAppointments.find((apt) => apt.time === time)
-                  return (
-                    <div key={time} className="flex items-center space-x-4 p-2 border-b border-gray-100">
-                      <div className="w-16 text-sm font-medium text-gray-600">{time}</div>
-                      {appointment ? (
-                        <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{appointment.patient}</p>
-                              <p className="text-sm text-gray-600">{appointment.type}</p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Badge className={getStatusColor(appointment.status)}>{appointment.status}</Badge>
-                              <span className="text-sm text-gray-500">{appointment.duration} min</span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex-1 text-gray-400 text-sm">Disponible</div>
-                      )}
-                    </div>
-                  )
-                })}
+        <div className="p-6">
+          {/* Date Navigation */}
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <Button variant="outline" size="sm" onClick={previousDay}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="text-center">
+                  <h2 className="text-lg font-semibold">{formatDate(currentDate)}</h2>
+                  <p className="text-sm text-gray-600">{todayAppointments.length} citas programadas</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={nextDay}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Appointments Summary */}
-          <div className="space-y-6">
-            <Card>
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Calendar View */}
+            <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Resumen del Día</CardTitle>
+                <CardTitle>Horarios del Día</CardTitle>
+                <CardDescription>Vista detallada de la agenda</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Total de citas</span>
-                    <span className="font-semibold">{todayAppointments.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Confirmadas</span>
-                    <span className="font-semibold text-green-600">
-                      {todayAppointments.filter((apt) => apt.status === "confirmada").length}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Pendientes</span>
-                    <span className="font-semibold text-yellow-600">
-                      {todayAppointments.filter((apt) => apt.status === "pendiente").length}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Tiempo total</span>
-                    <span className="font-semibold">
-                      {todayAppointments.reduce((total, apt) => total + apt.duration, 0)} min
-                    </span>
-                  </div>
+                <div className="space-y-2">
+                  {timeSlots.map((time) => {
+                    const appointment = todayAppointments.find((apt) => apt.time === time)
+                    return (
+                      <div key={time} className="flex items-center space-x-4 p-2 border-b border-gray-100">
+                        <div className="w-16 text-sm font-medium text-gray-600">{time}</div>
+                        {appointment ? (
+                          <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium">{appointment.patient}</p>
+                                <p className="text-sm text-gray-600">{appointment.type}</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Badge className={getStatusColor(appointment.status)}>{appointment.status}</Badge>
+                                <span className="text-sm text-gray-500">{appointment.duration} min</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 text-gray-400 text-sm">Disponible</div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
 
+            {/* Appointments Summary */}
             <Card>
               <CardHeader>
-                <CardTitle>Próximas Citas</CardTitle>
+                <CardTitle>Resumen del Día</CardTitle>
+                <CardDescription>Estadísticas de citas</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {todayAppointments.slice(0, 3).map((appointment) => (
-                    <div key={appointment.id} className="border rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{appointment.time}</span>
-                        <Badge className={getStatusColor(appointment.status)}>{appointment.status}</Badge>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">{appointment.patient}</span>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-blue-600">{todayAppointments.length}</p>
+                    <p className="text-sm text-gray-600">Total</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-green-600">
+                      {todayAppointments.filter((apt) => apt.status === "confirmada").length}
+                    </p>
+                    <p className="text-sm text-gray-600">Confirmadas</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-yellow-600">
+                      {todayAppointments.filter((apt) => apt.status === "pendiente").length}
+                    </p>
+                    <p className="text-sm text-gray-600">Pendientes</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {todayAppointments.filter((apt) => apt.status === "completada").length}
+                    </p>
+                    <p className="text-sm text-gray-600">Completadas</p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <h4 className="font-medium mb-3">Próximas Citas</h4>
+                  <div className="space-y-3">
+                    {todayAppointments
+                      .filter((apt) => apt.status !== "completada")
+                      .slice(0, 3)
+                      .map((appointment) => (
+                        <div key={appointment.id} className="border rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm">{appointment.patient}</p>
+                              <p className="text-xs text-gray-600">{appointment.type}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium">{appointment.time}</p>
+                              <Badge className={getStatusColor(appointment.status)}>
+                                {appointment.status}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-1 mt-2">
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">{appointment.phone}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">{appointment.type}</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">{appointment.phone}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
-    </div>
+    </DashboardWrapper>
   )
 }

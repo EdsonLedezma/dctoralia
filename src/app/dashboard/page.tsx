@@ -1,33 +1,61 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSession, signOut } from "next-auth/react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import { Calendar, Users, Clock, Plus, Bell, Settings, LogOut } from "lucide-react"
+import { Calendar, Users, Clock, Plus, Bell, Settings, LogOut, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 export default function DashboardPage() {
-  const [doctorName, setDoctorName] = useState("")
+  const { data: session, status } = useSession()
   const router = useRouter()
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    const isLoggedIn = localStorage.getItem("doctor_logged_in")
-    const name = localStorage.getItem("doctor_name")
+    if (status === "loading") return // Still loading
 
-    if (!isLoggedIn) {
+    if (!session) {
       router.push("/login")
       return
     }
 
-    setDoctorName(name || "Doctor")
-  }, [router])
+    // Redirect patients to their dashboard
+    if (session.user.role === "PATIENT") {
+      router.push("/patient/dashboard")
+      return
+    }
 
-  const handleLogout = () => {
-    localStorage.removeItem("doctor_logged_in")
-    localStorage.removeItem("doctor_name")
-    router.push("/")
+    // Only doctors should access this dashboard
+    if (session.user.role !== "DOCTOR") {
+      router.push("/login")
+      return
+    }
+  }, [session, status, router])
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/" })
   }
+
+  // Show loading while checking authentication
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span>Cargando...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render content if not authenticated or not a doctor
+  if (!session || session.user.role !== "DOCTOR") {
+    return null
+  }
+
+  const doctorName = session.user.name ?? "Doctor"
 
   const todayAppointments = [
     { id: 1, patient: "María González", time: "09:00", type: "Consulta General" },
@@ -59,6 +87,9 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center space-x-4">
             <span className="text-gray-600">Bienvenido, {doctorName}</span>
+            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+              {session.user.role}
+            </span>
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
             </Button>
@@ -161,6 +192,22 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* User Info Card (for debugging) */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Información de Sesión</CardTitle>
+            <CardDescription>Datos del usuario actual</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm space-y-2">
+              <p><strong>Nombre:</strong> {session.user.name}</p>
+              <p><strong>Email:</strong> {session.user.email}</p>
+              <p><strong>Rol:</strong> {session.user.role}</p>
+              <p><strong>ID:</strong> {session.user.id}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

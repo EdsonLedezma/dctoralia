@@ -1,6 +1,7 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { z } from "zod";
 
 import { db } from "~/server/db";
@@ -79,8 +80,13 @@ export const authConfig = {
         };
       },
     }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
   ],
-  adapter: PrismaAdapter(db),
+  // Temporarily commenting out adapter to resolve version conflicts
+  // adapter: PrismaAdapter(db),
   callbacks: {
     jwt({ token, user }) {
       if (user) {
