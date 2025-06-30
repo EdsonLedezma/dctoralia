@@ -127,10 +127,8 @@ export const authRouter = createTRPCRouter({
         const isValidPassword = await verify(user.password, password);
 
         if (!isValidPassword) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Credenciales inválidas",
-          });
+          return{status: 401, message: "Credenciales inválidas", error: "Invalid credentials"
+          };
         }
 
         // Retornar información del usuario sin la contraseña
