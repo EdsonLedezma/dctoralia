@@ -1,34 +1,29 @@
-Proyecto [Nombre del Proyecto]
-Este es un proyecto desarrollado con [Next.js / Typescript / Stack T3 App]. A continuación se detallan los pasos para ponerlo en marcha.
+# Create T3 App
 
-🛠️ Requisitos
-Node.js instalado
+This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
 
-Acceso a la terminal
+## What's next? How do I make an app with this?
 
-Editor de código (VSCode recomendado)
+We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
 
-⚙️ Pasos de instalación
-Instala NPM (si no lo tienes):
+If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
 
+- [Next.js](https://nextjs.org)
+- [NextAuth.js](https://next-auth.js.org)
+- [Prisma](https://prisma.io)
+- [Drizzle](https://orm.drizzle.team)
+- [Tailwind CSS](https://tailwindcss.com)
+- [tRPC](https://trpc.io)
 
-npm install -g npm
-Instala PNPM:
-npm install -g pnpm
+## Learn More
 
-Instala las dependencias del proyecto:
-pnpm install
+To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
 
-Genera el cliente de Prisma:
-pnpm prisma generate
+- [Documentation](https://create.t3.gg/)
+- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
 
+You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
 
-Crea el archivo .env en la raíz del proyecto
-Copia y pega tus variables de entorno dentro de ese archivo, por ejemplo:
+## How do I deploy this?
 
-DATABASE_URL=tu_url_de_base_de_datos
-NEXTAUTH_SECRET=tu_secreto
-
-
-Inicia el proyecto en modo desarrollo:
-pnpm dev
+Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.

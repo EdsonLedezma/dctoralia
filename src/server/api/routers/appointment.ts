@@ -19,27 +19,49 @@ export const useAppointment = createTRPCRouter({
         patientId: z.string(),
         doctorId: z.string(),
         serviceId: z.string(),
-        date: z.string(), 
+        date: z.date(), 
         time: z.string().optional().default(""),
         duration: z.number().int().positive(),
         reason: z.string(),
         notes: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
-      const newAppointment = await prisma.appointment.create({
-        data: {
-          patientId: input.patientId,
-          doctorId: input.doctorId,
-          serviceId: input.serviceId,
-          date: new Date(input.date),
-          time: input.time,
-          duration: input.duration,
-          reason: input.reason,
-          notes: input.notes ?? "",
-          status: "PENDING",
-        },
-      })
-      return newAppointment
+    .mutation(async ({ input, ctx }) => {
+      try {
+        
+        const newAppointment = await   ctx.db.appointment.create({
+          data: {
+            patientId: input.patientId,
+            doctorId: input.doctorId,
+            serviceId: input.serviceId,
+            date: input.date,
+            time: input.time,
+            duration: input.duration,
+            reason: input.reason,
+            notes: input.notes ?? "",
+            status: "PENDING",
+          },
+        })
+
+        
+
+        return ({
+          error: null,
+          status: "200",
+          message: "Cita creada correctamente",
+          data: newAppointment,
+        })
+      } catch (err) {
+        return (
+         {
+          error: err,
+          status: "500",
+          message: "Error al crear la cita",
+          data: null,
+         } 
+        )
+      }
+
+     
     }),
 })
