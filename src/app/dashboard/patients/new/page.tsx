@@ -13,6 +13,7 @@ import { Calendar, ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import DashboardWrapper from "../../../../components/auth/DashboardWrapper"
+import { api } from "src/trpc/react"
 
 export default function NewPatientPage() {
   const [formData, setFormData] = useState({
@@ -31,17 +32,49 @@ export default function NewPatientPage() {
     insuranceProvider: "",
     insuranceNumber: "",
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  const createUser = api.users.create.useMutation();
+  const createPatient = api.patients.create.useMutation();
+
+
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Aquí se guardaría el paciente en la base de datos
-    console.log("Nuevo paciente:", formData)
-    router.push("/dashboard/patients")
+    setError(null)
+    setLoading(true)
+    try {
+      // 1. Crear usuario tipo paciente
+      const userRes = await createUser.mutateAsync({
+        name: `${formData.firstName} ${formData.lastName}`.trim(),
+        email: formData.email,
+        password: formData.birthDate ? formData.birthDate.replaceAll('-', '') : "Paciente123*", // Puedes mejorar esto
+        phone: formData.phone,
+        role: "PATIENT",
+      })
+      if (!userRes.result?.id) throw new Error("No se pudo crear el usuario")
+
+      // 2. Crear perfil de paciente
+      await createPatient.mutateAsync({
+        userId: userRes.result.id,
+        phone: formData.phone,
+        birthDate: formData.birthDate ? new Date(formData.birthDate) : undefined,
+        gender: formData.gender,
+        address: formData.address,
+        // Puedes agregar más campos si tu modelo de paciente lo permite
+      })
+      router.push("/dashboard/patients")
+    } catch (err: any) {
+      setError(err?.message || "Error al crear el paciente")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -238,16 +271,19 @@ export default function NewPatientPage() {
 
             {/* Botones de acción */}
             <div className="flex space-x-4">
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1" disabled={loading}>
                 <Save className="w-4 h-4 mr-2" />
-                Guardar Paciente
+                {loading ? "Guardando..." : "Guardar Paciente"}
               </Button>
               <Link href="/dashboard/patients">
-                <Button type="button" variant="outline" className="flex-1">
+                <Button type="button" variant="outline" className="flex-1" disabled={loading}>
                   Cancelar
                 </Button>
               </Link>
             </div>
+            {error && (
+              <p className="mt-4 text-red-600 text-center font-medium">{error}</p>
+            )}
           </form>
         </div>
       </div>

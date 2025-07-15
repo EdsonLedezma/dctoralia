@@ -106,6 +106,39 @@ export const useUsers = createTRPCRouter({
         }
     }),
 
+    // Obtener todos los usuarios con perfil de paciente y doctor (solo admin)
+    getAllWithProfile: protectedProcedure.query(async ({ ctx }) => {
+        if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "DOCTOR") {
+            return {
+                status: 403,
+                message: "Solo los administradores o doctores pueden ver todos los usuarios",
+                result: null,
+                error: new Error("No autorizado"),
+            };
+        }
+        try {
+            const users = await ctx.db.user.findMany({
+                include: {
+                    patient: true,
+                    doctor: true,
+                },
+            });
+            return {
+                status: 200,
+                message: "Usuarios obtenidos correctamente",
+                result: users,
+                error: null,
+            };
+        } catch (error) {
+            return {
+                status: 500,
+                message: "Error al obtener usuarios",
+                result: null,
+                error,
+            };
+        }
+    }),
+
     // Eliminar usuario (solo admin)
     delete: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
         if (ctx.session.user.role !== "ADMIN") {

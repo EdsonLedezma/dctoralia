@@ -8,57 +8,20 @@ import { Badge } from "~/components/ui/badge"
 import { Calendar, Users, Search, Plus, Phone, Mail, Eye } from "lucide-react"
 import Link from "next/link"
 import DashboardWrapper from "../../../components/auth/DashboardWrapper"
+import { api } from "src/trpc/react"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
 
-  const patients = [
-    {
-      id: 1,
-      name: "María González",
-      age: 34,
-      phone: "+1 234 567 8901",
-      email: "maria@email.com",
-      lastVisit: "2024-01-15",
-      condition: "Hipertensión",
-      status: "Activo",
-    },
-    {
-      id: 2,
-      name: "Carlos Rodríguez",
-      age: 45,
-      phone: "+1 234 567 8902",
-      email: "carlos@email.com",
-      lastVisit: "2024-01-10",
-      condition: "Diabetes",
-      status: "Activo",
-    },
-    {
-      id: 3,
-      name: "Ana López",
-      age: 28,
-      phone: "+1 234 567 8903",
-      email: "ana@email.com",
-      lastVisit: "2024-01-08",
-      condition: "Control rutinario",
-      status: "Activo",
-    },
-    {
-      id: 4,
-      name: "Pedro Martínez",
-      age: 52,
-      phone: "+1 234 567 8904",
-      email: "pedro@email.com",
-      lastVisit: "2023-12-20",
-      condition: "Artritis",
-      status: "Inactivo",
-    },
-  ]
+  // Obtener usuarios reales y filtrar pacientes
+  const { data: patientsData, isLoading } = api.patients.getAll.useQuery()
+  const patients = patientsData?.result || []
 
   const filteredPatients = patients.filter(
-    (patient) =>
-      patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.condition.toLowerCase().includes(searchTerm.toLowerCase()),
+    (patient: any) =>
+    (patient.userId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.address?.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   return (
@@ -121,7 +84,8 @@ export default function PatientsPage() {
                     <div>
                       <p className="text-sm text-gray-600">Activos</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {patients.filter((p) => p.status === "Activo").length}
+                        {/* Puedes agregar lógica de estado si tienes ese campo en la base de datos */}
+                        {patients.length}
                       </p>
                     </div>
                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
@@ -163,49 +127,48 @@ export default function PatientsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {filteredPatients.map((patient) => (
-                  <div key={patient.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-blue-600 font-semibold">
-                            {patient.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </span>
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-lg">{patient.name}</h3>
-                          <p className="text-gray-600">
-                            {patient.age} años • {patient.condition}
-                          </p>
-                          <div className="flex items-center space-x-4 mt-1">
-                            <div className="flex items-center space-x-1 text-sm text-gray-500">
-                              <Phone className="w-3 h-3" />
-                              <span>{patient.phone}</span>
-                            </div>
-                            <div className="flex items-center space-x-1 text-sm text-gray-500">
-                              <Mail className="w-3 h-3" />
-                              <span>{patient.email}</span>
+                {isLoading ? (
+                  <div className="text-center py-8">Cargando pacientes...</div>
+                ) : filteredPatients.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">No hay pacientes registrados.</div>
+                ) : (
+                  filteredPatients.map((patient: any) => (
+                    <div key={patient.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 font-semibold">
+                              {patient.userId?.slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg">ID: {patient.userId}</h3>
+                            <div className="flex flex-col md:flex-row md:items-center md:space-x-4 mt-1 text-sm text-gray-600">
+                              <div className="flex items-center space-x-1">
+                                <Phone className="w-3 h-3" />
+                                <span>{patient.phone}</span>
+                              </div>
+                              {patient.address && (
+                                <span>• Dirección: {patient.address}</span>
+                              )}
+                              {patient.gender && (
+                                <span>• Género: {patient.gender}</span>
+                              )}
+                              {patient.birthDate && (
+                                <span>• Nacimiento: {new Date(patient.birthDate).toLocaleDateString("es-ES")}</span>
+                              )}
                             </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={patient.status === "Activo" ? "default" : "secondary"}>
-                          {patient.status}
-                        </Badge>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center space-x-2">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-3 text-sm text-gray-500">
-                      Última visita: {new Date(patient.lastVisit).toLocaleDateString("es-ES")}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

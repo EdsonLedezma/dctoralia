@@ -13,6 +13,7 @@ import { Badge } from "~/components/ui/badge"
 import { Calendar, Plus, Phone, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import DashboardWrapper from "../../../components/auth/DashboardWrapper"
+import { useAppointment } from "~/server/api/routers/appointment"
 
 type Appointment = {
   id: string
@@ -61,8 +62,8 @@ const getStatusColor = (status: string) => {
 
 export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: appointmentsData, isLoading } = useAppointment.getAll.useQuery()
+  const appointments = appointmentsData?.result || []
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -101,30 +102,30 @@ export default function AppointmentsPage() {
     })
   }
 
-return (
-  <DashboardWrapper allowedRoles={["DOCTOR"]}>
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
-            <Link href="/dashboard" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold">MediCare Pro</span>
-            </Link>
-            <div className="text-gray-600">|</div>
-            <h1 className="text-xl font-semibold">Agenda de Citas</h1>
-          </div>
+  return (
+    <DashboardWrapper allowedRoles={["DOCTOR"]}>
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b">
+          <div className="px-6 py-4 flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <Link href="/dashboard" className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xl font-bold">MediCare Pro</span>
+              </Link>
+              <div className="text-gray-600">|</div>
+              <h1 className="text-xl font-semibold">Agenda de Citas</h1>
+            </div>
 
-          <Link href="/dashboard/appointments/new" className="inline-flex">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva Cita
-            </Button>
-          </Link>
-        </div>
-      </header>
+            <Link href="/dashboard/appointments/new" className="inline-flex">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Cita
+              </Button>
+            </Link>
+          </div>
+        </header>
 
         <div className="p-6">
           <Card className="mb-6">
@@ -151,7 +152,7 @@ return (
                 <CardDescription>Vista detallada de la agenda</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {isLoading ? (
                   <p className="text-center text-gray-600">Cargando citas...</p>
                 ) : (
                   <div className="space-y-2">

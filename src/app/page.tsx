@@ -117,7 +117,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="bg-white p-8 rounded-lg shadow-lg">
-              <img src="/placeholder.svg?height=300&width=400" alt="Dashboard preview" className="w-full rounded-lg" />
+              <img src="/dashboardDC.jpg" alt="Dashboard de MediCare Pro" className="w-full rounded-lg" />
             </div>
           </div>
         </div>

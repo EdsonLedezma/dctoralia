@@ -23,23 +23,9 @@ import { Calendar, ArrowLeft, Save, User } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import DashboardWrapper from "../../../../components/auth/DashboardWrapper"
-import { useAppointment } from "~/server/api/routers/appointment"
+// import { useAppointment } from "~/server/api/routers/appointment"
+import { api } from "src/trpc/react"
 
-type FormData = {
-  patientId: string
-  date: string 
-  duration: string
-  reason: string
-  notes: string
-  priority: string
-}
-
-const patients = [
-  { id: "1", name: "María González" },
-  { id: "2", name: "Carlos Rodríguez" },
-  { id: "3", name: "Ana López" },
-  { id: "4", name: "Pedro Martínez" },
-]
 
 const appointmentTypes = [
   "Consulta General",
@@ -78,9 +64,16 @@ const timeSlots = [
 export default function NewAppointmentPage() {
   const router = useRouter()
 
+  // Obtener pacientes reales desde TRPC
+  const { data: usersData, isLoading: loadingUsers } = api.users.getAll.useQuery()
+  const patients = (usersData?.result || []).filter((u: any) => u.role === 'PATIENT')
+
+  // Mutación para crear cita
+  const createAppointment = api.appointments.create.useMutation()
+
   const [formData, setFormData] = useState({
     patientId: "",
-    date: "", // aquí solo fecha seleccionada, luego se concatena con hora antes de enviar
+    date: "",
     time: "",
     duration: "30",
     reason: "",
@@ -88,7 +81,6 @@ export default function NewAppointmentPage() {
     priority: "normal",
   })
 
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleInputChange = (field: string, value: string) => {
@@ -97,50 +89,31 @@ export default function NewAppointmentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError(null)
 
     if (!formData.patientId || !formData.date || !formData.time || !formData.reason) {
       setError("Por favor, completa todos los campos requeridos.")
-      setLoading(false)
       return
     }
 
     // Concatenar fecha y hora para crear un ISO string completo
-    const dateTimeISO = new Date(`${formData.date}T${formData.time}:00`).toISOString()
-
-    // Construir el objeto que enviaremos al backend
-    const bodyToSend = {
-      patientId: formData.patientId,
-      date: dateTimeISO,
-      duration: formData.duration,
-      reason: formData.reason,
-      notes: formData.notes,
-      priority: formData.priority,
-     
-    }
+    const dateObj = new Date(`${formData.date}T${formData.time}:00`)
 
     try {
-      const response = await fetch("/api/appointments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(bodyToSend),
+      // NOTA: doctorId y serviceId deben obtenerse del contexto o del formulario si aplica
+      await createAppointment.mutateAsync({
+        patientId: formData.patientId,
+        doctorId: "", // TODO: obtener el ID del doctor logueado
+        serviceId: "", // TODO: seleccionar servicio si aplica
+        date: dateObj,
+        time: formData.time,
+        duration: Number(formData.duration),
+        reason: formData.reason,
+        notes: formData.notes,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        setError(errorData.error || "Error desconocido al crear la cita.")
-        setLoading(false)
-        return
-      }
-
       router.push("/dashboard/appointments")
-    } catch {
-      setError("Error de conexión al servidor.")
-    } finally {
-      setLoading(false)
+    } catch (err: any) {
+      setError(err?.message || "Error al crear la cita.")
     }
   }
 
@@ -188,12 +161,13 @@ export default function NewAppointmentPage() {
                     onValueChange={(value) => handleInputChange("patientId", value)}
                     value={formData.patientId}
                     required
+                    disabled={loadingUsers}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar paciente" />
+                      <SelectValue placeholder={loadingUsers ? "Cargando..." : "Seleccionar paciente"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {patients.map((patient) => (
+                      {patients.map((patient: any) => (
                         <SelectItem key={patient.id} value={patient.id}>
                           {patient.name}
                         </SelectItem>
@@ -334,16 +308,16 @@ export default function NewAppointmentPage() {
 
             {/* Botones de acción */}
             <div className="flex space-x-4">
-              <Button type="submit" disabled={loading} className="flex-1">
+              <Button type="submit" disabled={createAppointment.status === 'pending'} className="flex-1">
                 <Save className="w-4 h-4 mr-2" />
-                {loading ? "Guardando..." : "Agendar Cita"}
+                {createAppointment.status === 'pending' ? "Guardando..." : "Agendar Cita"}
               </Button>
               <Link href="/dashboard/appointments" passHref>
                 <Button
                   type="button"
                   variant="outline"
                   className="flex-1"
-                  disabled={loading}
+                  disabled={createAppointment.status === 'pending'}
                   asChild
                 >
                   Cancelar

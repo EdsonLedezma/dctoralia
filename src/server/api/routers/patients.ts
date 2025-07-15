@@ -252,4 +252,24 @@ export const usePatients = createTRPCRouter({
       };
     }
   }),
+
+  // Obtener todos los pacientes
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const patients = await ctx.db.patient.findMany();
+      return {
+        status: 200,
+        message: "Pacientes obtenidos correctamente",
+        result: patients,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al obtener pacientes",
+        result: null,
+        error,
+      };
+    }
+  }),
 });
