@@ -1,7 +1,113 @@
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { z } from "zod";
 
 export const useDoctor = createTRPCRouter({
+  // Listar doctores (público)
+  getAll: publicProcedure.query(async ({ ctx }) => {
+    try {
+      const doctors = await ctx.db.doctor.findMany({
+        include: {
+          user: { select: { id: true, name: true, image: true } },
+          services: true,
+          reviews: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return {
+        status: 200,
+        message: "Doctores obtenidos correctamente",
+        result: doctors,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al obtener doctores",
+        result: null,
+        error,
+      };
+    }
+  }),
+
+  // Obtener doctor por ID (público)
+  getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
+    try {
+      const doctor = await ctx.db.doctor.findUnique({
+        where: { id: input.id },
+        include: {
+          user: { select: { id: true, name: true, image: true, email: true } },
+          services: true,
+          schedules: true,
+          reviews: {
+            include: {
+              patient: {
+                include: {
+                  user: { select: { name: true, image: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!doctor) {
+        return {
+          status: 404,
+          message: "Doctor no encontrado",
+          result: null,
+          error: new Error("Doctor no encontrado"),
+        };
+      }
+      return {
+        status: 200,
+        message: "Doctor encontrado",
+        result: doctor,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al buscar doctor",
+        result: null,
+        error,
+      };
+    }
+  }),
+
+  // Obtener perfil de doctor por userId (protegido)
+  getByUser: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const doctor = await ctx.db.doctor.findUnique({
+        where: { userId: ctx.session.user.id },
+        include: {
+          user: { select: { id: true, name: true, image: true, email: true } },
+          services: true,
+          schedules: true,
+        },
+      });
+      if (!doctor) {
+        return {
+          status: 404,
+          message: "Perfil de doctor no encontrado",
+          result: null,
+          error: new Error("Perfil de doctor no encontrado"),
+        };
+      }
+      return {
+        status: 200,
+        message: "Perfil de doctor encontrado",
+        result: doctor,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al obtener perfil de doctor",
+        result: null,
+        error,
+      };
+    }
+  }),
+
   // Actualizar especialidad
   updateSpecialty: protectedProcedure.input(z.object({ id: z.string(), specialty: z.string() })).mutation(async ({ input, ctx }) => {
     try {

@@ -13,12 +13,25 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Calendar, User, CheckCircle, ArrowLeft, Heart } from "lucide-react"
 import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
+import { api } from "src/trpc/react"
+import { toast } from "sonner"
 
 export default function BookAppointmentPage() {
   const [step, setStep] = useState(1)
   const [selectedService, setSelectedService] = useState("")
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedTime, setSelectedTime] = useState("")
+  const params = useParams<{ doctorId: string }>()
+  const doctorId = Array.isArray(params?.doctorId) ? params?.doctorId[0] : params?.doctorId
+  const router = useRouter()
+
+  const { data: doctorRes } = api.doctor.getById.useQuery({ id: doctorId as string }, { enabled: !!doctorId })
+  const doctor = doctorRes?.result
+  const { data: servicesRes } = api.services.publicGetByDoctor.useQuery({ doctorId: doctorId as string }, { enabled: !!doctorId })
+  const services = (servicesRes?.result ?? []).map((s: any) => ({ id: s.id, name: s.name, price: `$${s.price}`, duration: `${s.duration} min` }))
+  const { data: profile } = api.auth.getProfile.useQuery()
+  const patientId = profile?.patient?.id as string | undefined
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -33,32 +46,7 @@ export default function BookAppointmentPage() {
     terms: false,
   })
 
-  const services = [
-    {
-      id: "1",
-      name: "Consulta General de Cardiología",
-      price: "$150",
-      duration: "45 min",
-    },
-    {
-      id: "2",
-      name: "Ecocardiograma",
-      price: "$200",
-      duration: "30 min",
-    },
-    {
-      id: "3",
-      name: "Holter 24 horas",
-      price: "$180",
-      duration: "15 min",
-    },
-    {
-      id: "4",
-      name: "Prueba de Esfuerzo",
-      price: "$250",
-      duration: "60 min",
-    },
-  ]
+  const createAppointment = api.appointments.create.useMutation()
 
   const availableDates = [
     "2024-01-29",
@@ -89,14 +77,29 @@ export default function BookAppointmentPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (step < 4) {
       setStep(step + 1)
     } else {
       // Procesar la cita
-      console.log("Cita agendada:", { selectedService, selectedDate, selectedTime, formData })
-      setStep(5) // Página de confirmación
+      if (!doctorId || !selectedService || !selectedDate || !selectedTime || !patientId) return
+      try {
+        await createAppointment.mutateAsync({
+          patientId: patientId,
+          doctorId,
+          serviceId: selectedService,
+          date: new Date(`${selectedDate}T${selectedTime}:00`),
+          time: selectedTime,
+          duration: Number((services.find((s) => s.id === selectedService)?.duration || "0").split(" ")[0]) || 30,
+          reason: formData.reason || "Consulta",
+          notes: "",
+        })
+        toast.success("Cita agendada")
+        setStep(5)
+      } catch (err) {
+        toast.error("No se pudo agendar la cita")
+      }
     }
   }
 
@@ -189,7 +192,7 @@ export default function BookAppointmentPage() {
                 </div>
                 <div className="space-y-3">
                   <Button className="w-full">Agregar al Calendario</Button>
-                  <Link href="/doctor/1">
+                  <Link href={`/doctor/${doctorId}`}>
                     <Button variant="outline" className="w-full">
                       Volver al Perfil
                     </Button>

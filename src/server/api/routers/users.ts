@@ -80,10 +80,10 @@ export const useUsers = createTRPCRouter({
 
     // Obtener todos los usuarios (solo admin)
     getAll: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.session.user.role !== "ADMIN") {
+        if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "DOCTOR") {
             return {
                 status: 403,
-                message: "Solo los administradores pueden ver todos los usuarios",
+                message: "No autorizado",
                 result: null,
                 error: new Error("No autorizado"),
             };

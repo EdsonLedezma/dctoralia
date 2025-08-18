@@ -10,11 +10,28 @@ import { Badge } from "~/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Calendar, ArrowLeft, Search, Star, MapPin, Clock, Heart, Stethoscope, Brain } from "lucide-react"
 import Link from "next/link"
+import { api } from "src/trpc/react"
 
 export default function BookAppointmentPage() {
   const [selectedSpecialty, setSelectedSpecialty] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null)
+
+  const { data } = api.doctor.getAll.useQuery()
+  const doctors = (data?.result ?? []).map((d: any) => ({
+    id: d.id,
+    name: d.user?.name ?? "",
+    specialty: d.specialty,
+    rating: d.rating ?? 0,
+    reviews: d.totalReviews ?? d.reviews?.length ?? 0,
+    experience: d.experience ?? 0,
+    location: "",
+    address: "",
+    price: d.services?.[0]?.price ? `$${d.services[0].price}` : "",
+    image: d.user?.image ?? "/placeholder.svg?height=100&width=100",
+    nextAvailable: "",
+    icon: Stethoscope,
+  }))
 
   const specialties = [
     "Medicina General",
@@ -29,78 +46,6 @@ export default function BookAppointmentPage() {
     "Otorrinolaringología",
   ]
 
-  const doctors = [
-    {
-      id: "1",
-      name: "Dr. Juan Carlos Pérez",
-      specialty: "Cardiología",
-      rating: 4.9,
-      reviews: 127,
-      experience: 15,
-      location: "Clínica CardioVida",
-      address: "Av. Principal 123",
-      price: "$150",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Mañana 10:00 AM",
-      icon: Heart,
-    },
-    {
-      id: "2",
-      name: "Dra. María González",
-      specialty: "Dermatología",
-      rating: 4.8,
-      reviews: 89,
-      experience: 12,
-      location: "Centro Médico Integral",
-      address: "Calle Salud 456",
-      price: "$120",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Hoy 2:30 PM",
-      icon: Stethoscope,
-    },
-    {
-      id: "3",
-      name: "Dr. Carlos Rodríguez",
-      specialty: "Medicina General",
-      rating: 4.7,
-      reviews: 156,
-      experience: 20,
-      location: "Hospital Central",
-      address: "Plaza Mayor 789",
-      price: "$100",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Pasado mañana 9:00 AM",
-      icon: Stethoscope,
-    },
-    {
-      id: "4",
-      name: "Dra. Ana López",
-      specialty: "Ginecología",
-      rating: 4.9,
-      reviews: 203,
-      experience: 18,
-      location: "Clínica Femenina",
-      address: "Av. Mujeres 321",
-      price: "$140",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Lunes 11:00 AM",
-      icon: Heart,
-    },
-    {
-      id: "5",
-      name: "Dr. Pedro Martínez",
-      specialty: "Neurología",
-      rating: 4.8,
-      reviews: 94,
-      experience: 14,
-      location: "Centro Neurológico",
-      address: "Calle Cerebro 987",
-      price: "$180",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Miércoles 3:00 PM",
-      icon: Brain,
-    },
-  ]
 
   const filteredDoctors = doctors.filter((doctor) => {
     const matchesSpecialty = !selectedSpecialty || doctor.specialty === selectedSpecialty

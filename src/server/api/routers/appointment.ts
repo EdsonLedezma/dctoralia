@@ -1,11 +1,6 @@
 // server/api/routers/appointment.ts
 import { z } from "zod";
-import {
-  createTRPCRouter,
-  publicProcedure,
-  protectedProcedure,
-} from "~/server/api/trpc";
-import { prisma } from "~/lib/prisma";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
 export const useAppointment = createTRPCRouter({
   // Obtener todas las citas con relaciones incluidas
@@ -28,6 +23,41 @@ export const useAppointment = createTRPCRouter({
         result: null,
         error,
       };
+    }
+  }),
+
+  // Citas del usuario autenticado (médico o paciente)
+  listMine: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      if (ctx.session.user.role === "DOCTOR") {
+        const doctor = await ctx.db.doctor.findUnique({ where: { userId: ctx.session.user.id } });
+        if (!doctor) {
+          return { status: 404, message: "Perfil de doctor no encontrado", result: [], error: null };
+        }
+        const appointments = await ctx.db.appointment.findMany({
+          where: { doctorId: doctor.id },
+          include: { patient: { include: { user: { select: { name: true, email: true } } } }, service: true },
+          orderBy: { date: "desc" },
+        });
+        return { status: 200, message: "Citas del doctor", result: appointments, error: null };
+      }
+
+      if (ctx.session.user.role === "PATIENT") {
+        const patient = await ctx.db.patient.findUnique({ where: { userId: ctx.session.user.id } });
+        if (!patient) {
+          return { status: 404, message: "Perfil de paciente no encontrado", result: [], error: null };
+        }
+        const appointments = await ctx.db.appointment.findMany({
+          where: { patientId: patient.id },
+          include: { doctor: { include: { user: { select: { name: true, email: true } } } }, service: true },
+          orderBy: { date: "desc" },
+        });
+        return { status: 200, message: "Citas del paciente", result: appointments, error: null };
+      }
+
+      return { status: 200, message: "Sin rol", result: [], error: null };
+    } catch (error) {
+      return { status: 500, message: "Error al obtener citas", result: null, error };
     }
   }),
 
@@ -69,8 +99,8 @@ export const useAppointment = createTRPCRouter({
     .input(
       z.object({
         patientId: z.string(),
-        doctorId: z.string(),
-        serviceId: z.string(),
+        doctorId: z.string().optional(),
+        serviceId: z.string().optional(),
         date: z.date(),
         time: z.string(),
         duration: z.number().int().positive(),
@@ -80,11 +110,66 @@ export const useAppointment = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        // Si no envían doctorId y el usuario es doctor, usar su perfil
+        let doctorIdToUse = input.doctorId;
+        if (!doctorIdToUse && ctx.session.user.role === "DOCTOR") {
+          const doctor = await ctx.db.doctor.findUnique({ where: { userId: ctx.session.user.id } });
+          doctorIdToUse = doctor?.id;
+        }
+
+        if (!doctorIdToUse) {
+          return {
+            status: 400,
+            message: "doctorId es requerido",
+            result: null,
+            error: new Error("doctorId es requerido"),
+          };
+        }
+
+        // Resolver patientId: puede venir como Patient.id o como User.id
+        let patientIdToUse = input.patientId;
+        const existingPatientById = await ctx.db.patient.findUnique({ where: { id: patientIdToUse } });
+        if (!existingPatientById) {
+          const patientByUser = await ctx.db.patient.findUnique({ where: { userId: patientIdToUse } });
+          if (patientByUser) {
+            patientIdToUse = patientByUser.id;
+          } else {
+            return {
+              status: 400,
+              message: "Paciente no encontrado",
+              result: null,
+              error: new Error("Paciente no encontrado"),
+            };
+          }
+        }
+
+        // Asegurar serviceId: si no se envía, usar/crear un servicio por defecto
+        let serviceIdToUse = input.serviceId ?? null;
+        if (!serviceIdToUse) {
+          const defaultServiceName = "Consulta General";
+          const existingDefault = await ctx.db.service.findFirst({
+            where: { doctorId: doctorIdToUse, name: defaultServiceName },
+          });
+          if (existingDefault) {
+            serviceIdToUse = existingDefault.id;
+          } else {
+            const createdDefault = await ctx.db.service.create({
+              data: {
+                doctorId: doctorIdToUse,
+                name: defaultServiceName,
+                description: "Consulta general creada automáticamente",
+                price: 0,
+                duration: input.duration,
+              },
+            });
+            serviceIdToUse = createdDefault.id;
+          }
+        }
         const newAppointment = await ctx.db.appointment.create({
           data: {
-            patientId: input.patientId,
-            doctorId: input.doctorId,
-            serviceId: input.serviceId,
+            patientId: patientIdToUse,
+            doctorId: doctorIdToUse,
+            serviceId: serviceIdToUse,
             date: input.date,
             time: input.time,
             duration: input.duration,

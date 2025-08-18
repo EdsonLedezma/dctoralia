@@ -8,75 +8,25 @@ import { Input } from "~/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { Calendar, Clock, User, Search, Filter, Plus, MapPin, Phone, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { api } from "src/trpc/react"
 
 export default function PatientAppointmentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-
-  const appointments = [
-    {
-      id: 1,
-      doctor: "Dr. Juan Carlos Pérez",
-      specialty: "Cardiología",
-      date: "2024-01-29",
-      time: "10:00",
-      type: "Consulta General",
-      status: "confirmed",
-      location: "Clínica CardioVida",
-      address: "Av. Principal 123",
-      phone: "+1 234 567 8901",
-    },
-    {
-      id: 2,
-      doctor: "Dra. María González",
-      specialty: "Dermatología",
-      date: "2024-02-05",
-      time: "14:30",
-      type: "Control",
-      status: "pending",
-      location: "Centro Médico Integral",
-      address: "Calle Salud 456",
-      phone: "+1 234 567 8902",
-    },
-    {
-      id: 3,
-      doctor: "Dr. Carlos Rodríguez",
-      specialty: "Medicina General",
-      date: "2024-01-15",
-      time: "09:00",
-      type: "Consulta General",
-      status: "completed",
-      location: "Hospital Central",
-      address: "Plaza Mayor 789",
-      phone: "+1 234 567 8903",
-      diagnosis: "Control rutinario - Todo normal",
-    },
-    {
-      id: 4,
-      doctor: "Dra. Ana López",
-      specialty: "Ginecología",
-      date: "2024-01-10",
-      time: "11:00",
-      type: "Control Anual",
-      status: "completed",
-      location: "Clínica Femenina",
-      address: "Av. Mujeres 321",
-      phone: "+1 234 567 8904",
-      diagnosis: "Examen preventivo - Sin novedades",
-    },
-    {
-      id: 5,
-      doctor: "Dr. Pedro Martínez",
-      specialty: "Traumatología",
-      date: "2024-01-05",
-      time: "16:00",
-      type: "Seguimiento",
-      status: "cancelled",
-      location: "Centro Traumatológico",
-      address: "Calle Huesos 654",
-      phone: "+1 234 567 8905",
-    },
-  ]
+  const { data: mine } = api.appointments.listMine.useQuery()
+  const appointments = (mine?.result ?? []).map((a: any) => ({
+    id: a.id,
+    doctor: a.doctor?.user?.name ?? "",
+    specialty: a.doctor?.specialty ?? "",
+    date: new Date(a.date).toISOString().split("T")[0],
+    time: a.time,
+    type: a.reason ?? "Consulta",
+    status: a.status?.toLowerCase?.() ?? "pending",
+    location: "",
+    address: "",
+    phone: a.doctor?.phone ?? "",
+    diagnosis: a.notes ?? "",
+  }))
 
   const getStatusColor = (status: string) => {
     switch (status) {

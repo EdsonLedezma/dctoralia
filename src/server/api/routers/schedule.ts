@@ -1,7 +1,26 @@
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { z } from "zod";
 
 export const useSchedule = createTRPCRouter({
+  // Obtener horarios por doctor (público)
+  publicGetByDoctor: publicProcedure.input(z.object({ doctorId: z.string() })).query(async ({ input, ctx }) => {
+    try {
+      const schedules = await ctx.db.schedule.findMany({ where: { doctorId: input.doctorId } });
+      return {
+        status: 200,
+        message: "Horarios obtenidos correctamente",
+        result: schedules,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al obtener horarios",
+        result: null,
+        error,
+      };
+    }
+  }),
   // Crear horario para un doctor
   create: protectedProcedure.input(z.object({
     doctorId: z.string(),

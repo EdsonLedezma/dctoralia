@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -13,7 +13,7 @@ import { Badge } from "~/components/ui/badge"
 import { Calendar, Plus, Phone, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import DashboardWrapper from "../../../components/auth/DashboardWrapper"
-import { useAppointment } from "~/server/api/routers/appointment"
+import { api } from "src/trpc/react"
 
 type Appointment = {
   id: string
@@ -62,29 +62,37 @@ const getStatusColor = (status: string) => {
 
 export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
-  const { data: appointmentsData, isLoading } = useAppointment.getAll.useQuery()
-  const appointments = appointmentsData?.result || []
+  const { data, isLoading } = api.appointments.listMine.useQuery()
+  const allAppointments = (data?.result ?? []) as any[]
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      setLoading(true)
-      const dateISO = currentDate.toISOString().split("T")[0]
-
-      try {
-        const response = await fetch(`/api/appointments/appointments?date=${dateISO}`)
-        if (!response.ok) throw new Error("Error al obtener citas")
-        const data = await response.json()
-        setAppointments(data)
-      } catch (error) {
-        console.error("Error fetching appointments:", error)
-        setAppointments([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAppointments()
-  }, [currentDate])
+  const appointments = useMemo(() => {
+    const targetDate = currentDate.toISOString().split("T")[0]
+    return allAppointments
+      .filter((a) => new Date(a.date).toISOString().split("T")[0] === targetDate)
+      .map((a) => {
+        const statusMap: Record<string, string> = {
+          PENDING: "pendiente",
+          CONFIRMED: "confirmada",
+          COMPLETED: "completada",
+          CANCELLED: "cancelada",
+          NO_SHOW: "no show",
+        }
+        return {
+          id: a.id,
+          time: a.time,
+          duration: a.duration,
+          status: statusMap[a.status] ?? a.status?.toLowerCase?.() ?? "pendiente",
+          reason: a.reason,
+          patient: {
+            name: a.patient?.user?.name ?? "",
+            phone: a.patient?.phone ?? "",
+          },
+          service: {
+            name: a.service?.name ?? "Consulta",
+          },
+        } as Appointment
+      })
+  }, [allAppointments, currentDate])
 
   const previousDay = () => {
     setCurrentDate((date) => {

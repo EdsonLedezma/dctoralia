@@ -253,10 +253,16 @@ export const usePatients = createTRPCRouter({
     }
   }),
 
-  // Obtener todos los pacientes
+  // Obtener todos los pacientes (incluye datos básicos del usuario)
   getAll: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const patients = await ctx.db.patient.findMany();
+      const patients = await ctx.db.patient.findMany({
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, image: true },
+          },
+        },
+      });
       return {
         status: 200,
         message: "Pacientes obtenidos correctamente",

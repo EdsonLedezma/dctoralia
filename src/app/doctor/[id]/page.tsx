@@ -8,152 +8,54 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { Calendar, Clock, MapPin, Phone, Mail, Star, Award, CheckCircle, Heart, Brain, Stethoscope } from "lucide-react"
 import Link from "next/link"
+import { useParams } from "next/navigation"
+import { api } from "src/trpc/react"
 
 export default function DoctorProfilePage() {
   const [selectedService, setSelectedService] = useState<string | null>(null)
+  const params = useParams<{ id: string }>()
+  const doctorId = Array.isArray(params?.id) ? params?.id[0] : params?.id
 
-  // Datos del doctor (en una app real vendría de la base de datos)
+  const { data: doctorRes, isLoading } = api.doctor.getById.useQuery({ id: doctorId as string }, { enabled: !!doctorId })
+  const doctorData: any = doctorRes?.result
   const doctor = {
-    id: "1",
-    name: "Dr. Juan Carlos Pérez",
-    specialty: "Cardiología",
-    image: "/placeholder.svg?height=200&width=200",
-    rating: 4.9,
-    reviews: 127,
-    experience: 15,
-    patients: 1200,
-    education: [
-      "Medicina - Universidad Nacional (2005)",
-      "Especialización en Cardiología - Hospital Central (2008)",
-      "Fellowship en Cardiología Intervencionista - Mayo Clinic (2010)",
-    ],
-    certifications: ["Colegio Médico Nacional", "Sociedad de Cardiología", "Board Certified Cardiologist"],
-    languages: ["Español", "Inglés", "Portugués"],
-    about:
-      "Especialista en cardiología con más de 15 años de experiencia. Me dedico a brindar atención integral del corazón, desde prevención hasta tratamientos avanzados. Mi enfoque se centra en la medicina personalizada y el cuidado compasivo de cada paciente.",
-    location: "Clínica CardioVida, Av. Principal 123, Ciudad",
-    phone: "+1 (555) 123-4567",
-    email: "dr.perez@cardiovida.com",
-    schedule: {
-      Lunes: "8:00 AM - 6:00 PM",
-      Martes: "8:00 AM - 6:00 PM",
-      Miércoles: "8:00 AM - 6:00 PM",
-      Jueves: "8:00 AM - 6:00 PM",
-      Viernes: "8:00 AM - 4:00 PM",
-      Sábado: "9:00 AM - 1:00 PM",
-      Domingo: "Cerrado",
-    },
+    id: doctorData?.id ?? doctorId,
+    name: doctorData?.user?.name ?? "",
+    specialty: doctorData?.specialty ?? "",
+    image: doctorData?.user?.image ?? "/placeholder.svg?height=200&width=200",
+    rating: doctorData?.rating ?? 0,
+    reviews: doctorData?.totalReviews ?? doctorData?.reviews?.length ?? 0,
+    experience: doctorData?.experience ?? 0,
+    patients: undefined as number | undefined,
+    education: [] as string[],
+    certifications: [] as string[],
+    languages: [] as string[],
+    about: doctorData?.about ?? "",
+    location: "",
+    phone: doctorData?.phone ?? "",
+    email: doctorData?.user?.email ?? "",
+    schedule: (doctorData?.schedules ?? []).reduce((acc: any, s: any) => {
+      acc[`Día ${s.dayOfWeek}`] = `${s.startTime} - ${s.endTime}`
+      return acc
+    }, {} as Record<string, string>),
   }
 
-  const services = [
-    {
-      id: "1",
-      name: "Consulta General de Cardiología",
-      description: "Evaluación completa del sistema cardiovascular, diagnóstico y plan de tratamiento",
-      duration: "45 minutos",
-      price: "$150",
-      icon: Heart,
-      includes: [
-        "Historia clínica completa",
-        "Examen físico cardiovascular",
-        "Electrocardiograma",
-        "Plan de tratamiento personalizado",
-      ],
-    },
-    {
-      id: "2",
-      name: "Ecocardiograma",
-      description: "Ultrasonido del corazón para evaluar estructura y función cardíaca",
-      duration: "30 minutos",
-      price: "$200",
-      icon: Stethoscope,
-      includes: [
-        "Ecocardiograma transtorácico",
-        "Evaluación de válvulas cardíacas",
-        "Medición de función ventricular",
-        "Reporte detallado con imágenes",
-      ],
-    },
-    {
-      id: "3",
-      name: "Holter 24 horas",
-      description: "Monitoreo continuo del ritmo cardíaco durante 24 horas",
-      duration: "15 minutos (colocación)",
-      price: "$180",
-      icon: Clock,
-      includes: [
-        "Colocación del dispositivo",
-        "Monitoreo por 24 horas",
-        "Análisis completo del ritmo",
-        "Reporte de arritmias",
-      ],
-    },
-    {
-      id: "4",
-      name: "Prueba de Esfuerzo",
-      description: "Evaluación de la respuesta cardiovascular durante el ejercicio",
-      duration: "60 minutos",
-      price: "$250",
-      icon: Award,
-      includes: [
-        "Electrocardiograma de esfuerzo",
-        "Monitoreo de presión arterial",
-        "Evaluación de capacidad funcional",
-        "Detección de isquemia",
-      ],
-    },
-    {
-      id: "5",
-      name: "Control Post-Operatorio",
-      description: "Seguimiento especializado después de procedimientos cardíacos",
-      duration: "30 minutos",
-      price: "$120",
-      icon: CheckCircle,
-      includes: [
-        "Evaluación de cicatrización",
-        "Control de medicamentos",
-        "Ajuste de tratamiento",
-        "Recomendaciones de rehabilitación",
-      ],
-    },
-    {
-      id: "6",
-      name: "Consulta de Segunda Opinión",
-      description: "Revisión de diagnóstico y plan de tratamiento existente",
-      duration: "45 minutos",
-      price: "$180",
-      icon: Brain,
-      includes: [
-        "Revisión de estudios previos",
-        "Análisis de tratamiento actual",
-        "Recomendaciones adicionales",
-        "Reporte de segunda opinión",
-      ],
-    },
-  ]
+  const services = (doctorData?.services ?? []).map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    duration: `${s.duration} minutos`,
+    price: `$${s.price}`,
+    icon: Heart,
+    includes: [] as string[],
+  }))
 
-  const testimonials = [
-    {
-      name: "María González",
-      rating: 5,
-      comment:
-        "Excelente doctor, muy profesional y dedicado. Me explicó todo claramente y el tratamiento fue muy efectivo.",
-      date: "Hace 2 semanas",
-    },
-    {
-      name: "Carlos Rodríguez",
-      rating: 5,
-      comment:
-        "El Dr. Pérez salvó mi vida. Su diagnóstico temprano y tratamiento fueron fundamentales para mi recuperación.",
-      date: "Hace 1 mes",
-    },
-    {
-      name: "Ana López",
-      rating: 5,
-      comment: "Muy recomendado. Atención personalizada y seguimiento constante. Se nota su experiencia y dedicación.",
-      date: "Hace 3 semanas",
-    },
-  ]
+  const testimonials = (doctorData?.reviews ?? []).map((r: any) => ({
+    name: r.patient?.user?.name ?? "Paciente",
+    rating: r.rating ?? 0,
+    comment: r.comment ?? "",
+    date: new Date(r.createdAt).toLocaleDateString("es-ES"),
+  }))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -182,6 +84,7 @@ export default function DoctorProfilePage() {
           <div className="lg:col-span-1 space-y-6">
             <Card>
               <CardContent className="p-6 text-center">
+                {isLoading && <div>Cargando...</div>}
                 <Avatar className="w-32 h-32 mx-auto mb-4">
                   <AvatarImage src={doctor.image || "/placeholder.svg"} alt={doctor.name} />
                   <AvatarFallback className="text-2xl">

@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation"
 import DashboardWrapper from "../../../../components/auth/DashboardWrapper"
 // import { useAppointment } from "~/server/api/routers/appointment"
 import { api } from "src/trpc/react"
+import { toast } from "sonner"
 
 
 const appointmentTypes = [
@@ -65,8 +66,8 @@ export default function NewAppointmentPage() {
   const router = useRouter()
 
   // Obtener pacientes reales desde TRPC
-  const { data: usersData, isLoading: loadingUsers } = api.users.getAll.useQuery()
-  const patients = (usersData?.result || []).filter((u: any) => u.role === 'PATIENT')
+  const { data: patientsData, isLoading: loadingUsers } = api.patients.getAll.useQuery()
+  const patients = (patientsData?.result || [])
 
   // Mutación para crear cita
   const createAppointment = api.appointments.create.useMutation()
@@ -102,18 +103,18 @@ export default function NewAppointmentPage() {
     try {
       // NOTA: doctorId y serviceId deben obtenerse del contexto o del formulario si aplica
       await createAppointment.mutateAsync({
-        patientId: formData.patientId,
-        doctorId: "", // TODO: obtener el ID del doctor logueado
-        serviceId: "", // TODO: seleccionar servicio si aplica
+        patientId: formData.patientId, // aquí va el Patient.id
         date: dateObj,
         time: formData.time,
         duration: Number(formData.duration),
         reason: formData.reason,
         notes: formData.notes,
       })
+      toast.success("Cita creada correctamente")
       router.push("/dashboard/appointments")
     } catch (err: any) {
       setError(err?.message || "Error al crear la cita.")
+      toast.error("No se pudo crear la cita")
     }
   }
 
@@ -169,7 +170,7 @@ export default function NewAppointmentPage() {
                     <SelectContent>
                       {patients.map((patient: any) => (
                         <SelectItem key={patient.id} value={patient.id}>
-                          {patient.name}
+                          {patient.user?.name || patient.id}
                         </SelectItem>
                       ))}
                     </SelectContent>

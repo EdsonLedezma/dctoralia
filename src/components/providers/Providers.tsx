@@ -3,6 +3,7 @@
 import { SessionProvider } from "next-auth/react"
 import { TRPCReactProvider } from "../../trpc/react"
 import type { Session } from "next-auth"
+import { Toaster } from "~/components/ui/sonner"
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -14,6 +15,7 @@ export default function Providers({ children, session }: ProvidersProps) {
     <SessionProvider session={session}>
       <TRPCReactProvider>
         {children}
+        <Toaster richColors closeButton />
       </TRPCReactProvider>
     </SessionProvider>
   )

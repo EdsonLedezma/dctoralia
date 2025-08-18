@@ -22,12 +22,38 @@ import {
   Users,
 } from "lucide-react"
 import Link from "next/link"
+import { api } from "src/trpc/react"
 
 export default function DoctorsDirectoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSpecialty, setSelectedSpecialty] = useState("all")
   const [selectedLocation, setSelectedLocation] = useState("all")
   const [sortBy, setSortBy] = useState("rating")
+
+  const { data, isLoading } = api.doctor.getAll.useQuery()
+  const doctors = (data?.result ?? []).map((d: any) => {
+    const averageRating =
+      d.rating ?? (d.reviews?.length ? d.reviews.reduce((acc: number, r: any) => acc + (r.rating ?? 0), 0) / d.reviews.length : 0)
+    const reviewsCount = d.totalReviews ?? d.reviews?.length ?? 0
+    return {
+      id: d.id,
+      name: d.user?.name ?? "Sin nombre",
+      specialty: d.specialty,
+      rating: Number(averageRating?.toFixed?.(1) ?? 0),
+      reviews: reviewsCount,
+      experience: d.experience ?? 0,
+      location: "",
+      clinic: "",
+      address: "",
+      price: d.services?.[0]?.price ? `$${d.services[0].price}` : "",
+      image: d.user?.image ?? "/placeholder.svg?height=100&width=100",
+      nextAvailable: "",
+      icon: Heart,
+      languages: [],
+      education: "",
+      about: d.about ?? "",
+    }
+  })
 
   const specialties = [
     "Medicina General",
@@ -44,123 +70,12 @@ export default function DoctorsDirectoryPage() {
 
   const locations = ["Centro de la Ciudad", "Zona Norte", "Zona Sur", "Zona Este", "Zona Oeste"]
 
-  const doctors = [
-    {
-      id: "1",
-      name: "Dr. Juan Carlos Pérez",
-      specialty: "Cardiología",
-      rating: 4.9,
-      reviews: 127,
-      experience: 15,
-      location: "Centro de la Ciudad",
-      clinic: "Clínica CardioVida",
-      address: "Av. Principal 123",
-      price: "$150",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Mañana 10:00 AM",
-      icon: Heart,
-      languages: ["Español", "Inglés"],
-      education: "Universidad Nacional - Cardiología",
-      about: "Especialista en cardiología con enfoque en medicina preventiva y tratamientos mínimamente invasivos.",
-    },
-    {
-      id: "2",
-      name: "Dra. María González",
-      specialty: "Dermatología",
-      rating: 4.8,
-      reviews: 89,
-      experience: 12,
-      location: "Zona Norte",
-      clinic: "Centro Médico Integral",
-      address: "Calle Salud 456",
-      price: "$120",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Hoy 2:30 PM",
-      icon: Stethoscope,
-      languages: ["Español"],
-      education: "Universidad Central - Dermatología",
-      about: "Dermatóloga especializada en dermatología estética y tratamiento de enfermedades de la piel.",
-    },
-    {
-      id: "3",
-      name: "Dr. Carlos Rodríguez",
-      specialty: "Medicina General",
-      rating: 4.7,
-      reviews: 156,
-      experience: 20,
-      location: "Centro de la Ciudad",
-      clinic: "Hospital Central",
-      address: "Plaza Mayor 789",
-      price: "$100",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Pasado mañana 9:00 AM",
-      icon: Stethoscope,
-      languages: ["Español", "Inglés", "Portugués"],
-      education: "Universidad Nacional - Medicina General",
-      about: "Médico general con amplia experiencia en medicina familiar y preventiva.",
-    },
-    {
-      id: "4",
-      name: "Dra. Ana López",
-      specialty: "Ginecología",
-      rating: 4.9,
-      reviews: 203,
-      experience: 18,
-      location: "Zona Sur",
-      clinic: "Clínica Femenina",
-      address: "Av. Mujeres 321",
-      price: "$140",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Lunes 11:00 AM",
-      icon: Heart,
-      languages: ["Español", "Inglés"],
-      education: "Universidad de Medicina - Ginecología",
-      about: "Ginecóloga especializada en salud reproductiva y medicina preventiva femenina.",
-    },
-    {
-      id: "5",
-      name: "Dr. Pedro Martínez",
-      specialty: "Neurología",
-      rating: 4.8,
-      reviews: 94,
-      experience: 14,
-      location: "Zona Este",
-      clinic: "Centro Neurológico",
-      address: "Calle Cerebro 987",
-      price: "$180",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Miércoles 3:00 PM",
-      icon: Brain,
-      languages: ["Español", "Inglés"],
-      education: "Universidad Internacional - Neurología",
-      about: "Neurólogo especializado en trastornos del sistema nervioso y neurología clínica.",
-    },
-    {
-      id: "6",
-      name: "Dra. Laura Fernández",
-      specialty: "Oftalmología",
-      rating: 4.7,
-      reviews: 76,
-      experience: 10,
-      location: "Zona Oeste",
-      clinic: "Centro Oftalmológico",
-      address: "Av. Visión 654",
-      price: "$130",
-      image: "/placeholder.svg?height=100&width=100",
-      nextAvailable: "Viernes 4:00 PM",
-      icon: Eye,
-      languages: ["Español"],
-      education: "Universidad de Medicina - Oftalmología",
-      about: "Oftalmóloga especializada en cirugía refractiva y tratamiento de enfermedades oculares.",
-    },
-  ]
-
   const filteredDoctors = doctors.filter((doctor) => {
     const matchesSearch =
       !searchTerm ||
       doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doctor.specialty.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doctor.clinic.toLowerCase().includes(searchTerm.toLowerCase())
+      doctor.clinic?.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesSpecialty = selectedSpecialty === "all" || doctor.specialty === selectedSpecialty
     const matchesLocation = selectedLocation === "all" || doctor.location === selectedLocation
@@ -173,7 +88,7 @@ export default function DoctorsDirectoryPage() {
       case "rating":
         return b.rating - a.rating
       case "price":
-        return Number.parseInt(a.price.replace("$", "")) - Number.parseInt(b.price.replace("$", ""))
+        return Number.parseInt((a.price || "0").replace("$", "")) - Number.parseInt((b.price || "0").replace("$", ""))
       case "experience":
         return b.experience - a.experience
       case "reviews":
@@ -276,7 +191,12 @@ export default function DoctorsDirectoryPage() {
 
           {/* Results */}
           <div className="grid gap-6">
-            {sortedDoctors.map((doctor) => {
+            {isLoading && (
+              <Card>
+                <CardContent className="p-6">Cargando doctores...</CardContent>
+              </Card>
+            )}
+            {!isLoading && sortedDoctors.map((doctor) => {
               const IconComponent = doctor.icon
               return (
                 <Card key={doctor.id} className="hover:shadow-lg transition-shadow">
@@ -295,9 +215,11 @@ export default function DoctorsDirectoryPage() {
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
                             <h3 className="text-xl font-semibold">{doctor.name}</h3>
-                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                              <IconComponent className="w-5 h-5 text-blue-600" />
-                            </div>
+                            {IconComponent && (
+                              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <IconComponent className="w-5 h-5 text-blue-600" />
+                              </div>
+                            )}
                           </div>
                           <Badge variant="secondary" className="mb-2">
                             {doctor.specialty}

@@ -1,7 +1,26 @@
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { z } from "zod";
 
 export const useService = createTRPCRouter({
+  // Servicios por doctor (público)
+  publicGetByDoctor: publicProcedure.input(z.object({ doctorId: z.string() })).query(async ({ input, ctx }) => {
+    try {
+      const services = await ctx.db.service.findMany({ where: { doctorId: input.doctorId, isActive: true } });
+      return {
+        status: 200,
+        message: "Servicios obtenidos correctamente",
+        result: services,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al obtener servicios",
+        result: null,
+        error,
+      };
+    }
+  }),
   // Crear servicio
   create: protectedProcedure.input(z.object({
     doctorId: z.string(),
