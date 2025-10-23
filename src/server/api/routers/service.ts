@@ -21,6 +21,39 @@ export const useService = createTRPCRouter({
       };
     }
   }),
+  
+  // Obtener servicios del doctor autenticado
+  getMyServices: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const userId = ctx.session.user.id;
+      const doctor = await ctx.db.doctor.findUnique({ where: { userId } });
+      
+      if (!doctor) {
+        return {
+          status: 404,
+          message: "Doctor no encontrado",
+          result: null,
+          error: new Error("Doctor no encontrado"),
+        };
+      }
+      
+      const services = await ctx.db.service.findMany({ where: { doctorId: doctor.id } });
+      return {
+        status: 200,
+        message: "Servicios obtenidos correctamente",
+        result: services,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        status: 500,
+        message: "Error al obtener servicios",
+        result: null,
+        error,
+      };
+    }
+  }),
+  
   // Crear servicio
   create: protectedProcedure.input(z.object({
     doctorId: z.string(),

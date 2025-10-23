@@ -2,18 +2,50 @@ import { NextResponse } from 'next/server';
 import {prisma} from '~/lib/prisma';
 
 export async function POST(req: Request) {
-  const { doctorPhone, patientId, serviceId, date, time, notes } = await req.json();
-  if (!doctorPhone || !patientId || !serviceId || !date || !time) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  const { doctorPhone, patientId, serviceId, serviceName, date, time, notes, reason } = await req.json();
+  if (!doctorPhone || !patientId || !date || !time) {
+    return NextResponse.json({ error: 'Missing required fields: doctorPhone, patientId, date, time' }, { status: 400 });
   }
   
   // Buscar doctor por teléfono
   const doctor = await prisma.doctor.findFirst({ where: { phone: doctorPhone } });
   if (!doctor) return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
   
-  // Buscar el servicio para obtener la duración
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  if (!service) return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+  // Buscar o crear el servicio
+  let service;
+  
+  if (serviceId) {
+    // Si se proporciona serviceId, buscarlo
+    service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+  } else if (serviceName) {
+    // Si se proporciona serviceName, buscar o crear el servicio
+    service = await prisma.service.findFirst({
+      where: {
+        doctorId: doctor.id,
+        name: serviceName,
+        isActive: true
+      }
+    });
+    
+    // Si no existe, crear el servicio automáticamente
+    if (!service) {
+      service = await prisma.service.create({
+        data: {
+          doctorId: doctor.id,
+          name: serviceName,
+          description: reason || serviceName,
+          price: 0, // Precio por defecto, se puede actualizar después
+          duration: 30, // Duración por defecto de 30 minutos
+          isActive: true
+        }
+      });
+    }
+  } else {
+    return NextResponse.json({ 
+      error: 'Either serviceId or serviceName must be provided' 
+    }, { status: 400 });
+  }
   
   // Verificar disponibilidad - buscar citas existentes en esa fecha y hora
   const appointmentDate = new Date(date);
@@ -40,10 +72,11 @@ export async function POST(req: Request) {
     data: {
       doctorId: doctor.id,
       patientId,
-      serviceId,
+      serviceId: service.id,
       date: appointmentDate,
       time,
       notes,
+      reason: reason || serviceName,
       status: 'PENDING',
       duration: service.duration
     }
@@ -53,7 +86,11 @@ export async function POST(req: Request) {
     appointmentId: appointment.id, 
     status: appointment.status,
     date: appointment.date,
-    time: appointment.time
+    time: appointment.time,
+    service: {
+      id: service.id,
+      name: service.name
+    }
   });
 }
 
@@ -63,22 +100,41 @@ export async function POST(req: Request) {
  * Método: POST
  * Body (application/json):
  * {
- *   "doctorPhone": "string",
- *   "patientId": "string",           // Patient.id
- *   "serviceId": "string",           // Service.id
- *   "date": "2025-10-01" | ISO,      // Fecha de la cita
- *   "time": "HH:mm",                 // Hora de la cita
- *   "notes": "string opcional"
+ *   "doctorPhone": "string",         // Teléfono del doctor (requerido)
+ *   "patientId": "string",           // Patient.id (requerido)
+ *   "serviceId": "string",           // Service.id (opcional si se usa serviceName)
+ *   "serviceName": "string",         // Nombre del servicio (opcional si se usa serviceId)
+ *   "date": "2025-10-01" | ISO,      // Fecha de la cita (requerido)
+ *   "time": "HH:mm",                 // Hora de la cita (requerido)
+ *   "reason": "string",              // Razón de la cita (opcional)
+ *   "notes": "string"                // Notas adicionales (opcional)
  * }
+ * 
+ * Nota: Debes proporcionar serviceId O serviceName. Si usas serviceName y el servicio
+ * no existe, se creará automáticamente para ese doctor.
+ * 
  * Respuesta 200 (application/json):
  * {
  *   "appointmentId": "string",
- *   "status": "PENDING"
+ *   "status": "PENDING",
+ *   "date": "2025-10-01T00:00:00.000Z",
+ *   "time": "10:30",
+ *   "service": {
+ *     "id": "string",
+ *     "name": "string"
+ *   }
  * }
+ * 
  * Errores:
  * - 400 { "error": "Missing required fields" }
+ * - 400 { "error": "Either serviceId or serviceName must be provided" }
  * - 404 { "error": "Doctor not found" }
+ * - 404 { "error": "Service not found" }
+ * - 409 { "error": "Time slot not available", "message": "..." }
  *
+ * Ejemplos:
+ * 
+ * // Con serviceId existente:
  * curl -X POST "http://localhost:3000/api/vapi/appointment/book" \
  *  -H "Content-Type: application/json" \
  *  -d '{
@@ -88,5 +144,17 @@ export async function POST(req: Request) {
  *    "date":"2025-10-01",
  *    "time":"10:30",
  *    "notes":"Primera consulta"
+ *  }'
+ * 
+ * // Con serviceName (se crea si no existe):
+ * curl -X POST "http://localhost:3000/api/vapi/appointment/book" \
+ *  -H "Content-Type: application/json" \
+ *  -d '{
+ *    "doctorPhone":"+52 555-000-0000",
+ *    "patientId":"pat_123",
+ *    "serviceName":"Consulta General",
+ *    "reason":"Chequeo anual",
+ *    "date":"2025-10-01",
+ *    "time":"10:30"
  *  }'
  */

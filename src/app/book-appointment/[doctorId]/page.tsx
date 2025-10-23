@@ -32,6 +32,32 @@ export default function BookAppointmentPage() {
   const services = (servicesRes?.result ?? []).map((s: any) => ({ id: s.id, name: s.name, price: `$${s.price}`, duration: `${s.duration} min` }))
   const { data: profile } = api.auth.getProfile.useQuery()
   const patientId = profile?.patient?.id as string | undefined
+  
+  // Calcular rango de fechas (próximos 30 días)
+  const today = new Date()
+  const endDate = new Date(today)
+  endDate.setDate(endDate.getDate() + 30)
+  
+  const { data: slotsRes } = api.schedule.getAvailableSlots.useQuery({
+    doctorId: doctorId as string,
+    startDate: today.toISOString().split('T')[0] as string,
+    endDate: endDate.toISOString().split('T')[0] as string,
+  }, { enabled: !!doctorId })
+  
+  const availableSlots = slotsRes?.result ?? []
+  
+  // Agrupar slots por fecha
+  const slotsByDate = availableSlots.reduce((acc: any, slot: any) => {
+    if (!acc[slot.date]) {
+      acc[slot.date] = []
+    }
+    acc[slot.date].push(slot.time)
+    return acc
+  }, {})
+  
+  const availableDates = Object.keys(slotsByDate).sort()
+  const timeSlots = selectedDate ? slotsByDate[selectedDate] ?? [] : []
+  
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -47,31 +73,6 @@ export default function BookAppointmentPage() {
   })
 
   const createAppointment = api.appointments.create.useMutation()
-
-  const availableDates = [
-    "2024-01-29",
-    "2024-01-30",
-    "2024-01-31",
-    "2024-02-01",
-    "2024-02-02",
-    "2024-02-05",
-    "2024-02-06",
-  ]
-
-  const timeSlots = [
-    "09:00",
-    "09:30",
-    "10:00",
-    "10:30",
-    "11:00",
-    "11:30",
-    "14:00",
-    "14:30",
-    "15:00",
-    "15:30",
-    "16:00",
-    "16:30",
-  ]
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -111,6 +112,40 @@ export default function BookAppointmentPage() {
       day: "numeric",
     })
   }
+
+  const downloadICS = () => {
+    if (!selectedDate || !selectedTime || !doctor) return;
+
+    const appointmentDate = new Date(`${selectedDate}T${selectedTime}:00`);
+    const endDate = new Date(appointmentDate.getTime() + 30 * 60000); // +30 minutos
+
+    const formatICSDate = (date: Date) => {
+      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Dopilot//Appointment//ES
+BEGIN:VEVENT
+UID:${Date.now()}@dopilot.com
+DTSTAMP:${formatICSDate(new Date())}
+DTSTART:${formatICSDate(appointmentDate)}
+DTEND:${formatICSDate(endDate)}
+SUMMARY:Cita Médica - ${selectedServiceData?.name}
+DESCRIPTION:Cita con ${doctor.user?.name || 'Doctor'}\\nServicio: ${selectedServiceData?.name}\\nMotivo: ${formData.reason || 'Consulta'}
+LOCATION:Consultorio
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR`;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = `cita-${selectedDate}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const selectedServiceData = services.find((s) => s.id === selectedService)
 
@@ -191,7 +226,7 @@ export default function BookAppointmentPage() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <Button className="w-full">Agregar al Calendario</Button>
+                  <Button className="w-full" onClick={downloadICS}>Agregar al Calendario</Button>
                   <Link href={`/doctor/${doctorId}`}>
                     <Button variant="outline" className="w-full">
                       Volver al Perfil
@@ -251,41 +286,56 @@ export default function BookAppointmentPage() {
                   <CardContent className="space-y-6">
                     <div>
                       <Label className="text-base font-medium mb-3 block">Fecha disponible</Label>
-                      <RadioGroup value={selectedDate} onValueChange={setSelectedDate}>
-                        <div className="grid grid-cols-2 gap-3">
-                          {availableDates.map((date) => (
-                            <div
-                              key={date}
-                              className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50"
-                            >
-                              <RadioGroupItem value={date} id={date} />
-                              <Label htmlFor={date} className="cursor-pointer">
-                                {formatDate(date)}
-                              </Label>
-                            </div>
-                          ))}
+                      {availableDates.length === 0 ? (
+                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+                          <p className="text-yellow-800">
+                            El doctor aún no ha configurado sus horarios de atención. 
+                            Por favor, contacta directamente con el consultorio.
+                          </p>
                         </div>
-                      </RadioGroup>
-                    </div>
-
-                    {selectedDate && (
-                      <div>
-                        <Label className="text-base font-medium mb-3 block">Hora disponible</Label>
-                        <RadioGroup value={selectedTime} onValueChange={setSelectedTime}>
-                          <div className="grid grid-cols-3 gap-3">
-                            {timeSlots.map((time) => (
+                      ) : (
+                        <RadioGroup value={selectedDate} onValueChange={setSelectedDate}>
+                          <div className="grid grid-cols-2 gap-3">
+                            {availableDates.map((date) => (
                               <div
-                                key={time}
+                                key={date}
                                 className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50"
                               >
-                                <RadioGroupItem value={time} id={time} />
-                                <Label htmlFor={time} className="cursor-pointer">
-                                  {time}
+                                <RadioGroupItem value={date} id={date} />
+                                <Label htmlFor={date} className="cursor-pointer">
+                                  {formatDate(date)}
                                 </Label>
                               </div>
                             ))}
                           </div>
                         </RadioGroup>
+                      )}
+                    </div>
+
+                    {selectedDate && (
+                      <div>
+                        <Label className="text-base font-medium mb-3 block">Hora disponible</Label>
+                        {timeSlots.length === 0 ? (
+                          <div className="p-4 bg-gray-50 border rounded-lg text-center">
+                            <p className="text-gray-600">No hay horarios disponibles para esta fecha.</p>
+                          </div>
+                        ) : (
+                          <RadioGroup value={selectedTime} onValueChange={setSelectedTime}>
+                            <div className="grid grid-cols-3 gap-3">
+                              {timeSlots.map((time: string) => (
+                                <div
+                                  key={time}
+                                  className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50"
+                                >
+                                  <RadioGroupItem value={time} id={time} />
+                                  <Label htmlFor={time} className="cursor-pointer">
+                                    {time}
+                                  </Label>
+                                </div>
+                              ))}
+                            </div>
+                          </RadioGroup>
+                        )}
                       </div>
                     )}
                   </CardContent>

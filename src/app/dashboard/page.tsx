@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useSession, signOut } from "next-auth/react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import { Calendar, Users, Clock, Plus, Bell, Settings, LogOut, Loader2 } from "lucide-react"
+import { Calendar, Users, Clock, Plus, Bell, Settings, LogOut, Loader2, Briefcase } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -137,6 +137,18 @@ export default function DashboardPage() {
                 <Button className="w-full justify-start" variant="outline">
                   <Calendar className="w-4 h-4 mr-2" />
                   Agendar Cita
+                </Button>
+              </Link>
+              <Link href="/dashboard/services">
+                <Button className="w-full justify-start" variant="outline">
+                  <Briefcase className="w-4 h-4 mr-2" />
+                  Gestionar Servicios
+                </Button>
+              </Link>
+              <Link href="/dashboard/schedule">
+                <Button className="w-full justify-start" variant="outline">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Configurar Horarios
                 </Button>
               </Link>
               <Link href="/dashboard/patients">
