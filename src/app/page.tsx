@@ -13,7 +13,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Calendar className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">MediCare Pro</span>
+            <span className="text-xl font-bold text-gray-900">Dopilot</span>
           </div>
           <div className="space-x-4">
             <Link href="/login">
@@ -117,7 +117,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="bg-white p-8 rounded-lg shadow-lg">
-              <img src="/dashboardDC.jpg" alt="Dashboard de MediCare Pro" className="w-full rounded-lg" />
+              <img src="/dashboardDC.jpg" alt="Dashboard de Dopilot" className="w-full rounded-lg" />
             </div>
           </div>
         </div>
@@ -127,7 +127,7 @@ export default function LandingPage() {
       <section className="py-16 px-4 bg-blue-600 text-white">
         <div className="container mx-auto text-center">
           <h3 className="text-3xl font-bold mb-4">¿Listo para modernizar tu consulta?</h3>
-          <p className="text-xl mb-8 opacity-90">Únete a cientos de doctores que ya confían en MediCare Pro</p>
+          <p className="text-xl mb-8 opacity-90">Únete a cientos de doctores que ya confían en Dopilot</p>
           <Link href="/register">
             <Button size="lg" variant="secondary" className="px-8 py-3">
               Comenzar Prueba Gratuita
@@ -139,7 +139,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-8 px-4">
         <div className="container mx-auto text-center">
-          <p>&copy; 2024 MediCare Pro. Todos los derechos reservados.</p>
+          <p>&copy; 2024 Dopilot. Todos los derechos reservados.</p>
         </div>
       </footer>
     </div>

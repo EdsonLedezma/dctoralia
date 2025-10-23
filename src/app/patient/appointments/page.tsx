@@ -97,7 +97,7 @@ export default function PatientAppointmentsPage() {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Calendar className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold">MediCare Pro</span>
+              <span className="text-xl font-bold">Dopilot</span>
             </div>
             <div className="text-gray-600">|</div>
             <h1 className="text-xl font-semibold">Mis Citas</h1>
@@ -212,7 +212,7 @@ export default function PatientAppointmentsPage() {
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2 text-sm">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span>{formatDate(appointment.date)}</span>
+                        <span>{formatDate(appointment.date ?? "")}</span>
                       </div>
                       <div className="flex items-center space-x-2 text-sm">
                         <Clock className="w-4 h-4 text-gray-400" />

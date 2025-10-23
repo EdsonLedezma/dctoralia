@@ -6,7 +6,7 @@ import { Geist } from "next/font/google";
 import Providers from "~/components/providers/Providers";
 
 export const metadata: Metadata = {
-  title: "MediCare Pro",
+  title: "Dopilot",
   description: "Sistema de gestión médica",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };

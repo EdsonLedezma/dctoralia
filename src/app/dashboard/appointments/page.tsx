@@ -120,7 +120,7 @@ export default function AppointmentsPage() {
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold">MediCare Pro</span>
+                <span className="text-xl font-bold">Dopilot</span>
               </Link>
               <div className="text-gray-600">|</div>
               <h1 className="text-xl font-semibold">Agenda de Citas</h1>

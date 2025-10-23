@@ -6,21 +6,55 @@ export async function POST(req: Request) {
   if (!doctorPhone || !patientId || !serviceId || !date || !time) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+  
+  // Buscar doctor por teléfono
   const doctor = await prisma.doctor.findFirst({ where: { phone: doctorPhone } });
   if (!doctor) return NextResponse.json({ error: 'Doctor not found' }, { status: 404 });
+  
+  // Buscar el servicio para obtener la duración
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+  
+  // Verificar disponibilidad - buscar citas existentes en esa fecha y hora
+  const appointmentDate = new Date(date);
+  const existingAppointments = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date: appointmentDate,
+      time: time,
+      status: {
+        in: ['PENDING', 'CONFIRMED']
+      }
+    }
+  });
+  
+  if (existingAppointments.length > 0) {
+    return NextResponse.json({ 
+      error: 'Time slot not available',
+      message: 'El horario solicitado ya está ocupado'
+    }, { status: 409 });
+  }
+  
+  // Crear la cita si está disponible
   const appointment = await prisma.appointment.create({
     data: {
       doctorId: doctor.id,
       patientId,
       serviceId,
-      date: new Date(date),
+      date: appointmentDate,
       time,
       notes,
       status: 'PENDING',
-      duration: 30 // puedes ajustar esto
+      duration: service.duration
     }
   });
-  return NextResponse.json({ appointmentId: appointment.id, status: appointment.status });
+  
+  return NextResponse.json({ 
+    appointmentId: appointment.id, 
+    status: appointment.status,
+    date: appointment.date,
+    time: appointment.time
+  });
 }
 
 /**
