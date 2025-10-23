@@ -1,6 +1,7 @@
 // server/api/routers/appointment.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { TRPCError } from "@trpc/server";
 
 export const useAppointment = createTRPCRouter({
   // Obtener todas las citas con relaciones incluidas
@@ -61,6 +62,41 @@ export const useAppointment = createTRPCRouter({
     }
   }),
 
+  // Próximas citas (desde ahora, limit configurable). Devuelve próximas para doctor o paciente según rol actual
+  upcoming: protectedProcedure
+    .input(z.object({ limit: z.number().int().positive().max(100).optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      try {
+        const limit = input?.limit ?? 10;
+        const now = new Date();
+        if (ctx.session.user.role === "DOCTOR") {
+          const doctor = await ctx.db.doctor.findUnique({ where: { userId: ctx.session.user.id } });
+          if (!doctor) return { status: 404, message: "Perfil de doctor no encontrado", result: [], error: null };
+          const appointments = await ctx.db.appointment.findMany({
+            where: { doctorId: doctor.id, date: { gte: now }, status: { in: ["PENDING", "CONFIRMED"] } },
+            include: { patient: { include: { user: { select: { name: true, email: true } } } }, service: true },
+            orderBy: { date: "asc" },
+            take: limit,
+          });
+          return { status: 200, message: "Próximas citas del doctor", result: appointments, error: null };
+        }
+        if (ctx.session.user.role === "PATIENT") {
+          const patient = await ctx.db.patient.findUnique({ where: { userId: ctx.session.user.id } });
+          if (!patient) return { status: 404, message: "Perfil de paciente no encontrado", result: [], error: null };
+          const appointments = await ctx.db.appointment.findMany({
+            where: { patientId: patient.id, date: { gte: now }, status: { in: ["PENDING", "CONFIRMED"] } },
+            include: { doctor: { include: { user: { select: { name: true, email: true } } } }, service: true },
+            orderBy: { date: "asc" },
+            take: limit,
+          });
+          return { status: 200, message: "Próximas citas del paciente", result: appointments, error: null };
+        }
+        return { status: 200, message: "Sin rol", result: [], error: null };
+      } catch (error) {
+        return { status: 500, message: "Error al obtener próximas citas", result: null, error };
+      }
+    }),
+
   // Obtener cita por ID
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
@@ -105,6 +141,7 @@ export const useAppointment = createTRPCRouter({
         time: z.string(),
         duration: z.number().int().positive(),
         reason: z.string(),
+        severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
         notes: z.string().optional(),
       }),
     )
@@ -175,7 +212,19 @@ export const useAppointment = createTRPCRouter({
             duration: input.duration,
             reason: input.reason,
             notes: input.notes ?? "",
+            severity: input.severity,
             status: "PENDING",
+          },
+        });
+        // Notificación para el doctor
+        await ctx.db.notification.create({
+          data: {
+            doctorId: doctorIdToUse,
+            patientId: patientIdToUse,
+            type: "APPOINTMENT_BOOKED",
+            title: "Nueva cita agendada",
+            message: `Se agendó una cita para ${input.date.toISOString().slice(0, 10)} a las ${input.time}.`,
+            appointmentId: newAppointment.id,
           },
         });
         return {
@@ -191,6 +240,81 @@ export const useAppointment = createTRPCRouter({
           result: null,
           error,
         };
+      }
+    }),
+
+  // Solicitar reagendar (valida disponibilidad y notifica al doctor)
+  reschedule: protectedProcedure
+    .input(z.object({ id: z.string(), newDate: z.date(), newTime: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const appt = await ctx.db.appointment.findUnique({ where: { id: input.id } });
+        if (!appt) throw new TRPCError({ code: "NOT_FOUND", message: "Cita no encontrada" });
+
+        // Validar disponibilidad del doctor con Schedule activo en el día de la semana
+        const dayOfWeek = input.newDate.getDay();
+        const schedule = await ctx.db.schedule.findFirst({
+          where: { doctorId: appt.doctorId, dayOfWeek, isActive: true },
+        });
+        if (!schedule) {
+          return { status: 400, message: "El doctor no tiene horario disponible ese día", result: null, error: null };
+        }
+        const within = input.newTime >= schedule.startTime && input.newTime <= schedule.endTime;
+        if (!within) {
+          return { status: 400, message: "Hora fuera del horario disponible", result: null, error: null };
+        }
+
+        // Verificar que no haya otra cita en ese horario (mismo doctor, misma fecha, misma hora)
+        const clash = await ctx.db.appointment.findFirst({
+          where: { doctorId: appt.doctorId, date: input.newDate, time: input.newTime, status: { in: ["PENDING", "CONFIRMED"] } },
+        });
+        if (clash && clash.id !== appt.id) {
+          return { status: 409, message: "Horario ya ocupado", result: null, error: null };
+        }
+
+        const updated = await ctx.db.appointment.update({
+          where: { id: input.id },
+          data: { date: input.newDate, time: input.newTime, status: "CONFIRMED" },
+        });
+
+        await ctx.db.notification.create({
+          data: {
+            doctorId: appt.doctorId,
+            patientId: appt.patientId,
+            type: "APPOINTMENT_RESCHEDULED",
+            title: "Cita reagendada",
+            message: `La cita fue reagendada a ${input.newDate.toISOString().slice(0, 10)} ${input.newTime}.`,
+            appointmentId: updated.id,
+          },
+        });
+        return { status: 200, message: "Cita reagendada", result: updated, error: null };
+      } catch (error) {
+        return { status: 500, message: "Error al reagendar", result: null, error };
+      }
+    }),
+
+  // Cancelar cita: libera el horario (al estar basado en Schedule, basta con poner estado)
+  cancel: protectedProcedure
+    .input(z.object({ id: z.string(), reason: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const appt = await ctx.db.appointment.update({
+          where: { id: input.id },
+          data: { status: "CANCELLED", reason: input.reason },
+        });
+        await ctx.db.notification.create({
+          data: {
+            doctorId: appt.doctorId,
+            patientId: appt.patientId,
+            type: "APPOINTMENT_CANCELLED",
+            title: "Cita cancelada",
+            message: `El paciente canceló su cita del ${appt.date.toISOString().slice(0, 10)} ${appt.time}.`,
+            appointmentId: appt.id,
+          },
+        });
+        return { status: 200, message: "Cita cancelada", result: appt, error: null };
+      } catch (error) {
+        return { status: 500, message: "Error al cancelar", result: null, error };
       }
     }),
 
@@ -326,6 +450,44 @@ export const useAppointment = createTRPCRouter({
           result: null,
           error,
         };
+      }
+    }),
+
+  // Rellenar serviceId para citas existentes sin servicio: crea/usa "Consulta General" por doctor
+  backfillServiceId: protectedProcedure
+    .input(z.object({ limit: z.number().int().positive().max(500).optional() }).optional())
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const limit = input?.limit ?? 200;
+        const orphanAppointments = await ctx.db.appointment.findMany({
+          where: { serviceId: null },
+          select: { id: true, doctorId: true, duration: true },
+          take: limit,
+        });
+        if (orphanAppointments.length === 0) {
+          return { status: 200, message: "No hay citas huérfanas", result: 0, error: null };
+        }
+
+        const defaultServiceName = "Consulta General";
+        let updatedCount = 0;
+        for (const appt of orphanAppointments) {
+          const existingDefault = await ctx.db.service.findFirst({ where: { doctorId: appt.doctorId, name: defaultServiceName } });
+          const defaultService = existingDefault
+            ?? (await ctx.db.service.create({
+              data: {
+                doctorId: appt.doctorId,
+                name: defaultServiceName,
+                description: "Consulta general creada automáticamente",
+                price: 0,
+                duration: appt.duration,
+              },
+            }));
+          await ctx.db.appointment.update({ where: { id: appt.id }, data: { serviceId: defaultService.id } });
+          updatedCount += 1;
+        }
+        return { status: 200, message: "Citas actualizadas", result: updatedCount, error: null };
+      } catch (error) {
+        return { status: 500, message: "Error en backfill de serviceId", result: null, error };
       }
     }),
 });

@@ -36,6 +36,61 @@ export const usePatients = createTRPCRouter({
     }
   }),
 
+  // CRUD de historial médico básico del paciente
+  upsertMedicalHistory: protectedProcedure.input(
+    z.object({
+      patientId: z.string(),
+      bloodType: z.enum(["A_POS","A_NEG","B_POS","B_NEG","AB_POS","AB_NEG","O_POS","O_NEG"]).optional(),
+      allergies: z.array(z.string()).default([]),
+      medications: z.array(z.string()).default([]),
+      chronicDiseases: z.array(z.string()).default([]),
+      surgeries: z.array(z.string()).default([]),
+      immunizations: z.array(z.string()).default([]),
+      healthStatus: z.enum(["HEALTHY","LOW_IMMUNITY","SICK_LOW_RISK","SICK_HIGH_RISK"]).optional(),
+      notes: z.string().optional(),
+    })
+  ).mutation(async ({ input, ctx }) => {
+    try {
+      const history = await ctx.db.medicalHistory.upsert({
+        where: { patientId: input.patientId },
+        update: {
+          bloodType: input.bloodType,
+          allergies: input.allergies,
+          medications: input.medications,
+          chronicDiseases: input.chronicDiseases,
+          surgeries: input.surgeries,
+          immunizations: input.immunizations,
+          healthStatus: input.healthStatus,
+          notes: input.notes,
+          lastUpdated: new Date(),
+        },
+        create: {
+          patientId: input.patientId,
+          bloodType: input.bloodType,
+          allergies: input.allergies,
+          medications: input.medications,
+          chronicDiseases: input.chronicDiseases,
+          surgeries: input.surgeries,
+          immunizations: input.immunizations,
+          healthStatus: input.healthStatus ?? "HEALTHY",
+          notes: input.notes,
+        },
+      });
+      return { status: 200, message: "Historial médico guardado", result: history, error: null };
+    } catch (error) {
+      return { status: 500, message: "Error al guardar historial médico", result: null, error };
+    }
+  }),
+
+  getMedicalHistory: protectedProcedure.input(z.object({ patientId: z.string() })).query(async ({ input, ctx }) => {
+    try {
+      const history = await ctx.db.medicalHistory.findUnique({ where: { patientId: input.patientId } });
+      return { status: 200, message: "Historial médico", result: history, error: null };
+    } catch (error) {
+      return { status: 500, message: "Error al obtener historial médico", result: null, error };
+    }
+  }),
+
   // Obtener paciente por ID
   getById: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
     try {
@@ -201,6 +256,21 @@ export const usePatients = createTRPCRouter({
     notes: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     try {
+      // Validar disponibilidad antes de crear
+      const dayOfWeek = input.date.getDay();
+      const schedule = await ctx.db.schedule.findFirst({ where: { doctorId: input.doctorId, dayOfWeek, isActive: true } });
+      if (!schedule) {
+        return { status: 400, message: "El doctor no tiene horario disponible ese día", result: null, error: null };
+      }
+      const within = input.time >= schedule.startTime && input.time <= schedule.endTime;
+      if (!within) {
+        return { status: 400, message: "Hora fuera del horario disponible", result: null, error: null };
+      }
+      const clash = await ctx.db.appointment.findFirst({ where: { doctorId: input.doctorId, date: input.date, time: input.time, status: { in: ["PENDING","CONFIRMED"] } } });
+      if (clash) {
+        return { status: 409, message: "Horario ya ocupado", result: null, error: null };
+      }
+
       const appointment = await ctx.db.appointment.create({
         data: {
           doctorId: input.doctorId,
@@ -211,6 +281,16 @@ export const usePatients = createTRPCRouter({
           duration: input.duration,
           reason: input.reason,
           notes: input.notes,
+        },
+      });
+      await ctx.db.notification.create({
+        data: {
+          doctorId: input.doctorId,
+          patientId: input.patientId,
+          type: "APPOINTMENT_BOOKED",
+          title: "Nueva cita agendada",
+          message: `Se agendó una cita para ${input.date.toISOString().slice(0, 10)} a las ${input.time}.`,
+          appointmentId: appointment.id,
         },
       });
       return {

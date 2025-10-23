@@ -29,6 +29,74 @@ export const useDoctor = createTRPCRouter({
     }
   }),
 
+  // Doctores visibles para el paciente autenticado (para agendar)
+  listForPatient: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      // Mostrar doctores activos con servicios activos y horarios activos
+      const doctors = await ctx.db.doctor.findMany({
+        where: {
+          services: { some: { isActive: true } },
+          schedules: { some: { isActive: true } },
+        },
+        include: {
+          user: { select: { id: true, name: true, image: true } },
+          services: { where: { isActive: true } },
+          schedules: { where: { isActive: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return { status: 200, message: "Doctores disponibles", result: doctors, error: null };
+    } catch (error) {
+      return { status: 500, message: "Error al listar doctores disponibles", result: null, error };
+    }
+  }),
+
+  // Buscar doctores por nombre, teléfono o especialidad (público)
+  search: publicProcedure
+    .input(
+      z.object({
+        q: z.string().min(1),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        const q = input.q;
+        const doctors = await ctx.db.doctor.findMany({
+          where: {
+            OR: [
+              { specialty: { contains: q, mode: "insensitive" } },
+              { phone: { contains: q, mode: "insensitive" } },
+              {
+                user: {
+                  // nombre del usuario doctor
+                  is: { name: { contains: q, mode: "insensitive" } },
+                },
+              },
+            ],
+          },
+          include: {
+            user: { select: { id: true, name: true, image: true } },
+            services: true,
+            reviews: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        return {
+          status: 200,
+          message: "Resultados de búsqueda de doctores",
+          result: doctors,
+          error: null,
+        };
+      } catch (error) {
+        return {
+          status: 500,
+          message: "Error al buscar doctores",
+          result: null,
+          error,
+        };
+      }
+    }),
+
   // Obtener doctor por ID (público)
   getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
     try {
