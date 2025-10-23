@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
@@ -11,39 +11,115 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { ArrowLeft, User, Edit, Save, X, Camera, Phone, Mail, Heart, Shield } from "lucide-react"
 import Link from "next/link"
+import { api } from "~/trpc/react"
+import { toast } from "sonner"
 
 export default function PatientProfilePage() {
   const { data: session } = useSession()
   const [isEditing, setIsEditing] = useState(false)
+  
+  const { data: profile, refetch } = api.auth.getProfile.useQuery()
+  const patient = profile?.patient
+  const user = profile
+  
+  const { data: medicalHistoryRes } = api.patients.getMedicalHistory.useQuery(
+    { patientId: patient?.id as string },
+    { enabled: !!patient?.id }
+  )
+  const medicalHistory = medicalHistoryRes?.result
+  
+  const updatePhone = api.patients.updatePhone.useMutation()
+  const updateAddress = api.patients.updateAddress.useMutation()
+  const updateBirthDate = api.patients.updateBirthDate.useMutation()
+  const updateGender = api.patients.updateGender.useMutation()
+  const upsertMedicalHistory = api.patients.upsertMedicalHistory.useMutation()
+  
   const [profileData, setProfileData] = useState({
-    firstName: "María",
-    lastName: "González",
-    email: "maria.gonzalez@email.com",
-    phone: "+1 234 567 8900",
-    birthDate: "1990-05-15",
-    gender: "femenino",
-    address: "Calle Principal 123, Ciudad",
-    bloodType: "O+",
-    height: "165",
-    weight: "60",
-    emergencyContact: "Carlos González",
-    emergencyPhone: "+1 234 567 8901",
-    emergencyRelation: "Esposo",
-    medicalHistory: "Sin antecedentes médicos relevantes",
-    allergies: "Penicilina",
-    currentMedications: "Vitamina D3 - 1000 UI diario",
-    insuranceProvider: "Seguro Nacional",
-    insuranceNumber: "SN123456789",
+    firstName: user?.name?.split(" ")[0] || "",
+    lastName: user?.name?.split(" ").slice(1).join(" ") || "",
+    email: user?.email || "",
+    phone: patient?.phone || "",
+    birthDate: patient?.birthDate?.toISOString().split('T')[0] || "",
+    gender: patient?.gender || "",
+    address: patient?.address || "",
+    bloodType: medicalHistory?.bloodType || "",
+    height: "",
+    weight: "",
+    emergencyContact: "",
+    emergencyPhone: "",
+    emergencyRelation: "",
+    medicalHistory: medicalHistory?.notes || "",
+    allergies: medicalHistory?.allergies?.join(", ") || "",
+    currentMedications: medicalHistory?.medications?.join(", ") || "",
+    insuranceProvider: "",
+    insuranceNumber: "",
   })
+
+  useEffect(() => {
+    if (patient && user && medicalHistory) {
+      setProfileData({
+        firstName: user.name?.split(" ")[0] || "",
+        lastName: user.name?.split(" ").slice(1).join(" ") || "",
+        email: user.email || "",
+        phone: patient.phone || "",
+        birthDate: patient.birthDate?.toISOString().split('T')[0] || "",
+        gender: patient.gender || "",
+        address: patient.address || "",
+        bloodType: medicalHistory.bloodType || "",
+        height: "",
+        weight: "",
+        emergencyContact: "",
+        emergencyPhone: "",
+        emergencyRelation: "",
+        medicalHistory: medicalHistory.notes || "",
+        allergies: medicalHistory.allergies?.join(", ") || "",
+        currentMedications: medicalHistory.medications?.join(", ") || "",
+        insuranceProvider: "",
+        insuranceNumber: "",
+      })
+    }
+  }, [patient, user, medicalHistory])
 
   const handleInputChange = (field: string, value: string) => {
     setProfileData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSave = () => {
-    setIsEditing(false)
-    // Aquí guardarías los datos en la base de datos
-    console.log("Guardando perfil:", profileData)
+  const handleSave = async () => {
+    if (!patient?.id) return
+    
+    try {
+      // Actualizar datos del paciente
+      if (profileData.phone !== patient.phone) {
+        await updatePhone.mutateAsync({ id: patient.id, phone: profileData.phone })
+      }
+      if (profileData.address !== patient.address) {
+        await updateAddress.mutateAsync({ id: patient.id, address: profileData.address })
+      }
+      if (profileData.birthDate !== patient.birthDate?.toISOString().split('T')[0]) {
+        await updateBirthDate.mutateAsync({ id: patient.id, birthDate: new Date(profileData.birthDate) })
+      }
+      if (profileData.gender !== patient.gender) {
+        await updateGender.mutateAsync({ id: patient.id, gender: profileData.gender })
+      }
+      
+      // Actualizar historial médico
+      await upsertMedicalHistory.mutateAsync({
+        patientId: patient.id,
+        bloodType: profileData.bloodType as any,
+        allergies: profileData.allergies.split(",").map(a => a.trim()).filter(Boolean),
+        medications: profileData.currentMedications.split(",").map(m => m.trim()).filter(Boolean),
+        chronicDiseases: [],
+        surgeries: [],
+        immunizations: [],
+        notes: profileData.medicalHistory,
+      })
+      
+      toast.success("Perfil actualizado correctamente")
+      setIsEditing(false)
+      refetch()
+    } catch (error) {
+      toast.error("Error al actualizar el perfil")
+    }
   }
 
   const calculateAge = (birthDate: string) => {

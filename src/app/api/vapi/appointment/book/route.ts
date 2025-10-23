@@ -1,10 +1,30 @@
 import { NextResponse } from 'next/server';
 import {prisma} from '~/lib/prisma';
+import { parseDateAndTime, isValidFutureDate } from '~/lib/date-parser';
 
 export async function POST(req: Request) {
   const { doctorPhone, patientId, serviceId, serviceName, date, time, notes, reason } = await req.json();
   if (!doctorPhone || !patientId || !date || !time) {
     return NextResponse.json({ error: 'Missing required fields: doctorPhone, patientId, date, time' }, { status: 400 });
+  }
+  
+  // Parsear y validar fecha y hora
+  const parsed = parseDateAndTime(date, time);
+  if (!parsed) {
+    return NextResponse.json({ 
+      error: 'Invalid date or time format',
+      message: 'La fecha debe ser YYYY-MM-DD o timestamp, y la hora HH:mm (ej: 10:30)'
+    }, { status: 400 });
+  }
+  
+  const { date: appointmentDate, time: appointmentTime } = parsed;
+  
+  // Validar que la fecha no sea del pasado
+  if (!isValidFutureDate(appointmentDate)) {
+    return NextResponse.json({ 
+      error: 'Invalid date',
+      message: 'No se pueden agendar citas en fechas pasadas'
+    }, { status: 400 });
   }
   
   // Buscar doctor por teléfono
@@ -48,12 +68,11 @@ export async function POST(req: Request) {
   }
   
   // Verificar disponibilidad - buscar citas existentes en esa fecha y hora
-  const appointmentDate = new Date(date);
   const existingAppointments = await prisma.appointment.findMany({
     where: {
       doctorId: doctor.id,
       date: appointmentDate,
-      time: time,
+      time: appointmentTime,
       status: {
         in: ['PENDING', 'CONFIRMED']
       }
@@ -74,7 +93,7 @@ export async function POST(req: Request) {
       patientId,
       serviceId: service.id,
       date: appointmentDate,
-      time,
+      time: appointmentTime,
       notes,
       reason: reason || serviceName,
       status: 'PENDING',
@@ -104,8 +123,8 @@ export async function POST(req: Request) {
  *   "patientId": "string",           // Patient.id (requerido)
  *   "serviceId": "string",           // Service.id (opcional si se usa serviceName)
  *   "serviceName": "string",         // Nombre del servicio (opcional si se usa serviceId)
- *   "date": "2025-10-01" | ISO,      // Fecha de la cita (requerido)
- *   "time": "HH:mm",                 // Hora de la cita (requerido)
+ *   "date": "string|number",         // Fecha: "YYYY-MM-DD", "DD/MM/YYYY", timestamp (requerido)
+ *   "time": "string|number",         // Hora: "HH:mm", "HHMM", o número 1030 (requerido)
  *   "reason": "string",              // Razón de la cita (opcional)
  *   "notes": "string"                // Notas adicionales (opcional)
  * }
@@ -127,6 +146,8 @@ export async function POST(req: Request) {
  * 
  * Errores:
  * - 400 { "error": "Missing required fields" }
+ * - 400 { "error": "Invalid date or time format" } - Formato de fecha/hora no válido
+ * - 400 { "error": "Invalid date" } - Fecha en el pasado
  * - 400 { "error": "Either serviceId or serviceName must be provided" }
  * - 404 { "error": "Doctor not found" }
  * - 404 { "error": "Service not found" }
@@ -156,5 +177,16 @@ export async function POST(req: Request) {
  *    "reason":"Chequeo anual",
  *    "date":"2025-10-01",
  *    "time":"10:30"
+ *  }'
+ * 
+ * // Con diferentes formatos de fecha/hora:
+ * curl -X POST "http://localhost:3000/api/vapi/appointment/book" \
+ *  -H "Content-Type: application/json" \
+ *  -d '{
+ *    "doctorPhone":"+52 555-000-0000",
+ *    "patientId":"pat_123",
+ *    "serviceName":"Consulta General",
+ *    "date":"23/10/2025",
+ *    "time":1430
  *  }'
  */

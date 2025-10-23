@@ -5,15 +5,34 @@ import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
 import { Input } from "~/components/ui/input"
+import { Label } from "~/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
-import { Calendar, Clock, User, Search, Filter, Plus, MapPin, Phone, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, User, Search, Filter, Plus, MapPin, Phone, ArrowLeft, X } from "lucide-react"
 import Link from "next/link"
 import { api } from "src/trpc/react"
+import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "~/components/ui/dialog"
 
 export default function PatientAppointmentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const { data: mine } = api.appointments.listMine.useQuery()
+  const [rescheduleDialog, setRescheduleDialog] = useState<{ open: boolean; appointmentId: string | null }>({
+    open: false,
+    appointmentId: null,
+  })
+  const [rescheduleData, setRescheduleData] = useState({ date: "", time: "" })
+  
+  const { data: mine, refetch } = api.appointments.listMine.useQuery()
+  const cancelMutation = api.appointments.cancel.useMutation()
+  const rescheduleMutation = api.appointments.reschedule.useMutation()
+  
   const appointments = (mine?.result ?? []).map((a: any) => ({
     id: a.id,
     doctor: a.doctor?.user?.name ?? "",
@@ -80,6 +99,44 @@ export default function PatientAppointmentsPage() {
 
   const upcomingCount = appointments.filter((apt) => apt.status === "confirmed" || apt.status === "pending").length
   const completedCount = appointments.filter((apt) => apt.status === "completed").length
+
+  const handleCancel = async (appointmentId: string) => {
+    if (!confirm("¿Estás seguro de cancelar esta cita?")) return
+    
+    try {
+      await cancelMutation.mutateAsync({ id: appointmentId, reason: "Cancelada por el paciente" })
+      toast.success("Cita cancelada correctamente")
+      refetch()
+    } catch (error) {
+      toast.error("Error al cancelar la cita")
+    }
+  }
+
+  const handleReschedule = async () => {
+    if (!rescheduleDialog.appointmentId || !rescheduleData.date || !rescheduleData.time) {
+      toast.error("Completa todos los campos")
+      return
+    }
+
+    try {
+      await rescheduleMutation.mutateAsync({
+        id: rescheduleDialog.appointmentId,
+        newDate: new Date(`${rescheduleData.date}T${rescheduleData.time}:00`),
+        newTime: rescheduleData.time,
+      })
+      toast.success("Cita reagendada correctamente")
+      setRescheduleDialog({ open: false, appointmentId: null })
+      setRescheduleData({ date: "", time: "" })
+      refetch()
+    } catch (error) {
+      toast.error("Error al reagendar la cita")
+    }
+  }
+
+  const openRescheduleDialog = (appointmentId: string, currentDate: string, currentTime: string) => {
+    setRescheduleDialog({ open: true, appointmentId })
+    setRescheduleData({ date: currentDate, time: currentTime })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -242,15 +299,25 @@ export default function PatientAppointmentsPage() {
                   )}
 
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline">
-                      Ver Detalles
-                    </Button>
+                    <Link href={`/patient/appointments/${appointment.id}`}>
+                      <Button size="sm" variant="outline">
+                        Ver Detalles
+                      </Button>
+                    </Link>
                     {(appointment.status === "confirmed" || appointment.status === "pending") && (
                       <>
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => openRescheduleDialog(appointment.id, appointment.date || "", appointment.time)}
+                        >
                           Reagendar
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleCancel(appointment.id)}
+                        >
                           Cancelar
                         </Button>
                       </>
@@ -260,9 +327,11 @@ export default function PatientAppointmentsPage() {
                         Descargar Reporte
                       </Button>
                     )}
-                    <Button size="sm" variant="outline">
-                      <Phone className="w-4 h-4 mr-1" />
-                      Contactar
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={`tel:${appointment.phone}`}>
+                        <Phone className="w-4 h-4 mr-1" />
+                        Contactar
+                      </a>
                     </Button>
                   </div>
                 </div>
@@ -271,6 +340,50 @@ export default function PatientAppointmentsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reschedule Dialog */}
+      <Dialog open={rescheduleDialog.open} onOpenChange={(open: boolean) => setRescheduleDialog({ ...rescheduleDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reagendar Cita</DialogTitle>
+            <DialogDescription>
+              Selecciona la nueva fecha y hora para tu cita
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reschedule-date">Nueva Fecha</Label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                value={rescheduleData.date}
+                onChange={(e) => setRescheduleData({ ...rescheduleData, date: e.target.value })}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reschedule-time">Nueva Hora</Label>
+              <Input
+                id="reschedule-time"
+                type="time"
+                value={rescheduleData.time}
+                onChange={(e) => setRescheduleData({ ...rescheduleData, time: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setRescheduleDialog({ open: false, appointmentId: null })}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleReschedule}>
+              Confirmar Reagendado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
