@@ -1,5 +1,5 @@
 import "~/styles/globals.css";
-
+import {Analytics} from "@vercel/analytics/react";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
@@ -23,6 +23,7 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable}`}>
       <body>
         <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );
