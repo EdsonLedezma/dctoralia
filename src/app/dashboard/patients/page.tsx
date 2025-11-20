@@ -17,6 +17,23 @@ export default function PatientsPage() {
   const { data: patientsData, isLoading } = api.patients.getAll.useQuery()
   const patients = patientsData?.result || []
 
+  // Obtener citas del doctor para calcular próximas citas
+  const { data: appointmentsData } = api.appointments.listMine.useQuery()
+  const appointments = appointmentsData?.result ?? []
+
+  // Calculate statistics
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const newPatientsThisMonth = patients.filter((patient: any) => {
+    const createdAt = new Date(patient.createdAt)
+    return createdAt >= startOfMonth
+  }).length
+
+  const upcomingAppointments = appointments.filter((appt: any) => {
+    const apptDate = new Date(appt.date)
+    return apptDate >= now && (appt.status === "PENDING" || appt.status === "CONFIRMED")
+  }).length
+
   const filteredPatients = patients.filter(
     (patient: any) =>
     (patient.userId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -99,7 +116,7 @@ export default function PatientsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Nuevos (Este mes)</p>
-                      <p className="text-2xl font-bold text-blue-600">12</p>
+                      <p className="text-2xl font-bold text-blue-600">{newPatientsThisMonth}</p>
                     </div>
                     <Plus className="w-8 h-8 text-blue-600" />
                   </div>
@@ -110,7 +127,7 @@ export default function PatientsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-600">Próximas citas</p>
-                      <p className="text-2xl font-bold text-orange-600">8</p>
+                      <p className="text-2xl font-bold text-orange-600">{upcomingAppointments}</p>
                     </div>
                     <Calendar className="w-8 h-8 text-orange-600" />
                   </div>

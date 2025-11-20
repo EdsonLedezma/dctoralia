@@ -8,16 +8,40 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { Calendar, Clock, MapPin, Phone, Mail, Star, Award, CheckCircle, Heart, Brain, Stethoscope } from "lucide-react"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { useParams } from "next/navigation"
 import { api } from "src/trpc/react"
 
 export default function DoctorProfilePage() {
+  const { data: session } = useSession()
+  const homeHref = session?.user
+    ? session.user.role === "DOCTOR"
+      ? "/dashboard"
+      : "/patient/dashboard"
+    : "/"
   const [selectedService, setSelectedService] = useState<string | null>(null)
   const params = useParams<{ id: string }>()
   const doctorId = Array.isArray(params?.id) ? params?.id[0] : params?.id
 
   const { data: doctorRes, isLoading } = api.doctor.getById.useQuery({ id: doctorId as string }, { enabled: !!doctorId })
   const doctorData: any = doctorRes?.result
+  type Service = {
+    id: string
+    name: string
+    description: string
+    duration: string
+    price: string
+    icon: any
+    includes: string[]
+  }
+
+  type Testimonial = {
+    name: string
+    rating: number
+    comment: string
+    date: string
+  }
+
   const doctor = {
     id: doctorData?.id ?? doctorId,
     name: doctorData?.user?.name ?? "",
@@ -40,7 +64,7 @@ export default function DoctorProfilePage() {
     }, {} as Record<string, string>),
   }
 
-  const services = (doctorData?.services ?? []).map((s: any) => ({
+  const services: Service[] = (doctorData?.services ?? []).map((s: any) => ({
     id: s.id,
     name: s.name,
     description: s.description,
@@ -50,7 +74,7 @@ export default function DoctorProfilePage() {
     includes: [] as string[],
   }))
 
-  const testimonials = (doctorData?.reviews ?? []).map((r: any) => ({
+  const testimonials: Testimonial[] = (doctorData?.reviews ?? []).map((r: any) => ({
     name: r.patient?.user?.name ?? "Paciente",
     rating: r.rating ?? 0,
     comment: r.comment ?? "",
@@ -62,7 +86,7 @@ export default function DoctorProfilePage() {
       {/* Header */}
       <header className="bg-white border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/">
+          <Link href={homeHref}>
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Calendar className="w-5 h-5 text-white" />
@@ -90,7 +114,7 @@ export default function DoctorProfilePage() {
                   <AvatarFallback className="text-2xl">
                     {doctor.name
                       .split(" ")
-                      .map((n) => n[0])
+                      .map((n: string) => n[0])
                       .join("")}
                   </AvatarFallback>
                 </Avatar>
@@ -115,7 +139,7 @@ export default function DoctorProfilePage() {
                     <div className="text-sm text-gray-600">Años de experiencia</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{doctor.patients}+</div>
+                    <div className="text-2xl font-bold text-green-600">{doctor.patients ?? "-"}+</div>
                     <div className="text-sm text-gray-600">Pacientes atendidos</div>
                   </div>
                 </div>
@@ -155,7 +179,7 @@ export default function DoctorProfilePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {Object.entries(doctor.schedule).map(([day, hours]) => (
+                  {Object.entries(doctor.schedule as Record<string, string>).map(([day, hours]: [string, string]) => (
                     <div key={day} className="flex justify-between text-sm">
                       <span className="font-medium">{day}</span>
                       <span className={hours === "Cerrado" ? "text-red-600" : "text-gray-600"}>{hours}</span>
@@ -186,7 +210,7 @@ export default function DoctorProfilePage() {
                 </div>
 
                 <div className="grid gap-6">
-                  {services.map((service) => {
+                  {services.map((service: Service) => {
                     const IconComponent = service.icon
                     const isSelected = selectedService === service.id
 
@@ -219,7 +243,7 @@ export default function DoctorProfilePage() {
                             <div className="border-t pt-4 mt-4">
                               <h4 className="font-semibold mb-2">Este servicio incluye:</h4>
                               <ul className="space-y-1">
-                                {service.includes.map((item, index) => (
+                                {service.includes.map((item: string, index: number) => (
                                   <li key={index} className="flex items-center space-x-2 text-sm">
                                     <CheckCircle className="w-4 h-4 text-green-500" />
                                     <span>{item}</span>
@@ -297,14 +321,14 @@ export default function DoctorProfilePage() {
                 </div>
 
                 <div className="space-y-4">
-                  {testimonials.map((testimonial, index) => (
+                  {testimonials.map((testimonial: Testimonial, index: number) => (
                     <Card key={index}>
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <h4 className="font-semibold">{testimonial.name}</h4>
                             <div className="flex items-center space-x-1">
-                              {[...Array(testimonial.rating)].map((_, i) => (
+                              {[...Array(testimonial.rating)].map((_, i: number) => (
                                 <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
                               ))}
                             </div>

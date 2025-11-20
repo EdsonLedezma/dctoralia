@@ -356,20 +356,47 @@ export const useAppointment = createTRPCRouter({
 
   // Actualizar notas
   updateNotes: protectedProcedure
-    .input(z.object({ id: z.string(), notes: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+        notes: z.string().max(2000),
+        severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
       try {
-        const appointment = await ctx.db.appointment.update({
-          where: { id: input.id },
-          data: { notes: input.notes },
+        // Verificar que es doctor y es su cita
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { userId: ctx.session.user.id },
         });
+
+        const appointment = await ctx.db.appointment.findUnique({
+          where: { id: input.id },
+        });
+
+        if (!appointment || (doctor && appointment.doctorId !== doctor.id)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "No tienes acceso a esta cita",
+          });
+        }
+
+        const updated = await ctx.db.appointment.update({
+          where: { id: input.id },
+          data: {
+            notes: input.notes,
+            severity: input.severity,
+          },
+        });
+
         return {
           status: 200,
           message: "Notas actualizadas correctamente",
-          result: appointment.notes,
+          result: updated.notes,
           error: null,
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         return {
           status: 500,
           message: "Error al actualizar las notas",
@@ -459,13 +486,14 @@ export const useAppointment = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       try {
         const limit = input?.limit ?? 200;
+        // Buscar citas donde serviceId podría no estar asignado correctamente
         const orphanAppointments = await ctx.db.appointment.findMany({
-          where: { serviceId: null },
-          select: { id: true, doctorId: true, duration: true },
+          select: { id: true, doctorId: true, duration: true, serviceId: true },
           take: limit,
         });
+
         if (orphanAppointments.length === 0) {
-          return { status: 200, message: "No hay citas huérfanas", result: 0, error: null };
+          return { status: 200, message: "No hay citas para procesar", result: 0, error: null };
         }
 
         const defaultServiceName = "Consulta General";
@@ -488,6 +516,54 @@ export const useAppointment = createTRPCRouter({
         return { status: 200, message: "Citas actualizadas", result: updatedCount, error: null };
       } catch (error) {
         return { status: 500, message: "Error en backfill de serviceId", result: null, error };
+      }
+    }),
+  // Obtener historial clínico de un paciente (solo mis citas)
+  getPatientHistory: protectedProcedure
+    .input(z.object({ patientId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { userId: ctx.session.user.id },
+        });
+
+        if (!doctor) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "No eres doctor",
+          });
+        }
+
+        const appointments = await ctx.db.appointment.findMany({
+          where: {
+            AND: [{ patientId: input.patientId }, { doctorId: doctor.id }],
+          },
+          include: {
+            patient: {
+              select: {
+                user: { select: { name: true, email: true } },
+                medicalHistory: true,
+              },
+            },
+            service: true,
+          },
+          orderBy: { date: "desc" },
+        });
+
+        return {
+          status: 200,
+          message: "Historial del paciente",
+          result: appointments,
+          error: null,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        return {
+          status: 500,
+          message: "Error al obtener historial",
+          result: null,
+          error,
+        };
       }
     }),
 });

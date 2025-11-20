@@ -7,10 +7,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Calendar, Users, Clock, Plus, Bell, Settings, LogOut, Loader2, Briefcase } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { api } from "~/trpc/react"
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+
+  // Fetch appointments from backend
+  const { data: appointmentsData, isLoading: appointmentsLoading } = api.appointments.listMine.useQuery(undefined, {
+    enabled: status === "authenticated",
+  })
+
+  // Fetch patients from backend
+  const { data: patientsData, isLoading: patientsLoading } = api.doctor.getMyPatients.useQuery({}, {
+    enabled: status === "authenticated",
+  })
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -38,8 +49,8 @@ export default function DashboardPage() {
     await signOut({ callbackUrl: "/" })
   }
 
-  // Show loading while checking authentication
-  if (status === "loading") {
+  // Show loading while checking authentication or fetching data
+  if (status === "loading" || appointmentsLoading || patientsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -57,17 +68,41 @@ export default function DashboardPage() {
 
   const doctorName = session.user.name ?? "Doctor"
 
-  const todayAppointments = [
-    { id: 1, patient: "María González", time: "09:00", type: "Consulta General" },
-    { id: 2, patient: "Carlos Rodríguez", time: "10:30", type: "Control" },
-    { id: 3, patient: "Ana López", time: "14:00", type: "Primera Consulta" },
-    { id: 4, patient: "Pedro Martínez", time: "15:30", type: "Seguimiento" },
-  ]
+  // Filter today's appointments
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  const appointments = appointmentsData?.result ?? []
+  const todayAppointments = appointments
+    .filter((appt) => {
+      const apptDate = new Date(appt.date)
+      apptDate.setHours(0, 0, 0, 0)
+      return apptDate.getTime() === today.getTime() && (appt.status === "PENDING" || appt.status === "CONFIRMED")
+    })
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .map((appt) => {
+      // For doctor dashboard, appointments include patient data
+      const patientName =
+        "patient" in appt && appt.patient?.user?.name ? appt.patient.user.name : "Paciente"
+      return {
+        id: appt.id,
+        patient: patientName,
+        time: appt.time,
+        type: appt.service?.name ?? appt.reason,
+      }
+    })
+
+  // Calculate statistics
+  const totalPatients = patientsData?.result?.length ?? 0
+  const todayCount = todayAppointments.length
+  const pendingCount = appointments.filter((appt) => appt.status === "PENDING").length
 
   const stats = [
-    { title: "Pacientes Totales", value: "156", icon: Users, color: "text-blue-600" },
-    { title: "Citas Hoy", value: "8", icon: Calendar, color: "text-green-600" },
-    { title: "Citas Pendientes", value: "12", icon: Clock, color: "text-orange-600" },
+    { title: "Pacientes Totales", value: totalPatients.toString(), icon: Users, color: "text-blue-600" },
+    { title: "Citas Hoy", value: todayCount.toString(), icon: Calendar, color: "text-green-600" },
+    { title: "Citas Pendientes", value: pendingCount.toString(), icon: Clock, color: "text-orange-600" },
   ]
 
   return (

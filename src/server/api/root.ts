@@ -8,10 +8,7 @@ import { useDoctor } from "~/server/api/routers/doctor";
 import { useSchedule } from "~/server/api/routers/schedule";
 import { useService } from "~/server/api/routers/service";
 import { useNotifications } from "~/server/api/routers/notifications";
-
-
-
-
+import { reviewRouter } from "~/server/api/routers/review";
 
 /**
  * This is the primary router for your server.
@@ -28,6 +25,7 @@ export const appRouter = createTRPCRouter({
   schedule: useSchedule,
   services: useService,
   notifications: useNotifications,
+  review: reviewRouter,
 });
 
 // export type definition of API

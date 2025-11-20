@@ -256,23 +256,237 @@ export const useDoctor = createTRPCRouter({
     }
   }),
 
-  // Actualizar años de experiencia
-  updateExperience: protectedProcedure.input(z.object({ id: z.string(), experience: z.number() })).mutation(async ({ input, ctx }) => {
+  // Actualizar perfil completo del doctor
+  updateProfile: protectedProcedure
+    .input(
+      z.object({
+        specialty: z.string().optional(),
+        about: z.string().optional(),
+        experience: z.number().int().min(0).optional(),
+        phone: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { userId: ctx.session.user.id },
+        });
+
+        if (!doctor) {
+          return {
+            status: 404,
+            message: "Perfil de doctor no encontrado",
+            result: null,
+            error: new Error("Doctor no encontrado"),
+          };
+        }
+
+        const updated = await ctx.db.doctor.update({
+          where: { id: doctor.id },
+          data: {
+            specialty: input.specialty,
+            about: input.about,
+            experience: input.experience,
+            phone: input.phone,
+          },
+          include: {
+            user: { select: { id: true, name: true, image: true, email: true } },
+            services: true,
+            schedules: true,
+          },
+        });
+
+        return {
+          status: 200,
+          message: "Perfil actualizado correctamente",
+          result: updated,
+          error: null,
+        };
+      } catch (error) {
+        return {
+          status: 500,
+          message: "Error al actualizar perfil",
+          result: null,
+          error,
+        };
+      }
+    }),
+
+  // Obtener mi perfil completo (doctor autenticado)
+  getMyProfile: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const doctor = await ctx.db.doctor.update({ where: { id: input.id }, data: { experience: input.experience } });
+      const doctor = await ctx.db.doctor.findFirst({
+        where: { userId: ctx.session.user.id },
+        include: {
+          user: { select: { id: true, name: true, email: true, image: true } },
+          services: true,
+          schedules: true,
+          reviews: {
+            include: {
+              patient: {
+                select: { user: { select: { name: true, image: true } } },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          },
+          appointments: {
+            include: { patient: true, service: true },
+            orderBy: { date: "desc" },
+            take: 5,
+          },
+        },
+      });
+
+      if (!doctor) {
+        return {
+          status: 404,
+          message: "Perfil de doctor no encontrado",
+          result: null,
+          error: new Error("Doctor no encontrado"),
+        };
+      }
+
       return {
         status: 200,
-        message: "Años de experiencia actualizados correctamente",
-        result: doctor.experience,
+        message: "Perfil del doctor",
+        result: doctor,
         error: null,
       };
     } catch (error) {
       return {
         status: 500,
-        message: "Error al actualizar los años de experiencia",
+        message: "Error al obtener perfil",
         result: null,
         error,
       };
     }
   }),
-}); 
+
+  // Obtener mis pacientes (doctor autenticado)
+  getMyPatients: protectedProcedure
+    .input(
+      z.object({
+        search: z.string().optional(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { userId: ctx.session.user.id },
+        });
+
+        if (!doctor) {
+          return {
+            status: 404,
+            message: "Doctor no encontrado",
+            result: [],
+            error: null,
+          };
+        }
+
+        const patients = await ctx.db.patient.findMany({
+          where: {
+            AND: [
+              {
+                appointments: {
+                  some: { doctorId: doctor.id },
+                },
+              },
+              input.search
+                ? {
+                    user: {
+                      name: { contains: input.search, mode: "insensitive" },
+                    },
+                  }
+                : {},
+            ],
+          },
+          include: {
+            user: { select: { name: true, email: true, image: true } },
+            appointments: {
+              where: { doctorId: doctor.id },
+              include: { service: true },
+              orderBy: { date: "desc" },
+              take: 5,
+            },
+            medicalHistory: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        return {
+          status: 200,
+          message: "Mis pacientes",
+          result: patients,
+          error: null,
+        };
+      } catch (error) {
+        return {
+          status: 500,
+          message: "Error al obtener pacientes",
+          result: [],
+          error,
+        };
+      }
+    }),
+
+  // Obtener historial clínico de un paciente (doctor autenticado)
+  getPatientHistory: protectedProcedure
+    .input(z.object({ patientId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const doctor = await ctx.db.doctor.findFirst({
+          where: { userId: ctx.session.user.id },
+        });
+
+        if (!doctor) {
+          return {
+            status: 404,
+            message: "No eres doctor",
+            result: null,
+            error: null,
+          };
+        }
+
+        const patient = await ctx.db.patient.findUnique({
+          where: { id: input.patientId },
+          include: {
+            user: { select: { name: true, email: true, phone: true, image: true } },
+            appointments: {
+              where: { doctorId: doctor.id },
+              include: {
+                service: true,
+                doctor: { select: { user: { select: { name: true } } } },
+              },
+              orderBy: { date: "desc" },
+            },
+            medicalHistory: true,
+          },
+        });
+
+        if (!patient) {
+          return {
+            status: 404,
+            message: "Paciente no encontrado",
+            result: null,
+            error: null,
+          };
+        }
+
+        return {
+          status: 200,
+          message: "Historial del paciente",
+          result: patient,
+          error: null,
+        };
+      } catch (error) {
+        return {
+          status: 500,
+          message: "Error al obtener historial",
+          result: null,
+          error,
+        };
+      }
+    }),
+});

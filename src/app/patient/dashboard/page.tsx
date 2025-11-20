@@ -14,6 +14,12 @@ export default function PatientDashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
+  const homeHref = session?.user
+    ? session.user.role === "DOCTOR"
+      ? "/dashboard"
+      : "/patient/dashboard"
+    : "/"
+
   useEffect(() => {
     if (status === "loading") return
     if (!session || session.user.role !== "PATIENT") {
@@ -124,7 +130,7 @@ export default function PatientDashboardPage() {
       <header className="bg-white border-b">
         <div className="px-6 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-4">
-            <Link href="/">
+            <Link href={homeHref}>
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-white" />

@@ -1,100 +1,95 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { api } from "~/trpc/react"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Badge } from "~/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
-import { ArrowLeft, FileText, Heart, Pill, AlertTriangle, Download, Plus, Edit, Save, X } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import { ArrowLeft, FileText, Heart, Pill, AlertTriangle, Download, Plus, Edit, Save, X, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 
 export default function MedicalHistoryPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
-  const [personalInfo, setPersonalInfo] = useState({
-    bloodType: "O+",
-    height: "175",
-    weight: "70",
-    emergencyContact: "María González",
-    emergencyPhone: "+1 234 567 8900",
-  })
-
-  const medicalHistory = [
-    {
-      id: 1,
-      date: "2024-01-15",
-      doctor: "Dr. Carlos Rodríguez",
-      specialty: "Medicina General",
-      diagnosis: "Control rutinario",
-      treatment: "Continuar con ejercicio regular y dieta balanceada",
-      notes: "Paciente en excelente estado de salud. Presión arterial normal.",
-      files: ["Examen_sangre_15012024.pdf", "Electrocardiograma_15012024.pdf"],
-    },
-    {
-      id: 2,
-      date: "2024-01-10",
-      doctor: "Dra. Ana López",
-      specialty: "Ginecología",
-      diagnosis: "Control anual preventivo",
-      treatment: "Continuar con controles anuales",
-      notes: "Examen preventivo sin novedades. Próximo control en 12 meses.",
-      files: ["Papanicolaou_10012024.pdf"],
-    },
-    {
-      id: 3,
-      date: "2023-12-20",
-      doctor: "Dr. Juan Carlos Pérez",
-      specialty: "Cardiología",
-      diagnosis: "Evaluación cardiovascular",
-      treatment: "Ejercicio cardiovascular 30 min diarios",
-      notes: "Función cardíaca normal. Recomendado mantener actividad física.",
-      files: ["Ecocardiograma_20122023.pdf", "Holter_20122023.pdf"],
-    },
-  ]
-
-  const allergies = [
-    { id: 1, allergen: "Penicilina", severity: "Alta", reaction: "Erupción cutánea" },
-    { id: 2, allergen: "Mariscos", severity: "Media", reaction: "Hinchazón" },
-  ]
-
-  const medications = [
-    {
-      id: 1,
-      name: "Vitamina D3",
-      dosage: "1000 UI",
-      frequency: "Diario",
-      startDate: "2024-01-01",
-      prescribedBy: "Dr. Carlos Rodríguez",
-    },
-    {
-      id: 2,
-      name: "Omega 3",
-      dosage: "1000 mg",
-      frequency: "Diario",
-      startDate: "2023-12-01",
-      prescribedBy: "Dr. Juan Carlos Pérez",
-    },
-  ]
-
-  const vaccinations = [
-    { id: 1, vaccine: "COVID-19 (Pfizer)", date: "2023-10-15", nextDue: "2024-10-15" },
-    { id: 2, vaccine: "Influenza", date: "2023-09-20", nextDue: "2024-09-20" },
-    { id: 3, vaccine: "Tétanos", date: "2022-05-10", nextDue: "2032-05-10" },
-  ]
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "Alta":
-        return "bg-red-100 text-red-800"
-      case "Media":
-        return "bg-yellow-100 text-yellow-800"
-      case "Baja":
-        return "bg-green-100 text-green-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  
+  useEffect(() => {
+    if (status === "loading") return
+    if (!session || session.user.role !== "PATIENT") {
+      router.push("/login")
     }
-  }
+  }, [session, status, router])
+
+  // Obtener patient actual
+  const { data: profile } = api.auth.getProfile.useQuery(undefined, {
+    enabled: !!session
+  })
+  const patient = profile?.patient
+  
+  // Obtener historial médico
+  const { data: historyRes, isLoading: isLoadingHistory } = api.patients.getMedicalHistory.useQuery(
+    { patientId: patient?.id || "" },
+    { enabled: !!patient?.id }
+  )
+  const medicalHistory = historyRes?.result
+  
+  // Obtener citas completadas (historial)
+  const { data: appointmentsRes } = api.appointments.listMine.useQuery(undefined, {
+    enabled: !!session
+  })
+  const completedAppointments = appointmentsRes?.result?.filter((a: any) => a.status === 'COMPLETED') || []
+  
+  type BloodType = "A_POS" | "A_NEG" | "B_POS" | "B_NEG" | "AB_POS" | "AB_NEG" | "O_POS" | "O_NEG" | ""
+  
+  const [formData, setFormData] = useState<{
+    bloodType: BloodType
+    allergies: string[]
+    medications: string[]
+    chronicDiseases: string[]
+    surgeries: string[]
+    immunizations: string[]
+    notes: string
+  }>({
+    bloodType: "",
+    allergies: [],
+    medications: [],
+    chronicDiseases: [],
+    surgeries: [],
+    immunizations: [],
+    notes: "",
+  })
+  
+  // Update form when medicalHistory loads
+  useEffect(() => {
+    if (medicalHistory) {
+      setFormData({
+        bloodType: (medicalHistory.bloodType as BloodType) || "",
+        allergies: medicalHistory.allergies || [],
+        medications: medicalHistory.medications || [],
+        chronicDiseases: medicalHistory.chronicDiseases || [],
+        surgeries: medicalHistory.surgeries || [],
+        immunizations: medicalHistory.immunizations || [],
+        notes: medicalHistory.notes || "",
+      })
+    }
+  }, [medicalHistory])
+  
+  const upsertHistory = api.patients.upsertMedicalHistory.useMutation({
+    onSuccess: () => {
+      toast.success("Historial médico actualizado")
+      setIsEditing(false)
+    },
+    onError: (error) => {
+      toast.error(error.message || "Error al actualizar historial")
+    }
+  })
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("es-ES", {
@@ -105,8 +100,52 @@ export default function MedicalHistoryPage() {
   }
 
   const handleSave = () => {
-    setIsEditing(false)
-    // Aquí guardarías los datos
+    if (!patient?.id) return
+    
+    // Filtrar bloodType vacío
+    const dataToSubmit: any = {
+      patientId: patient.id,
+      allergies: formData.allergies,
+      medications: formData.medications,
+      chronicDiseases: formData.chronicDiseases,
+      surgeries: formData.surgeries,
+      immunizations: formData.immunizations,
+      notes: formData.notes,
+    }
+    
+    if (formData.bloodType) {
+      dataToSubmit.bloodType = formData.bloodType
+    }
+    
+    upsertHistory.mutate(dataToSubmit)
+  }
+  
+  const handleAddItem = (field: string, value: string) => {
+    if (!value.trim()) return
+    
+    setFormData(prev => ({
+      ...prev,
+      [field]: [...(prev[field as keyof typeof prev] as string[]), value.trim()]
+    }))
+  }
+  
+  const handleRemoveItem = (field: string, index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: (prev[field as keyof typeof prev] as string[]).filter((_, i) => i !== index)
+    }))
+  }
+  
+  if (status === "loading" || isLoadingHistory) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    )
+  }
+  
+  if (!session || !patient) {
+    return null
   }
 
   return (
@@ -158,49 +197,47 @@ export default function MedicalHistoryPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-6">
-                    {medicalHistory.map((record) => (
-                      <div key={record.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h3 className="font-semibold text-lg">{record.diagnosis}</h3>
-                            <p className="text-blue-600">
-                              {record.doctor} - {record.specialty}
-                            </p>
-                            <p className="text-sm text-gray-600">{formatDate(record.date)}</p>
+                  {completedAppointments.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      <p>No tienes historial de consultas completadas</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {completedAppointments.map((record: any) => (
+                        <div key={record.id} className="border rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h3 className="font-semibold text-lg">{record.reason || "Consulta"}</h3>
+                              <p className="text-blue-600">
+                                {record.doctor?.user?.name || "Doctor"} - {record.doctor?.specialty || "Especialidad"}
+                              </p>
+                              <p className="text-sm text-gray-600">{formatDate(record.date)}</p>
+                            </div>
+                            <Badge variant="outline">Completada</Badge>
                           </div>
-                          <Button variant="outline" size="sm">
-                            Ver Detalles
-                          </Button>
-                        </div>
 
-                        <div className="grid md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <h4 className="font-medium mb-2">Tratamiento</h4>
-                            <p className="text-sm text-gray-700">{record.treatment}</p>
-                          </div>
-                          <div>
-                            <h4 className="font-medium mb-2">Notas</h4>
-                            <p className="text-sm text-gray-700">{record.notes}</p>
-                          </div>
-                        </div>
+                          {record.notes && (
+                            <div className="mb-4">
+                              <h4 className="font-medium mb-2">Notas del doctor</h4>
+                              <p className="text-sm text-gray-700">{record.notes}</p>
+                            </div>
+                          )}
 
-                        {record.files.length > 0 && (
-                          <div>
-                            <h4 className="font-medium mb-2">Archivos Adjuntos</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {record.files.map((file, index) => (
-                                <Button key={index} variant="outline" size="sm">
-                                  <FileText className="w-4 h-4 mr-2" />
-                                  {file}
-                                </Button>
-                              ))}
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium mb-2">Servicio</h4>
+                              <p className="text-sm text-gray-700">{record.service?.name || "N/A"}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-medium mb-2">Duración</h4>
+                              <p className="text-sm text-gray-700">{record.duration || record.service?.duration || "N/A"} min</p>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -225,9 +262,9 @@ export default function MedicalHistoryPage() {
                           <X className="w-4 h-4 mr-2" />
                           Cancelar
                         </Button>
-                        <Button onClick={handleSave}>
+                        <Button onClick={handleSave} disabled={upsertHistory.isPending}>
                           <Save className="w-4 h-4 mr-2" />
-                          Guardar
+                          {upsertHistory.isPending ? "Guardando..." : "Guardar"}
                         </Button>
                       </div>
                     )}
@@ -244,74 +281,77 @@ export default function MedicalHistoryPage() {
                         <div>
                           <Label htmlFor="bloodType">Tipo de Sangre</Label>
                           {isEditing ? (
-                            <Input
-                              id="bloodType"
-                              value={personalInfo.bloodType}
-                              onChange={(e) => setPersonalInfo({ ...personalInfo, bloodType: e.target.value })}
-                            />
+                            <Select
+                              value={formData.bloodType}
+                              onValueChange={(value: BloodType) => setFormData({ ...formData, bloodType: value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona tipo de sangre" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="A_POS">A+</SelectItem>
+                                <SelectItem value="A_NEG">A-</SelectItem>
+                                <SelectItem value="B_POS">B+</SelectItem>
+                                <SelectItem value="B_NEG">B-</SelectItem>
+                                <SelectItem value="AB_POS">AB+</SelectItem>
+                                <SelectItem value="AB_NEG">AB-</SelectItem>
+                                <SelectItem value="O_POS">O+</SelectItem>
+                                <SelectItem value="O_NEG">O-</SelectItem>
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            <p className="text-lg font-medium">{personalInfo.bloodType}</p>
+                            <p className="text-lg font-medium">
+                              {formData.bloodType ? 
+                                formData.bloodType.replace('_POS', '+').replace('_NEG', '-') 
+                                : "No especificado"}
+                            </p>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label htmlFor="height">Altura (cm)</Label>
-                            {isEditing ? (
-                              <Input
-                                id="height"
-                                value={personalInfo.height}
-                                onChange={(e) => setPersonalInfo({ ...personalInfo, height: e.target.value })}
-                              />
-                            ) : (
-                              <p className="text-lg font-medium">{personalInfo.height} cm</p>
-                            )}
-                          </div>
-                          <div>
-                            <Label htmlFor="weight">Peso (kg)</Label>
-                            {isEditing ? (
-                              <Input
-                                id="weight"
-                                value={personalInfo.weight}
-                                onChange={(e) => setPersonalInfo({ ...personalInfo, weight: e.target.value })}
-                              />
-                            ) : (
-                              <p className="text-lg font-medium">{personalInfo.weight} kg</p>
-                            )}
-                          </div>
+                        <div>
+                          <Label>Estado de Salud</Label>
+                          <p className="text-lg font-medium">
+                            {medicalHistory?.healthStatus === 'HEALTHY' ? 'Saludable' :
+                             medicalHistory?.healthStatus === 'LOW_IMMUNITY' ? 'Defensas bajas' :
+                             medicalHistory?.healthStatus === 'SICK_LOW_RISK' ? 'Enfermo - Bajo riesgo' :
+                             medicalHistory?.healthStatus === 'SICK_HIGH_RISK' ? 'Enfermo - Alto riesgo' :
+                             'No especificado'}
+                          </p>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-4">
-                      <h3 className="font-semibold text-lg">Contacto de Emergencia</h3>
+                      <h3 className="font-semibold text-lg">Datos del Paciente</h3>
                       <div className="space-y-3">
                         <div>
-                          <Label htmlFor="emergencyContact">Nombre</Label>
-                          {isEditing ? (
-                            <Input
-                              id="emergencyContact"
-                              value={personalInfo.emergencyContact}
-                              onChange={(e) => setPersonalInfo({ ...personalInfo, emergencyContact: e.target.value })}
-                            />
-                          ) : (
-                            <p className="text-lg font-medium">{personalInfo.emergencyContact}</p>
-                          )}
+                          <Label>Nombre</Label>
+                          <p className="text-lg font-medium">{profile?.name}</p>
                         </div>
                         <div>
-                          <Label htmlFor="emergencyPhone">Teléfono</Label>
-                          {isEditing ? (
-                            <Input
-                              id="emergencyPhone"
-                              value={personalInfo.emergencyPhone}
-                              onChange={(e) => setPersonalInfo({ ...personalInfo, emergencyPhone: e.target.value })}
-                            />
-                          ) : (
-                            <p className="text-lg font-medium">{personalInfo.emergencyPhone}</p>
-                          )}
+                          <Label>Teléfono</Label>
+                          <p className="text-lg font-medium">{patient?.phone}</p>
                         </div>
+                        {patient?.birthDate && (
+                          <div>
+                            <Label>Fecha de Nacimiento</Label>
+                            <p className="text-lg font-medium">{formatDate(patient.birthDate.toISOString())}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
+
+                  {isEditing && formData.notes !== undefined && (
+                    <div className="mt-6">
+                      <Label htmlFor="notes">Notas adicionales</Label>
+                      <Input
+                        id="notes"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Notas sobre tu historial médico..."
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -328,29 +368,51 @@ export default function MedicalHistoryPage() {
                       </CardTitle>
                       <CardDescription>Registro de alergias y reacciones adversas</CardDescription>
                     </div>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Agregar Alergia
-                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {allergies.map((allergy) => (
-                      <div key={allergy.id} className="border rounded-lg p-4 flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">{allergy.allergen}</h3>
-                          <p className="text-sm text-gray-600">Reacción: {allergy.reaction}</p>
+                  {formData.allergies.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      <p>No tienes alergias registradas</p>
+                      {isEditing && (
+                        <p className="text-sm mt-2">Edita tu historial médico para agregar alergias</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {formData.allergies.map((allergy, index) => (
+                        <div key={index} className="border rounded-lg p-4 flex justify-between items-center">
+                          <div>
+                            <h3 className="font-semibold">{allergy}</h3>
+                          </div>
+                          {isEditing && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleRemoveItem('allergies', index)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <Badge className={getSeverityColor(allergy.severity)}>{allergy.severity}</Badge>
-                          <Button variant="outline" size="sm">
-                            Editar
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {isEditing && (
+                    <div className="mt-4">
+                      <Input
+                        placeholder="Agregar nueva alergia (presiona Enter)"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                            handleAddItem('allergies', e.currentTarget.value)
+                            e.currentTarget.value = ''
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -367,39 +429,97 @@ export default function MedicalHistoryPage() {
                       </CardTitle>
                       <CardDescription>Medicamentos que tomas actualmente</CardDescription>
                     </div>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Agregar Medicamento
-                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {medications.map((medication) => (
-                      <div key={medication.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start">
+                  {formData.medications.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Pill className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      <p>No tienes medicamentos registrados</p>
+                      {isEditing && (
+                        <p className="text-sm mt-2">Edita tu historial médico para agregar medicamentos</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {formData.medications.map((medication, index) => (
+                        <div key={index} className="border rounded-lg p-4 flex justify-between items-center">
                           <div>
-                            <h3 className="font-semibold text-lg">{medication.name}</h3>
-                            <p className="text-blue-600">Prescrito por: {medication.prescribedBy}</p>
-                            <div className="mt-2 space-y-1 text-sm">
-                              <p>
-                                <strong>Dosis:</strong> {medication.dosage}
-                              </p>
-                              <p>
-                                <strong>Frecuencia:</strong> {medication.frequency}
-                              </p>
-                              <p>
-                                <strong>Desde:</strong> {formatDate(medication.startDate)}
-                              </p>
-                            </div>
+                            <h3 className="font-semibold text-lg">{medication}</h3>
                           </div>
-                          <Button variant="outline" size="sm">
-                            Editar
-                          </Button>
+                          {isEditing && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleRemoveItem('medications', index)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {isEditing && (
+                    <div className="mt-4">
+                      <Input
+                        placeholder="Agregar nuevo medicamento (presiona Enter)"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                            handleAddItem('medications', e.currentTarget.value)
+                            e.currentTarget.value = ''
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Chronic Diseases */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Padecimientos Crónicos</CardTitle>
+                  <CardDescription>Enfermedades crónicas diagnosticadas</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {formData.chronicDiseases.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500">
+                      <p>No tienes padecimientos crónicos registrados</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {formData.chronicDiseases.map((disease, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 border rounded">
+                          <span>{disease}</span>
+                          {isEditing && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveItem('chronicDiseases', index)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {isEditing && (
+                    <div className="mt-4">
+                      <Input
+                        placeholder="Agregar padecimiento crónico (presiona Enter)"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                            handleAddItem('chronicDiseases', e.currentTarget.value)
+                            e.currentTarget.value = ''
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -411,34 +531,99 @@ export default function MedicalHistoryPage() {
                   <div className="flex justify-between items-center">
                     <div>
                       <CardTitle>Historial de Vacunas</CardTitle>
-                      <CardDescription>Registro de vacunas aplicadas y próximas dosis</CardDescription>
+                      <CardDescription>Registro de vacunas aplicadas</CardDescription>
                     </div>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Agregar Vacuna
-                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {vaccinations.map((vaccination) => (
-                      <div key={vaccination.id} className="border rounded-lg p-4 flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">{vaccination.vaccine}</h3>
-                          <p className="text-sm text-gray-600">Aplicada: {formatDate(vaccination.date)}</p>
-                          <p className="text-sm text-gray-600">Próxima dosis: {formatDate(vaccination.nextDue)}</p>
+                  {formData.immunizations.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      <p>No tienes vacunas registradas</p>
+                      {isEditing && (
+                        <p className="text-sm mt-2">Edita tu historial médico para agregar vacunas</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {formData.immunizations.map((vaccination, index) => (
+                        <div key={index} className="border rounded-lg p-4 flex justify-between items-center">
+                          <div>
+                            <h3 className="font-semibold">{vaccination}</h3>
+                          </div>
+                          {isEditing && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleRemoveItem('immunizations', index)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <Badge variant="outline">
-                            {new Date(vaccination.nextDue) > new Date() ? "Vigente" : "Vencida"}
-                          </Badge>
-                          <Button variant="outline" size="sm">
-                            Ver Certificado
-                          </Button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {isEditing && (
+                    <div className="mt-4">
+                      <Input
+                        placeholder="Agregar vacuna (presiona Enter)"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                            handleAddItem('immunizations', e.currentTarget.value)
+                            e.currentTarget.value = ''
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Surgeries */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Cirugías Previas</CardTitle>
+                  <CardDescription>Historial de procedimientos quirúrgicos</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {formData.surgeries.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500">
+                      <p>No tienes cirugías registradas</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {formData.surgeries.map((surgery, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 border rounded">
+                          <span>{surgery}</span>
+                          {isEditing && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveItem('surgeries', index)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {isEditing && (
+                    <div className="mt-4">
+                      <Input
+                        placeholder="Agregar cirugía previa (presiona Enter)"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                            handleAddItem('surgeries', e.currentTarget.value)
+                            e.currentTarget.value = ''
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
