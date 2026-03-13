@@ -38,7 +38,8 @@ export default function AuthTest() {
 
     try {
       const result = await signin(credentials.email, credentials.password)
-      setSuccess(`¡Inicio de sesión exitoso! Bienvenido ${result.user.name}`)
+      const userName = result.user?.name ?? "usuario"
+      setSuccess(`¡Inicio de sesión exitoso! Bienvenido ${userName}`)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al iniciar sesión"
       setError(errorMessage)
