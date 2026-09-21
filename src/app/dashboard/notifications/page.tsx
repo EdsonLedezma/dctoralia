@@ -1,195 +1,232 @@
-"use client"
+"use client";
 
-import { useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
-import { Bell, Calendar, Check, Clock, X } from "lucide-react"
-import { api } from "~/trpc/react"
-import { toast } from "sonner"
+import { Bell, Calendar, Check, Clock, X } from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
+import DashboardWrapper from "~/components/auth/DashboardWrapper";
+import { MotionList } from "~/components/shared/motion-list";
+import { ProductShell } from "~/components/shell/product-shell";
+import { api } from "~/trpc/react";
+import { unwrapTrpcResult } from "~/types/trpc-response";
+
+type NotificationType =
+  | "APPOINTMENT_BOOKED"
+  | "APPOINTMENT_RESCHEDULE_REQUEST"
+  | "APPOINTMENT_RESCHEDULED"
+  | "APPOINTMENT_CANCELLED";
+
+function NotificationIcon({ type }: { type: NotificationType }) {
+  if (type === "APPOINTMENT_BOOKED") {
+    return <Calendar className="h-5 w-5 text-[#6b6b6b]" />;
+  }
+  if (
+    type === "APPOINTMENT_RESCHEDULED" ||
+    type === "APPOINTMENT_RESCHEDULE_REQUEST"
+  ) {
+    return <Clock className="h-5 w-5 text-[#6b6b6b]" />;
+  }
+  if (type === "APPOINTMENT_CANCELLED") {
+    return <X className="h-5 w-5 text-[#6b6b6b]" />;
+  }
+  return <Bell className="h-5 w-5 text-[#6b6b6b]" />;
+}
+
+function notificationColor(type: NotificationType) {
+  switch (type) {
+    case "APPOINTMENT_BOOKED":
+      return "border-l-2 border-l-emerald-500";
+    case "APPOINTMENT_RESCHEDULED":
+    case "APPOINTMENT_RESCHEDULE_REQUEST":
+      return "border-l-2 border-l-amber-500";
+    case "APPOINTMENT_CANCELLED":
+      return "border-l-2 border-l-rose-500";
+    default:
+      return "border-l-2 border-l-[#ebebeb]";
+  }
+}
 
 export default function NotificationsPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const utils = api.useUtils()
+  const utils = api.useUtils();
+  const {
+    data: notificationsRes,
+    isLoading,
+    isError,
+  } = api.notifications.getMyNotifications.useQuery();
+  const markAsReadMutation = api.notifications.markAsRead.useMutation();
+  const markAllAsReadMutation = api.notifications.markAllAsRead.useMutation();
+  const deleteNotificationMutation = api.notifications.delete.useMutation();
 
-  useEffect(() => {
-    if (status === "loading") return
-    if (!session || session.user.role !== "DOCTOR") {
-      router.push("/login")
+  const notifications = notificationsRes?.result ?? [];
+  const unreadCount = notifications.filter(
+    (notification) => !notification.isRead,
+  ).length;
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      unwrapTrpcResult(await markAsReadMutation.mutateAsync({ id }));
+      await utils.notifications.getMyNotifications.invalidate();
+      toast.success("Notificación marcada como leída");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la notificación",
+      );
     }
-  }, [session, status, router])
+  };
 
-  const { data: notificationsRes, isLoading } = api.notifications.getMyNotifications.useQuery()
-  const markAsReadMutation = api.notifications.markAsRead.useMutation({
-    onSuccess: () => {
-      void utils.notifications.getMyNotifications.invalidate()
-      toast.success("Notificación marcada como leída")
-    },
-  })
-  const markAllAsReadMutation = api.notifications.markAllAsRead.useMutation({
-    onSuccess: () => {
-      void utils.notifications.getMyNotifications.invalidate()
-      toast.success("Todas las notificaciones marcadas como leídas")
-    },
-  })
-  const deleteNotificationMutation = api.notifications.delete.useMutation({
-    onSuccess: () => {
-      void utils.notifications.getMyNotifications.invalidate()
-      toast.success("Notificación eliminada")
-    },
-  })
-
-  const notifications = notificationsRes?.result ?? []
-  const unreadCount = notifications.filter((n: any) => !n.isRead).length
-
-  const handleMarkAsRead = (id: string) => {
-    markAsReadMutation.mutate({ id })
-  }
-
-  const handleMarkAllAsRead = () => {
-    markAllAsReadMutation.mutate()
-  }
-
-  const handleDelete = (id: string) => {
-    deleteNotificationMutation.mutate({ id })
-  }
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case "APPOINTMENT_BOOKED":
-        return <Calendar className="w-5 h-5 text-green-600" />
-      case "APPOINTMENT_RESCHEDULED":
-        return <Clock className="w-5 h-5 text-blue-600" />
-      case "APPOINTMENT_CANCELLED":
-        return <X className="w-5 h-5 text-red-600" />
-      default:
-        return <Bell className="w-5 h-5 text-gray-600" />
+  const handleMarkAllAsRead = async () => {
+    try {
+      unwrapTrpcResult(await markAllAsReadMutation.mutateAsync());
+      await utils.notifications.getMyNotifications.invalidate();
+      toast.success("Todas las notificaciones están al día");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron actualizar las notificaciones",
+      );
     }
-  }
+  };
 
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case "APPOINTMENT_BOOKED":
-        return "bg-green-50 border-green-200"
-      case "APPOINTMENT_RESCHEDULED":
-        return "bg-blue-50 border-blue-200"
-      case "APPOINTMENT_CANCELLED":
-        return "bg-red-50 border-red-200"
-      default:
-        return "bg-gray-50 border-gray-200"
+  const handleDelete = async (id: string) => {
+    try {
+      unwrapTrpcResult(await deleteNotificationMutation.mutateAsync({ id }));
+      await utils.notifications.getMyNotifications.invalidate();
+      toast.success("Notificación eliminada");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la notificación",
+      );
     }
-  }
-
-  if (status === "loading" || isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando notificaciones...</p>
-        </div>
-      </div>
-    )
-  }
+  };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Notificaciones</h1>
-          <p className="text-gray-600 mt-1">
-            {unreadCount > 0 ? `Tienes ${unreadCount} notificaciones sin leer` : "Todas las notificaciones están al día"}
-          </p>
-        </div>
-        {unreadCount > 0 && (
-          <Button onClick={handleMarkAllAsRead} variant="outline">
-            <Check className="w-4 h-4 mr-2" />
-            Marcar todas como leídas
-          </Button>
-        )}
-      </div>
-
-      {notifications.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <Bell className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay notificaciones</h3>
-              <p className="text-gray-600">
-                Cuando tengas nuevas citas o cambios, aparecerán aquí
-              </p>
+    <DashboardWrapper allowedRoles={["DOCTOR"]}>
+      <ProductShell role="DOCTOR">
+        <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+          <div className="mx-auto max-w-4xl">
+            <div className="mb-5 flex justify-end">
+              {unreadCount > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleMarkAllAsRead()}
+                  disabled={markAllAsReadMutation.isPending}
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Marcar todas como leídas
+                </Button>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {notifications.map((notification: any) => (
-            <Card 
-              key={notification.id} 
-              className={`${getNotificationColor(notification.type)} ${
-                notification.isRead ? "opacity-60" : ""
-              }`}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 mt-1">
-                    {getNotificationIcon(notification.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        {notification.title}
-                      </h3>
-                      {!notification.isRead && (
-                        <Badge variant="default" className="ml-2">
-                          Nueva
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-700 mb-2">{notification.message}</p>
-                    <div className="flex items-center space-x-4 text-xs text-gray-500">
-                      <span>
-                        {new Date(notification.createdAt).toLocaleDateString("es-ES", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                      {notification.patient && (
-                        <span>
-                          Paciente: {notification.patient.user?.name ?? "Sin nombre"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {!notification.isRead && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleMarkAsRead(notification.id)}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(notification.id)}
+
+            {isLoading ? (
+              <div className="space-y-4" aria-busy="true">
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div
+                    key={index}
+                    className="h-28 animate-pulse rounded-lg border border-[#ebebeb] bg-white"
+                  />
+                ))}
+                <span className="sr-only">Cargando notificaciones</span>
+              </div>
+            ) : isError || notificationsRes?.error ? (
+              <Card className="border-[#ebebeb] bg-white shadow-none">
+                <CardContent className="p-6 text-sm text-red-700" role="alert">
+                  No se pudieron cargar las notificaciones. Intenta nuevamente.
+                </CardContent>
+              </Card>
+            ) : notifications.length === 0 ? (
+              <Card className="border-[#ebebeb] bg-white shadow-none">
+                <CardContent className="py-12 text-center">
+                  <Bell className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                  <h2 className="mb-2 text-lg font-semibold">
+                    No hay notificaciones
+                  </h2>
+                  <p className="text-gray-600">
+                    Los cambios de citas aparecerán aquí.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <MotionList className="space-y-4">
+                {notifications.map((notification) => {
+                  const type = notification.type as NotificationType;
+                  return (
+                    <Card
+                      key={notification.id}
+                      className={`border-[#ebebeb] bg-white shadow-none transition-[opacity,box-shadow] duration-200 ${notificationColor(type)} ${notification.isRead ? "opacity-60" : ""}`}
                     >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-4">
+                          <div className="mt-1 shrink-0">
+                            <NotificationIcon type={type} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex items-center justify-between gap-3">
+                              <h2 className="text-sm font-semibold text-gray-900">
+                                {notification.title}
+                              </h2>
+                              {!notification.isRead && <Badge>Nueva</Badge>}
+                            </div>
+                            <p className="mb-2 text-sm text-gray-700">
+                              {notification.message}
+                            </p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                              <span>
+                                {new Date(
+                                  notification.createdAt,
+                                ).toLocaleDateString("es-ES", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              <span>
+                                Paciente:{" "}
+                                {notification.patient.user.name ?? "Sin nombre"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {!notification.isRead && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                aria-label="Marcar como leída"
+                                disabled={markAsReadMutation.isPending}
+                                onClick={() =>
+                                  void handleMarkAsRead(notification.id)
+                                }
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label="Eliminar notificación"
+                              disabled={deleteNotificationMutation.isPending}
+                              onClick={() => void handleDelete(notification.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </MotionList>
+            )}
+          </div>
         </div>
-      )}
-    </div>
-  )
+      </ProductShell>
+    </DashboardWrapper>
+  );
 }

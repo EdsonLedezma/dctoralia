@@ -1,87 +1,41 @@
-"use client"
+"use client";
 
-import { useMemo, useState } from "react"
-import { Button } from "~/components/ui/button"
+import { useMemo, useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import DashboardWrapper from "../../../components/auth/DashboardWrapper";
+import { api } from "src/trpc/react";
+import { ProductShell } from "~/components/shell/product-shell";
+import { MotionList } from "~/components/shared/motion-list";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card"
-import { Badge } from "~/components/ui/badge"
-import { Calendar, Plus, Phone, ChevronLeft, ChevronRight } from "lucide-react"
-import Link from "next/link"
-import DashboardWrapper from "../../../components/auth/DashboardWrapper"
-import { api } from "src/trpc/react"
-
-type Appointment = {
-  id: string
-  time: string
-  duration: number
-  status: string
-  reason?: string | null
-  patient: {
-    name: string
-    phone?: string
-  }
-  service: {
-    name: string
-  }
-}
-
-const timeSlots = [
-  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
-  "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
-  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
-  "17:00", "17:30", "18:00",
-]
-
-const formatDate = (date: Date) =>
-  date.toLocaleDateString("es-ES", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
-
-const getStatusColor = (status: string) => {
-  switch (status.toLowerCase()) {
-    case "confirmada":
-      return "bg-green-100 text-green-800"
-    case "pendiente":
-      return "bg-yellow-100 text-yellow-800"
-    case "completada":
-      return "bg-blue-100 text-blue-800"
-    case "cancelada":
-      return "bg-red-100 text-red-800"
-    default:
-      return "bg-gray-100 text-gray-800"
-  }
-}
+  DAILY_TIME_SLOTS,
+  formatAppointmentDate,
+  getAppointmentStatusColor,
+  normalizeAppointmentStatus,
+} from "./_components/appointments.utils";
+import type { DailyAppointment } from "./_components/appointments.types";
 
 export default function AppointmentsPage() {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const { data, isLoading } = api.appointments.listMine.useQuery()
-  const allAppointments = (data?.result ?? []) as any[]
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const { data, isLoading } = api.appointments.listMine.useQuery();
+  const appointmentResults = data?.result;
 
   const appointments = useMemo(() => {
-    const targetDate = currentDate.toISOString().split("T")[0]
+    const allAppointments = appointmentResults ?? [];
+    const targetDate = currentDate.toISOString().split("T")[0];
     return allAppointments
-      .filter((a) => new Date(a.date).toISOString().split("T")[0] === targetDate)
+      .filter(
+        (a) => new Date(a.date).toISOString().split("T")[0] === targetDate,
+      )
       .map((a) => {
-        const statusMap: Record<string, string> = {
-          PENDING: "pendiente",
-          CONFIRMED: "confirmada",
-          COMPLETED: "completada",
-          CANCELLED: "cancelada",
-          NO_SHOW: "no show",
-        }
         return {
           id: a.id,
           time: a.time,
           duration: a.duration,
-          status: statusMap[a.status] ?? a.status?.toLowerCase?.() ?? "pendiente",
+          status: normalizeAppointmentStatus(a.status),
           reason: a.reason,
           patient: {
             name: a.patient?.user?.name ?? "",
@@ -90,193 +44,128 @@ export default function AppointmentsPage() {
           service: {
             name: a.service?.name ?? "Consulta",
           },
-        } as Appointment
-      })
-  }, [allAppointments, currentDate])
+        } satisfies DailyAppointment;
+      });
+  }, [appointmentResults, currentDate]);
 
   const previousDay = () => {
     setCurrentDate((date) => {
-      const newDate = new Date(date)
-      newDate.setDate(newDate.getDate() - 1)
-      return newDate
-    })
-  }
+      const newDate = new Date(date);
+      newDate.setDate(newDate.getDate() - 1);
+      return newDate;
+    });
+  };
 
   const nextDay = () => {
     setCurrentDate((date) => {
-      const newDate = new Date(date)
-      newDate.setDate(newDate.getDate() + 1)
-      return newDate
-    })
-  }
+      const newDate = new Date(date);
+      newDate.setDate(newDate.getDate() + 1);
+      return newDate;
+    });
+  };
 
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white border-b">
-          <div className="px-6 py-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold">Dopilot</span>
+      <ProductShell role="DOCTOR">
+        <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-5 flex justify-end">
+              <Link href="/dashboard/appointments/new" className="inline-flex">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva cita
+                </Button>
               </Link>
-              <div className="text-gray-600">|</div>
-              <h1 className="text-xl font-semibold">Agenda de Citas</h1>
             </div>
-
-            <Link href="/dashboard/appointments/new" className="inline-flex">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Nueva Cita
-              </Button>
-            </Link>
-          </div>
-        </header>
-
-        <div className="p-6">
-          <Card className="mb-6">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <Button variant="outline" size="sm" onClick={previousDay}>
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <div className="text-center">
-                  <h2 className="text-lg font-semibold">{formatDate(currentDate)}</h2>
-                  <p className="text-sm text-gray-600">{appointments.length} citas programadas</p>
+            <Card className="mb-6 border-[#ebebeb] bg-white shadow-none">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={previousDay}
+                    aria-label="Día anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-center">
+                    <h2 className="text-lg font-semibold">
+                      {formatAppointmentDate(currentDate)}
+                    </h2>
+                    <p className="text-sm text-[#6b6b6b]">
+                      {appointments.length} citas programadas
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={nextDay}
+                    aria-label="Día siguiente"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={nextDay}>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <div className="grid lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Horarios del Día</CardTitle>
-                <CardDescription>Vista detallada de la agenda</CardDescription>
-              </CardHeader>
-              <CardContent>
+            <Card className="border-[#ebebeb] bg-white shadow-none">
+              <CardContent className="p-4 sm:p-6">
                 {isLoading ? (
                   <p className="text-center text-gray-600">Cargando citas...</p>
                 ) : (
-                  <div className="space-y-2">
-                    {timeSlots.map((time) => {
+                  <MotionList className="space-y-2">
+                    {DAILY_TIME_SLOTS.map((time) => {
                       const appointmentAtTime = appointments.find(
-                        (appointment) => appointment.time === time
-                      )
+                        (appointment) => appointment.time === time,
+                      );
                       return (
                         <div
                           key={time}
-                          className="flex items-center space-x-4 p-2 border-b border-gray-100"
+                          className="flex items-center gap-4 border-b border-[#ebebeb] p-2 transition-colors duration-150 last:border-b-0"
                         >
-                          <div className="w-16 text-sm font-medium text-gray-600">{time}</div>
+                          <div className="w-16 text-sm font-medium text-[#6b6b6b]">
+                            {time}
+                          </div>
                           {appointmentAtTime ? (
-                            <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <div className="flex-1 rounded-md border border-l-2 border-[#ebebeb] border-l-[#171717] bg-[#fafafa] p-3 transition-colors duration-150 hover:bg-white">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="font-medium">{appointmentAtTime.patient.name}</p>
-                                  <p className="text-sm text-gray-600">{appointmentAtTime.service.name}</p>
+                                  <p className="font-medium">
+                                    {appointmentAtTime.patient.name}
+                                  </p>
+                                  <p className="text-sm text-[#6b6b6b]">
+                                    {appointmentAtTime.service.name}
+                                  </p>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                  <Badge className={getStatusColor(appointmentAtTime.status)}>
+                                  <Badge
+                                    className={getAppointmentStatusColor(
+                                      appointmentAtTime.status,
+                                    )}
+                                  >
                                     {appointmentAtTime.status}
                                   </Badge>
-                                  <span className="text-sm text-gray-500">{appointmentAtTime.duration} min</span>
+                                  <span className="text-sm text-gray-500">
+                                    {appointmentAtTime.duration} min
+                                  </span>
                                 </div>
                               </div>
                             </div>
                           ) : (
-                            <div className="flex-1 text-gray-400 text-sm">Disponible</div>
+                            <div className="flex-1 text-sm text-[#a3a3a3] transition-colors duration-150 hover:text-[#6b6b6b]">
+                              Disponible
+                            </div>
                           )}
                         </div>
-                      )
+                      );
                     })}
-                  </div>
+                  </MotionList>
                 )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Resumen del Día</CardTitle>
-                <CardDescription>Estadísticas de citas</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <SummaryCard label="Total" value={appointments.length} color="blue" />
-                  <SummaryCard
-                    label="Confirmadas"
-                    value={appointments.filter((a) => a.status.toLowerCase() === "confirmada").length}
-                    color="green"
-                  />
-                  <SummaryCard
-                    label="Pendientes"
-                    value={appointments.filter((a) => a.status.toLowerCase() === "pendiente").length}
-                    color="yellow"
-                  />
-                  <SummaryCard
-                    label="Completadas"
-                    value={appointments.filter((a) => a.status.toLowerCase() === "completada").length}
-                    color="blue"
-                  />
-                </div>
-
-                <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-3">Próximas Citas</h4>
-                  <div className="space-y-3">
-                    {appointments
-                      .filter((appointment) => appointment.status.toLowerCase() !== "completada")
-                      .slice(0, 3)
-                      .map((appointment) => (
-                        <div key={appointment.id} className="border rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-sm">{appointment.patient.name}</p>
-                              <p className="text-xs text-gray-600">{appointment.service.name}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium">{appointment.time}</p>
-                              <Badge className={getStatusColor(appointment.status)}>
-                                {appointment.status}
-                              </Badge>
-                            </div>
-                          </div>
-                          {appointment.patient.phone && (
-                            <div className="flex items-center space-x-1 mt-2">
-                              <Phone className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs text-gray-500">{appointment.patient.phone}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
         </div>
-      </div>
+      </ProductShell>
     </DashboardWrapper>
-  )
-}
-
-function SummaryCard({
-  label,
-  value,
-  color,
-}: {
-  label: string
-  value: number
-  color: string
-}) {
-  return (
-    <div className="text-center">
-      <p className={`text-2xl font-bold text-${color}-600`}>{value}</p>
-      <p className="text-sm text-gray-600">{label}</p>
-    </div>
-  )
+  );
 }

@@ -1,258 +1,537 @@
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "~/server/api/trpc";
+import { doctorOwnedServiceScope } from "~/server/domain/authorization/access-policy";
+import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
+
+const serviceIdSchema = z.object({ id: z.string().min(1) });
+
+const createServiceSchema = z.object({
+  doctorId: z.string().optional(),
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().min(2).max(1_000),
+  price: z.number().finite().nonnegative(),
+  duration: z.number().int().min(5).max(480),
+});
+
+type Actor = {
+  id: string;
+  role: "DOCTOR" | "PATIENT" | "ADMIN";
+};
+
+function manageableServiceWhere(
+  actor: Actor,
+  id: string,
+): Prisma.ServiceWhereInput | null {
+  if (actor.role === "ADMIN") {
+    return { id };
+  }
+
+  const ownershipScope = doctorOwnedServiceScope(actor);
+  return ownershipScope ? { id, ...ownershipScope } : null;
+}
+
 export const useService = createTRPCRouter({
-  // Servicios por doctor (público)
-  publicGetByDoctor: publicProcedure.input(z.object({ doctorId: z.string() })).query(async ({ input, ctx }) => {
-    try {
-      const services = await ctx.db.service.findMany({ where: { doctorId: input.doctorId, isActive: true } });
-      return {
-        status: 200,
-        message: "Servicios obtenidos correctamente",
-        result: services,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al obtener servicios",
-        result: null,
-        error,
-      };
-    }
-  }),
-  
-  // Obtener servicios del doctor autenticado
+  publicGetByDoctor: publicProcedure
+    .input(z.object({ doctorId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const services = await ctx.db.service.findMany({
+          where: { doctorId: input.doctorId, isActive: true },
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            duration: true,
+            isActive: true,
+          },
+        });
+
+        return trpcSuccess(services, "Servicios obtenidos correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible obtener los servicios",
+          500,
+        );
+      }
+    }),
+
   getMyServices: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      const userId = ctx.session.user.id;
-      const doctor = await ctx.db.doctor.findUnique({ where: { userId } });
-      
-      if (!doctor) {
-        return {
-          status: 404,
-          message: "Doctor no encontrado",
-          result: null,
-          error: new Error("Doctor no encontrado"),
-        };
-      }
-      
-      const services = await ctx.db.service.findMany({ where: { doctorId: doctor.id } });
-      return {
-        status: 200,
-        message: "Servicios obtenidos correctamente",
-        result: services,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al obtener servicios",
-        result: null,
-        error,
-      };
+    if (ctx.session.user.role !== "DOCTOR") {
+      return trpcFailure(
+        "FORBIDDEN",
+        "Sólo los doctores pueden administrar servicios",
+        403,
+      );
     }
-  }),
-  
-  // Crear servicio
-  create: protectedProcedure.input(z.object({
-    doctorId: z.string(),
-    name: z.string(),
-    description: z.string(),
-    price: z.number(),
-    duration: z.number(),
-  })).mutation(async ({ input, ctx }) => {
+
     try {
-      const newService = await ctx.db.service.create({
-        data: {
-          doctorId: input.doctorId,
-          name: input.name,
-          description: input.description,
-          price: input.price,
-          duration: input.duration,
-        },
+      const doctor = await ctx.db.doctor.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
       });
-      return {
-        status: 201,
-        message: "Servicio creado correctamente",
-        result: newService,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al crear servicio",
-        result: null,
-        error,
-      };
-    }
-  }),
 
-  // Obtener servicio por ID
-  getById: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
-    try {
-      const service = await ctx.db.service.findUnique({ where: { id: input.id } });
-      if (!service) {
-        return {
-          status: 404,
-          message: "Servicio no encontrado",
-          result: null,
-          error: new Error("Servicio no encontrado"),
-        };
+      if (!doctor) {
+        return trpcFailure(
+          "DOCTOR_PROFILE_NOT_FOUND",
+          "No se encontró el perfil del doctor",
+          404,
+        );
       }
-      return {
-        status: 200,
-        message: "Servicio encontrado",
-        result: service,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al buscar servicio",
-        result: null,
-        error,
-      };
+
+      const services = await ctx.db.service.findMany({
+        where: { doctorId: doctor.id },
+        orderBy: { name: "asc" },
+      });
+
+      return trpcSuccess(services, "Servicios obtenidos correctamente");
+    } catch {
+      return trpcFailure(
+        "INTERNAL_ERROR",
+        "No fue posible obtener los servicios",
+        500,
+      );
     }
   }),
 
-  // Obtener todos los servicios de un doctor
-  getByDoctor: protectedProcedure.input(z.object({ doctorId: z.string() })).query(async ({ input, ctx }) => {
-    try {
-      const services = await ctx.db.service.findMany({ where: { doctorId: input.doctorId } });
-      return {
-        status: 200,
-        message: "Servicios obtenidos correctamente",
-        result: services,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al obtener servicios",
-        result: null,
-        error,
-      };
-    }
-  }),
+  create: protectedProcedure
+    .input(createServiceSchema)
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "DOCTOR") {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo los doctores pueden crear servicios",
+          403,
+        );
+      }
 
-  // Actualizar nombre
-  updateName: protectedProcedure.input(z.object({ id: z.string(), name: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const service = await ctx.db.service.update({ where: { id: input.id }, data: { name: input.name } });
-      return {
-        status: 200,
-        message: "Nombre actualizado correctamente",
-        result: service.name,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar el nombre",
-        result: null,
-        error,
-      };
-    }
-  }),
+      try {
+        const doctor = await ctx.db.doctor.findUnique({
+          where: { userId: ctx.session.user.id },
+          select: { id: true },
+        });
 
-  // Actualizar descripción
-  updateDescription: protectedProcedure.input(z.object({ id: z.string(), description: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const service = await ctx.db.service.update({ where: { id: input.id }, data: { description: input.description } });
-      return {
-        status: 200,
-        message: "Descripción actualizada correctamente",
-        result: service.description,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar la descripción",
-        result: null,
-        error,
-      };
-    }
-  }),
+        if (!doctor) {
+          return trpcFailure(
+            "DOCTOR_PROFILE_NOT_FOUND",
+            "No se encontró el perfil del doctor",
+            404,
+          );
+        }
 
-  // Actualizar precio
-  updatePrice: protectedProcedure.input(z.object({ id: z.string(), price: z.number() })).mutation(async ({ input, ctx }) => {
-    try {
-      const service = await ctx.db.service.update({ where: { id: input.id }, data: { price: input.price } });
-      return {
-        status: 200,
-        message: "Precio actualizado correctamente",
-        result: service.price,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar el precio",
-        result: null,
-        error,
-      };
-    }
-  }),
+        const service = await ctx.db.service.create({
+          data: {
+            doctorId: doctor.id,
+            name: input.name,
+            description: input.description,
+            price: input.price,
+            duration: input.duration,
+          },
+        });
 
-  // Actualizar duración
-  updateDuration: protectedProcedure.input(z.object({ id: z.string(), duration: z.number() })).mutation(async ({ input, ctx }) => {
-    try {
-      const service = await ctx.db.service.update({ where: { id: input.id }, data: { duration: input.duration } });
-      return {
-        status: 200,
-        message: "Duración actualizada correctamente",
-        result: service.duration,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar la duración",
-        result: null,
-        error,
-      };
-    }
-  }),
+        return trpcSuccess(service, "Servicio creado correctamente", 201);
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible crear el servicio",
+          500,
+        );
+      }
+    }),
 
-  // Actualizar estado activo
-  updateIsActive: protectedProcedure.input(z.object({ id: z.string(), isActive: z.boolean() })).mutation(async ({ input, ctx }) => {
-    try {
-      const service = await ctx.db.service.update({ where: { id: input.id }, data: { isActive: input.isActive } });
-      return {
-        status: 200,
-        message: "Estado actualizado correctamente",
-        result: service.isActive,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar el estado",
-        result: null,
-        error,
-      };
-    }
-  }),
+  getById: protectedProcedure
+    .input(serviceIdSchema)
+    .query(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
 
-  // Eliminar servicio
-  delete: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const deleted = await ctx.db.service.delete({ where: { id: input.id } });
-      return {
-        status: 200,
-        message: "Servicio eliminado correctamente",
-        result: deleted,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al eliminar servicio",
-        result: null,
-        error,
-      };
-    }
-  }),
-}); 
+      try {
+        const service = await ctx.db.service.findFirst({ where });
+        if (!service) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        return trpcSuccess(service, "Servicio encontrado");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible obtener el servicio",
+          500,
+        );
+      }
+    }),
+
+  getByDoctor: protectedProcedure
+    .input(z.object({ doctorId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        if (ctx.session.user.role === "PATIENT") {
+          return trpcFailure(
+            "FORBIDDEN",
+            "No tienes acceso a la administración de servicios",
+            403,
+          );
+        }
+
+        const doctor =
+          ctx.session.user.role === "ADMIN"
+            ? await ctx.db.doctor.findUnique({
+                where: { id: input.doctorId },
+                select: { id: true },
+              })
+            : await ctx.db.doctor.findUnique({
+                where: { userId: ctx.session.user.id },
+                select: { id: true },
+              });
+
+        if (!doctor || doctor.id !== input.doctorId) {
+          return trpcFailure(
+            "FORBIDDEN",
+            "No tienes acceso a los servicios de este doctor",
+            403,
+          );
+        }
+
+        const services = await ctx.db.service.findMany({
+          where: { doctorId: doctor.id },
+          orderBy: { name: "asc" },
+        });
+
+        return trpcSuccess(services, "Servicios obtenidos correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible obtener los servicios",
+          500,
+        );
+      }
+    }),
+
+  update: protectedProcedure
+    .input(
+      serviceIdSchema.extend({
+        name: z.string().trim().min(2).max(120),
+        description: z.string().trim().min(2).max(1_000),
+        price: z.number().finite().nonnegative(),
+        duration: z.number().int().min(5).max(480),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: {
+            name: input.name,
+            description: input.description,
+            price: input.price,
+            duration: input.duration,
+          },
+        });
+
+        return trpcSuccess(service, "Servicio actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible actualizar el servicio",
+          500,
+        );
+      }
+    }),
+
+  updateName: protectedProcedure
+    .input(serviceIdSchema.extend({ name: z.string().trim().min(2).max(120) }))
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: { name: input.name },
+          select: { name: true },
+        });
+        return trpcSuccess(service.name, "Nombre actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible actualizar el nombre",
+          500,
+        );
+      }
+    }),
+
+  updateDescription: protectedProcedure
+    .input(
+      serviceIdSchema.extend({
+        description: z.string().trim().min(2).max(1_000),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: { description: input.description },
+          select: { description: true },
+        });
+        return trpcSuccess(
+          service.description,
+          "Descripción actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible actualizar la descripción",
+          500,
+        );
+      }
+    }),
+
+  updatePrice: protectedProcedure
+    .input(serviceIdSchema.extend({ price: z.number().finite().nonnegative() }))
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: { price: input.price },
+          select: { price: true },
+        });
+        return trpcSuccess(service.price, "Precio actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible actualizar el precio",
+          500,
+        );
+      }
+    }),
+
+  updateDuration: protectedProcedure
+    .input(
+      serviceIdSchema.extend({ duration: z.number().int().min(5).max(480) }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: { duration: input.duration },
+          select: { duration: true },
+        });
+        return trpcSuccess(
+          service.duration,
+          "Duración actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible actualizar la duración",
+          500,
+        );
+      }
+    }),
+
+  updateIsActive: protectedProcedure
+    .input(serviceIdSchema.extend({ isActive: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: { isActive: input.isActive },
+          select: { isActive: true },
+        });
+        return trpcSuccess(
+          service.isActive,
+          "Estado actualizado correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible actualizar el estado",
+          500,
+        );
+      }
+    }),
+
+  delete: protectedProcedure
+    .input(serviceIdSchema)
+    .mutation(async ({ input, ctx }) => {
+      const where = manageableServiceWhere(ctx.session.user, input.id);
+      if (!where) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes acceso a este servicio",
+          403,
+        );
+      }
+
+      try {
+        const ownedService = await ctx.db.service.findFirst({
+          where,
+          select: { id: true },
+        });
+        if (!ownedService) {
+          return trpcFailure(
+            "SERVICE_NOT_FOUND",
+            "Servicio no encontrado",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.update({
+          where: { id: ownedService.id },
+          data: { isActive: false },
+        });
+
+        return trpcSuccess(
+          service,
+          "Servicio desactivado; se conservó su historial",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible desactivar el servicio",
+          500,
+        );
+      }
+    }),
+});

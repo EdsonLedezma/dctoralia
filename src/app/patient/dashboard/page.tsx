@@ -1,339 +1,279 @@
-"use client"
+"use client";
 
-import { useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import { Badge } from "~/components/ui/badge"
-import { Calendar, Clock, User, Heart, FileText, Bell, Settings, LogOut, Plus, MapPin, Phone } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { api } from "~/trpc/react"
+import { useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import {
+  CalendarDays,
+  ChevronRight,
+  Clock3,
+  FileText,
+  Phone,
+} from "lucide-react";
+import { ProductShell } from "~/components/shell/product-shell";
+import { MotionList } from "~/components/shared/motion-list";
+import { Button } from "~/components/ui/button";
+import { api, type RouterOutputs } from "~/trpc/react";
+
+type Appointment = Exclude<
+  RouterOutputs["appointments"]["listMine"]["result"],
+  null
+>[number];
+
+const statusLabels: Record<string, string> = {
+  confirmed: "Confirmada",
+  pending: "Pendiente",
+  completed: "Completada",
+};
+
+function formatDate(value: Date | string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Fecha no disponible"
+    : date.toLocaleDateString("es-MX", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+}
 
 export default function PatientDashboardPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-
-  const homeHref = session?.user
-    ? session.user.role === "DOCTOR"
-      ? "/dashboard"
-      : "/patient/dashboard"
-    : "/"
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
   useEffect(() => {
-    if (status === "loading") return
-    if (!session || session.user.role !== "PATIENT") {
-      router.push("/login")
-    }
-  }, [session, status, router])
+    if (status === "loading") return;
+    if (!session || session.user.role !== "PATIENT") router.push("/login");
+  }, [session, status, router]);
 
-  // Obtener datos reales del backend
-  const { data: upcomingRes } = api.appointments.upcoming.useQuery({ limit: 5 })
-  const { data: allAppointmentsRes } = api.appointments.listMine.useQuery()
-  
-  const upcomingAppointments = (upcomingRes?.result ?? []).map((a: any) => ({
-    id: a.id,
-    doctor: a.doctor?.user?.name ?? "Doctor",
-    specialty: a.doctor?.specialty ?? "",
-    date: a.date.toISOString().split('T')[0] as string,
-    time: a.time,
-    type: a.service?.name ?? a.reason ?? "Consulta",
-    status: a.status.toLowerCase(),
-    location: "",
-    address: "",
-    phone: a.doctor?.phone ?? "",
-  }))
-
-  const allAppointments = allAppointmentsRes?.result ?? []
-  const recentAppointments = allAppointments
-    .filter((a: any) => a.status === 'COMPLETED')
-    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 3)
-    .map((a: any) => ({
-      id: a.id,
-      doctor: a.doctor?.user?.name ?? "Doctor",
-      specialty: a.doctor?.specialty ?? "",
-      date: a.date.toISOString().split('T')[0] as string,
-      time: a.time,
-      type: a.service?.name ?? a.reason ?? "Consulta",
-      status: "completed",
-      diagnosis: a.notes || "Consulta completada",
-    }))
-
-  // Calcular métricas reales
-  const lastAppointment = allAppointments
-    .filter((a: any) => a.status === 'COMPLETED')
-    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-  
-  const nextAppointment = upcomingAppointments[0]
-  
-  const uniqueDoctors = new Set(allAppointments.map((a: any) => a.doctorId))
-
-  const healthMetrics = [
-    { 
-      label: "Última Consulta", 
-      value: lastAppointment 
-        ? new Date(lastAppointment.date).toLocaleDateString("es-ES", { day: 'numeric', month: 'short', year: 'numeric' })
-        : "N/A", 
-      icon: Calendar 
-    },
-    { 
-      label: "Próxima Cita", 
-      value: nextAppointment 
-        ? new Date(nextAppointment.date).toLocaleDateString("es-ES", { day: 'numeric', month: 'short', year: 'numeric' })
-        : "N/A", 
-      icon: Clock 
-    },
-    { 
-      label: "Doctores Visitados", 
-      value: uniqueDoctors.size.toString(), 
-      icon: User 
-    },
-    { 
-      label: "Estado General", 
-      value: "Saludable", 
-      icon: Heart 
-    },
-  ]
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "completed":
-        return "bg-blue-100 text-blue-800"
-      case "cancelled":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-ES", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-  }
+  const {
+    data: upcomingRes,
+    isLoading: upcomingLoading,
+    isError: upcomingError,
+  } = api.appointments.upcoming.useQuery({ limit: 5 });
+  const {
+    data: allAppointmentsRes,
+    isLoading: historyLoading,
+    isError: historyError,
+  } = api.appointments.listMine.useQuery();
 
   if (status === "loading") {
-    return <div>Cargando...</div>
+    return <DashboardSkeleton />;
   }
 
+  if (!session || session.user.role !== "PATIENT") return null;
+
+  const upcomingAppointments = upcomingRes?.result ?? [];
+  const recentAppointments = (allAppointmentsRes?.result ?? [])
+    .filter((appointment) => appointment.status === "COMPLETED")
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 3);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
-            <Link href={homeHref}>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold">Dopilot</span>
-              </div>
-            </Link>
-            <div className="text-gray-600">|</div>
-            <h1 className="text-xl font-semibold">Mi Dashboard</h1>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-gray-600">Bienvenido, {session?.user?.name}</span>
-            <Button variant="ghost" size="sm">
-              <Bell className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm">
-              <Settings className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm">
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="p-6">
-        {/* Health Metrics */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          {healthMetrics.map((metric, index) => {
-            const IconComponent = metric.icon
-            return (
-              <Card key={index}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-600">{metric.label}</CardTitle>
-                  <IconComponent className="w-5 h-5 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{metric.value}</div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Acciones Rápidas</CardTitle>
-              <CardDescription>Gestiona tu salud fácilmente</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Link href="/patient/appointments/book">
-                <Button className="w-full justify-start" variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Agendar Nueva Cita
-                </Button>
-              </Link>
-              <Link href="/patient/appointments">
-                <Button className="w-full justify-start" variant="outline">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Ver Mis Citas
-                </Button>
-              </Link>
-              <Link href="/patient/medical-history">
-                <Button className="w-full justify-start" variant="outline">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Historial Médico
-                </Button>
-              </Link>
-              <Link href="/patient/doctors">
-                <Button className="w-full justify-start" variant="outline">
-                  <User className="w-4 h-4 mr-2" />
-                  Buscar Doctores
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Upcoming Appointments */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Próximas Citas</CardTitle>
-              <CardDescription>Tus citas médicas programadas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {upcomingAppointments.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                    <p>No tienes citas programadas</p>
-                    <Link href="/patient/appointments/book">
-                      <Button className="mt-4">Agendar Primera Cita</Button>
-                    </Link>
-                  </div>
-                ) : (
-                  upcomingAppointments.map((appointment) => (
-                    <div key={appointment.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h3 className="font-semibold text-lg">{appointment.doctor}</h3>
-                          <p className="text-blue-600">{appointment.specialty}</p>
-                        </div>
-                        <Badge className={getStatusColor(appointment.status)}>
-                          {appointment.status === "confirmed" ? "Confirmada" : "Pendiente"}
-                        </Badge>
-                      </div>
-                      <div className="grid md:grid-cols-2 gap-4 text-sm">
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            <span>{formatDate(appointment.date)}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4 text-gray-400" />
-                            <span>
-                              {appointment.time} - {appointment.type}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {appointment.phone && (
-                            <div className="flex items-center space-x-2">
-                              <Phone className="w-4 h-4 text-gray-400" />
-                              <span>{appointment.phone}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-3 flex space-x-2">
-                        <Link href={`/patient/appointments/${appointment.id}`}>
-                          <Button size="sm" variant="outline">
-                            Ver Detalles
-                          </Button>
-                        </Link>
-                        <Link href="/patient/appointments">
-                          <Button size="sm" variant="outline">
-                            Reagendar
-                          </Button>
-                        </Link>
-                        {appointment.phone && (
-                          <Button size="sm" variant="outline" asChild>
-                            <a href={`tel:${appointment.phone}`}>
-                              <Phone className="w-4 h-4 mr-1" />
-                              Contactar
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="mt-4">
-                <Link href="/patient/appointments">
-                  <Button variant="outline" className="w-full">
-                    Ver Todas las Citas
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Appointments */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Historial Reciente</CardTitle>
-            <CardDescription>Tus últimas consultas médicas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentAppointments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <FileText className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                  <p>No tienes historial de consultas</p>
-                </div>
-              ) : (
-                recentAppointments.map((appointment: any) => (
-                  <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <User className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold">{appointment.doctor}</h4>
-                        <p className="text-sm text-gray-600">{appointment.specialty}</p>
-                        <p className="text-sm text-gray-500">
-                          {formatDate(appointment.date)} - {appointment.time}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge className={getStatusColor(appointment.status)}>Completada</Badge>
-                      <p className="text-sm text-gray-600 mt-1">{appointment.diagnosis}</p>
-                    </div>
-                  </div>
-                ))
-              )}
+    <ProductShell role="PATIENT">
+      <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+        <div className="mx-auto max-w-5xl space-y-10">
+          <div className="flex flex-col gap-4 border-b border-[#ebebeb] pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+                Agenda personal
+              </p>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
+                Tus próximas citas
+              </h1>
             </div>
-          </CardContent>
-        </Card>
+            <Link href="/patient/appointments/book">
+              <Button className="w-full sm:w-auto">Buscar doctor</Button>
+            </Link>
+          </div>
+
+          {upcomingError ? (
+            <InlineError message="No pudimos cargar tus próximas citas." />
+          ) : upcomingLoading ? (
+            <AppointmentListSkeleton label="Cargando próximas citas" />
+          ) : upcomingAppointments.length === 0 ? (
+            <EmptyState
+              icon={CalendarDays}
+              title="No tienes citas programadas"
+              description="Busca un doctor y agenda tu próxima consulta cuando lo necesites."
+              action={{
+                href: "/patient/appointments/book",
+                label: "Buscar doctor",
+              }}
+            />
+          ) : (
+            <MotionList className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white">
+              {upcomingAppointments.map((appointment) => (
+                <AppointmentRow
+                  key={appointment.id}
+                  appointment={appointment}
+                />
+              ))}
+            </MotionList>
+          )}
+
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <h2 className="text-base font-semibold">Consultas recientes</h2>
+              <Link
+                href="/patient/medical-history"
+                className="text-xs font-medium text-[#525252] underline-offset-4 hover:text-[#171717] hover:underline"
+              >
+                Ver historial
+              </Link>
+            </div>
+            {historyError ? (
+              <InlineError message="No pudimos cargar tu historial reciente." />
+            ) : historyLoading ? (
+              <AppointmentListSkeleton label="Cargando historial" />
+            ) : recentAppointments.length === 0 ? (
+              <div className="border-y border-[#ebebeb] bg-white px-5 py-8 text-sm text-[#737373]">
+                Aún no tienes consultas completadas.
+              </div>
+            ) : (
+              <MotionList className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white">
+                {recentAppointments.map((appointment) => (
+                  <Link
+                    key={appointment.id}
+                    href={`/patient/appointments/${appointment.id}`}
+                    className="flex min-h-16 items-center gap-4 px-4 py-4 transition-colors hover:bg-[#fafafa] focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none focus-visible:ring-inset sm:px-5"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-[#737373]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {appointment.doctor?.user?.name ?? "Doctor"}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-[#737373]">
+                        {appointment.service?.name ??
+                          appointment.reason ??
+                          "Consulta"}{" "}
+                        · {formatDate(appointment.date)}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#a3a3a3]" />
+                  </Link>
+                ))}
+              </MotionList>
+            )}
+          </section>
+        </div>
       </div>
+    </ProductShell>
+  );
+}
+
+function AppointmentRow({ appointment }: { appointment: Appointment }) {
+  const status = appointment.status.toLowerCase();
+  return (
+    <div className="flex flex-col gap-4 px-4 py-5 transition-colors hover:bg-[#fafafa] sm:flex-row sm:items-center sm:px-5">
+      <div className="flex items-center gap-3 sm:w-44 sm:shrink-0">
+        <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-md border border-[#e5e5e5] bg-[#fafafa] text-center">
+          <CalendarDays className="h-3.5 w-3.5 text-[#737373]" />
+          <span className="mt-0.5 text-[10px] font-medium text-[#525252]">
+            {new Date(appointment.date).getDate()}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-[#525252]">
+            {formatDate(appointment.date)}
+          </p>
+          <p className="mt-1 flex items-center gap-1 font-mono text-xs text-[#737373]">
+            <Clock3 className="h-3.5 w-3.5" />
+            {appointment.time}
+          </p>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {appointment.doctor?.user?.name ?? "Doctor"}
+        </p>
+        <p className="mt-1 truncate text-xs text-[#737373]">
+          {appointment.service?.name ?? appointment.reason ?? "Consulta"}
+          {appointment.doctor?.specialty
+            ? ` · ${appointment.doctor.specialty}`
+            : ""}
+        </p>
+      </div>
+      <div className="flex items-center justify-between gap-3 sm:justify-end">
+        <span className="text-xs text-[#525252]">
+          {statusLabels[status] ?? status}
+        </span>
+        <Link
+          href={`/patient/appointments/${appointment.id}`}
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-[#525252] hover:text-[#171717]"
+        >
+          Detalles
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+      {appointment.doctor?.phone && (
+        <a
+          href={`tel:${appointment.doctor.phone}`}
+          aria-label={`Llamar a ${appointment.doctor.user?.name ?? "doctor"}`}
+          className="hidden min-h-11 min-w-11 items-center justify-center rounded-md text-[#737373] hover:bg-[#f0f0f0] hover:text-[#171717] sm:inline-flex"
+        >
+          <Phone className="h-4 w-4" />
+        </a>
+      )}
     </div>
-  )
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: typeof CalendarDays;
+  title: string;
+  description: string;
+  action: { href: string; label: string };
+}) {
+  return (
+    <div className="border-y border-[#ebebeb] bg-white px-5 py-12 text-center">
+      <Icon className="mx-auto h-7 w-7 text-[#737373]" />
+      <p className="mt-4 text-sm font-medium">{title}</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-[#737373]">
+        {description}
+      </p>
+      <Link href={action.href} className="mt-5 inline-flex">
+        <Button variant="outline">{action.label}</Button>
+      </Link>
+    </div>
+  );
+}
+
+function InlineError({ message }: { message: string }) {
+  return (
+    <div
+      className="border-y border-[#e5e5e5] bg-white px-5 py-5 text-sm text-[#525252]"
+      role="alert"
+    >
+      {message}
+    </div>
+  );
+}
+
+function AppointmentListSkeleton({ label }: { label: string }) {
+  return (
+    <div
+      className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white"
+      aria-label={label}
+    >
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="h-20 animate-pulse bg-white" />
+      ))}
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#fafafa]">
+      <span className="text-sm text-[#737373]">Cargando tu agenda…</span>
+    </div>
+  );
 }

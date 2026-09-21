@@ -1,80 +1,53 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import { Input } from "~/components/ui/input"
-import { Badge } from "~/components/ui/badge"
-import { Calendar, Users, Search, Plus, Phone, Mail, Eye } from "lucide-react"
-import Link from "next/link"
-import DashboardWrapper from "../../../components/auth/DashboardWrapper"
-import { api } from "src/trpc/react"
+import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Search, Plus, Phone } from "lucide-react";
+import Link from "next/link";
+import DashboardWrapper from "../../../components/auth/DashboardWrapper";
+import { api } from "~/trpc/react";
+import { ProductShell } from "~/components/shell/product-shell";
+import { MotionList } from "~/components/shared/motion-list";
 
 export default function PatientsPage() {
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Obtener usuarios reales y filtrar pacientes
-  const { data: patientsData, isLoading } = api.patients.getAll.useQuery()
-  const patients = patientsData?.result || []
+  const { data: patientsData, isLoading } = api.doctor.getMyPatients.useQuery(
+    {},
+  );
+  const patients = patientsData?.result ?? [];
 
-  // Obtener citas del doctor para calcular próximas citas
-  const { data: appointmentsData } = api.appointments.listMine.useQuery()
-  const appointments = appointmentsData?.result ?? []
-
-  // Calculate statistics
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const newPatientsThisMonth = patients.filter((patient: any) => {
-    const createdAt = new Date(patient.createdAt)
-    return createdAt >= startOfMonth
-  }).length
-
-  const upcomingAppointments = appointments.filter((appt: any) => {
-    const apptDate = new Date(appt.date)
-    return apptDate >= now && (appt.status === "PENDING" || appt.status === "CONFIRMED")
-  }).length
-
-  const filteredPatients = patients.filter(
-    (patient: any) =>
-    (patient.userId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.address?.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredPatients = patients.filter((patient) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      patient.user.name.toLowerCase().includes(term) ||
+      patient.phone.toLowerCase().includes(term) ||
+      (patient.address ?? "").toLowerCase().includes(term)
+    );
+  });
 
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <header className="bg-white border-b">
-          <div className="px-6 py-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-white" />
-                  </div>
-                  <span className="text-xl font-bold">Dopilot</span>
-                </div>
-              </Link>
-              <div className="text-gray-600">|</div>
-              <h1 className="text-xl font-semibold">Gestión de Pacientes</h1>
-            </div>
+      <ProductShell role="DOCTOR">
+        <div className="min-h-screen bg-[#fafafa] p-6 sm:p-8">
+          <div className="mb-5 flex justify-end">
             <Link href="/dashboard/patients/new">
               <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Paciente
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo paciente
               </Button>
             </Link>
           </div>
-        </header>
-
-        <div className="p-6">
-          {/* Search and Stats */}
+          {/* Search */}
           <div className="mb-6">
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="mb-6 flex flex-col gap-4 md:flex-row">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
                 <Input
+                  aria-label="Buscar pacientes"
                   placeholder="Buscar pacientes por nombre o condición..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -82,87 +55,50 @@ export default function PatientsPage() {
                 />
               </div>
             </div>
-
-            <div className="grid md:grid-cols-4 gap-4 mb-6">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Total Pacientes</p>
-                      <p className="text-2xl font-bold">{patients.length}</p>
-                    </div>
-                    <Users className="w-8 h-8 text-blue-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Activos</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {/* Puedes agregar lógica de estado si tienes ese campo en la base de datos */}
-                        {patients.length}
-                      </p>
-                    </div>
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Nuevos (Este mes)</p>
-                      <p className="text-2xl font-bold text-blue-600">{newPatientsThisMonth}</p>
-                    </div>
-                    <Plus className="w-8 h-8 text-blue-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Próximas citas</p>
-                      <p className="text-2xl font-bold text-orange-600">{upcomingAppointments}</p>
-                    </div>
-                    <Calendar className="w-8 h-8 text-orange-600" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </div>
 
           {/* Patients List */}
           <Card>
             <CardHeader>
               <CardTitle>Lista de Pacientes</CardTitle>
-              <CardDescription>Gestiona la información de tus pacientes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <MotionList className="space-y-4">
                 {isLoading ? (
-                  <div className="text-center py-8">Cargando pacientes...</div>
+                  <div className="py-8 text-center">Cargando pacientes...</div>
+                ) : patientsData?.error ? (
+                  <div
+                    className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                    role="alert"
+                  >
+                    No se pudo cargar la lista de pacientes.
+                  </div>
                 ) : filteredPatients.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">No hay pacientes registrados.</div>
+                  <div className="py-8 text-center text-gray-500">
+                    {searchTerm
+                      ? "No encontramos pacientes con esa búsqueda."
+                      : "No hay pacientes registrados."}
+                  </div>
                 ) : (
-                  filteredPatients.map((patient: any) => (
-                    <div key={patient.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  filteredPatients.map((patient) => (
+                    <div
+                      key={patient.id}
+                      className="rounded-lg border p-4 transition-colors hover:bg-gray-50"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
-                              {patient.userId?.slice(0, 2).toUpperCase()}
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                            <span className="font-semibold text-blue-600">
+                              {patient.user.name.slice(0, 2).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <h3 className="font-semibold text-lg">ID: {patient.userId}</h3>
-                            <div className="flex flex-col md:flex-row md:items-center md:space-x-4 mt-1 text-sm text-gray-600">
+                            <h3 className="text-lg font-semibold">
+                              {patient.user.name}
+                            </h3>
+                            <div className="mt-1 flex flex-col text-sm text-gray-600 md:flex-row md:items-center md:space-x-4">
                               <div className="flex items-center space-x-1">
-                                <Phone className="w-3 h-3" />
+                                <Phone className="h-3 w-3" />
                                 <span>{patient.phone}</span>
                               </div>
                               {patient.address && (
@@ -172,25 +108,25 @@ export default function PatientsPage() {
                                 <span>• Género: {patient.gender}</span>
                               )}
                               {patient.birthDate && (
-                                <span>• Nacimiento: {new Date(patient.birthDate).toLocaleDateString("es-ES")}</span>
+                                <span>
+                                  • Nacimiento:{" "}
+                                  {new Date(
+                                    patient.birthDate,
+                                  ).toLocaleDateString("es-ES")}
+                                </span>
                               )}
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
                         </div>
                       </div>
                     </div>
                   ))
                 )}
-              </div>
+              </MotionList>
             </CardContent>
           </Card>
         </div>
-      </div>
+      </ProductShell>
     </DashboardWrapper>
-  )
+  );
 }

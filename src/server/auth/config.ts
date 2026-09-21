@@ -1,4 +1,3 @@
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
@@ -44,13 +43,13 @@ export const authConfig = {
           })
           .safeParse(credentials);
 
-        if (!parsedData.success) {
-          throw new Error("Datos inválidos");
-        }
+        if (!parsedData.success) return null;
+
+        const email = parsedData.data.email.trim().toLowerCase();
 
         const user = await db.user.findFirst({
           where: {
-            email: parsedData.data.email,
+            email,
           },
           select: {
             id: true,
@@ -66,7 +65,14 @@ export const authConfig = {
           return null;
         }
 
-        const isValid = await verify(user.password, parsedData.data.password);
+        let isValid = false;
+        try {
+          isValid = await verify(user.password, parsedData.data.password);
+        } catch {
+          // A legacy or malformed hash must behave like invalid credentials,
+          // not become an opaque 500 from the callback route.
+          return null;
+        }
 
         if (!isValid) return null;
 
@@ -81,8 +87,6 @@ export const authConfig = {
     }),
     // Removed Google provider
   ],
-  // Temporarily commenting out adapter to resolve version conflicts
-  // adapter: PrismaAdapter(db),
   callbacks: {
     jwt({ token, user }) {
       if (user) {

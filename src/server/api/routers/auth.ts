@@ -124,10 +124,18 @@ export const authRouter = createTRPCRouter({
         }
 
         // Verificar contraseña
-        const isValidPassword = await verify(user.password, password);
+        let isValidPassword = false;
+        try {
+          isValidPassword = await verify(user.password, password);
+        } catch {
+          isValidPassword = false;
+        }
 
         if (!isValidPassword) {
-          return{status: 401, message: "Credenciales inválidas", error: "Invalid credentials"
+          return {
+            status: 401,
+            message: "Credenciales inválidas",
+            error: "Invalid credentials",
           };
         }
 
@@ -237,7 +245,15 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const { specialty, about, experience, birthDate, gender, address, ...userFields } = input;
+      const {
+        specialty,
+        about,
+        experience,
+        birthDate,
+        gender,
+        address,
+        ...userFields
+      } = input;
 
       try {
         // Update user basic info
