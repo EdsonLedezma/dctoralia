@@ -9,7 +9,15 @@ import Link from "next/link";
 import DashboardWrapper from "../../../components/auth/DashboardWrapper";
 import { api } from "src/trpc/react";
 import { ProductShell } from "~/components/shell/product-shell";
-import { MotionList } from "~/components/shared/motion-list";
+import { Skeleton } from "~/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import {
   DAILY_TIME_SLOTS,
   formatAppointmentDate,
@@ -108,36 +116,53 @@ export default function AppointmentsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#ebebeb] bg-white shadow-none">
-              <CardContent className="p-4 sm:p-6">
+            <Card className="overflow-hidden border-[#ebebeb] bg-white shadow-none">
+              <CardContent className="p-0">
                 {isLoading ? (
-                  <p className="text-center text-gray-600">Cargando citas...</p>
+                  <div className="space-y-3 p-6">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <Skeleton key={index} className="h-12 w-full" />
+                    ))}
+                  </div>
                 ) : (
-                  <MotionList className="space-y-2">
-                    {DAILY_TIME_SLOTS.map((time) => {
-                      const appointmentAtTime = appointments.find(
-                        (appointment) => appointment.time === time,
-                      );
-                      return (
-                        <div
-                          key={time}
-                          className="flex items-center gap-4 border-b border-[#ebebeb] p-2 transition-colors duration-150 last:border-b-0"
-                        >
-                          <div className="w-16 text-sm font-medium text-[#6b6b6b]">
-                            {time}
-                          </div>
-                          {appointmentAtTime ? (
-                            <div className="flex-1 rounded-md border border-l-2 border-[#ebebeb] border-l-[#171717] bg-[#fafafa] p-3 transition-colors duration-150 hover:bg-white">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-medium">
-                                    {appointmentAtTime.patient.name}
-                                  </p>
-                                  <p className="text-sm text-[#6b6b6b]">
-                                    {appointmentAtTime.service.name}
-                                  </p>
-                                </div>
-                                <div className="flex items-center space-x-2">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">Hora</TableHead>
+                          <TableHead>Paciente</TableHead>
+                          <TableHead>Servicio</TableHead>
+                          <TableHead>Duración</TableHead>
+                          <TableHead>Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {DAILY_TIME_SLOTS.map((time) => {
+                          const appointmentAtTime = appointments.find(
+                            (appointment) => appointment.time === time,
+                          );
+                          return (
+                            <TableRow key={time} className="group">
+                              <TableCell className="font-mono text-xs text-[#737373]">
+                                {time}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {appointmentAtTime?.patient.name || (
+                                  <span className="font-normal text-[#a3a3a3]">
+                                    Disponible
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-[#525252]">
+                                {appointmentAtTime?.service.name || "—"}
+                              </TableCell>
+                              <TableCell className="text-[#737373]">
+                                {appointmentAtTime
+                                  ? `${appointmentAtTime.duration} min`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell>
+                                {appointmentAtTime ? (
                                   <Badge
                                     className={getAppointmentStatusColor(
                                       appointmentAtTime.status,
@@ -145,21 +170,18 @@ export default function AppointmentsPage() {
                                   >
                                     {appointmentAtTime.status}
                                   </Badge>
-                                  <span className="text-sm text-gray-500">
-                                    {appointmentAtTime.duration} min
+                                ) : (
+                                  <span className="text-xs text-[#a3a3a3]">
+                                    Libre
                                   </span>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex-1 text-sm text-[#a3a3a3] transition-colors duration-150 hover:text-[#6b6b6b]">
-                              Disponible
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </MotionList>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

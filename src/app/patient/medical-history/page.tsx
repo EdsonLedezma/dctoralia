@@ -51,9 +51,10 @@ export default function MedicalHistoryPage() {
   }, [session, status, router]);
 
   // Obtener patient actual
-  const { data: profile } = api.auth.getProfile.useQuery(undefined, {
+  const { data: profileRes } = api.auth.getProfile.useQuery(undefined, {
     enabled: !!session,
   });
+  const profile = profileRes?.result ?? null;
   const patient = profile?.patient;
 
   // Obtener historial médico

@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { hash, verify } from "argon2";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../trpc";
-import { TRPCError } from "@trpc/server";
+import { Prisma } from "@prisma/client";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "~/server/api/trpc";
+import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 
 const registerSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
@@ -33,69 +38,76 @@ export const authRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { email, password, role, name, phone, specialty, license } = input;
 
-      // Verificar si el usuario ya existe
-      const existingUser = await ctx.db.user.findFirst({
-        where: {
-          OR: [
-            { email: email.toLowerCase() },
-            role === "DOCTOR" ? { doctor: { license } } : {},
-          ],
-        },
-      });
-
-      if (existingUser) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "El usuario ya existe",
-        });
+      if (role === "DOCTOR" && (!specialty?.trim() || !license?.trim())) {
+        return trpcFailure(
+          "DOCTOR_FIELDS_REQUIRED",
+          "Especialidad y cédula son obligatorias",
+          400,
+        );
       }
-
-      // Hash de la contraseña
-      const hashedPassword = await hash(password);
-
       try {
+        const existingUser = await ctx.db.user.findFirst({
+          where: {
+            OR: [
+              { email: email.trim().toLowerCase() },
+              ...(role === "DOCTOR" && license
+                ? [{ doctor: { license: license.trim() } }]
+                : []),
+            ],
+          },
+        });
+
+        if (existingUser) {
+          return trpcFailure(
+            "USER_ALREADY_EXISTS",
+            "El usuario ya existe",
+            409,
+          );
+        }
+
+        // Hash de la contraseña
+        const hashedPassword = await hash(password);
+
         // Crear usuario
         const user = await ctx.db.user.create({
           data: {
-            email: email.toLowerCase(),
+            email: email.trim().toLowerCase(),
             name,
             password: hashedPassword,
             phone,
             role,
+            ...(role === "DOCTOR" && specialty && license
+              ? {
+                  doctor: {
+                    create: {
+                      specialty: specialty.trim(),
+                      license: license.trim(),
+                      phone,
+                    },
+                  },
+                }
+              : { patient: { create: { phone } } }),
           },
+          select: { id: true },
         });
 
-        // Si es doctor, crear perfil de doctor
-        if (role === "DOCTOR" && specialty && license) {
-          await ctx.db.doctor.create({
-            data: {
-              userId: user.id,
-              specialty,
-              license,
-              phone,
-            },
-          });
+        return trpcSuccess(
+          { userId: user.id },
+          "Usuario creado exitosamente",
+          201,
+        );
+      } catch (error: unknown) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          return trpcFailure(
+            "USER_ALREADY_EXISTS",
+            "El correo o la cédula ya están registrados",
+            409,
+          );
         }
-
-        // Si es paciente, crear perfil de paciente
-        if (role === "PATIENT") {
-          await ctx.db.patient.create({
-            data: {
-              userId: user.id,
-              phone,
-            },
-          });
-        }
-
-        return {
-          status: 201,
-          message: "Usuario creado exitosamente",
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Error al crear el usuario",
-        });
+        return trpcFailure("INTERNAL_ERROR", "Error al crear el usuario", 500);
       }
     }),
 
@@ -105,7 +117,6 @@ export const authRouter = createTRPCRouter({
       const { email, password } = input;
 
       try {
-        // Buscar usuario por email
         const user = await ctx.db.user.findUnique({
           where: {
             email: email.toLowerCase(),
@@ -116,12 +127,12 @@ export const authRouter = createTRPCRouter({
           },
         });
 
-        if (!user) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Credenciales inválidas",
-          });
-        }
+        if (!user)
+          return trpcFailure(
+            "INVALID_CREDENTIALS",
+            "Credenciales inválidas",
+            401,
+          );
 
         // Verificar contraseña
         let isValidPassword = false;
@@ -132,29 +143,22 @@ export const authRouter = createTRPCRouter({
         }
 
         if (!isValidPassword) {
-          return {
-            status: 401,
-            message: "Credenciales inválidas",
-            error: "Invalid credentials",
-          };
+          return trpcFailure(
+            "INVALID_CREDENTIALS",
+            "Credenciales inválidas",
+            401,
+          );
         }
 
         // Retornar información del usuario sin la contraseña
         const { password: _, ...userWithoutPassword } = user;
 
-        return {
-          status: 200,
-          message: "Inicio de sesión exitoso",
-          user: userWithoutPassword,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Error al iniciar sesión",
-        });
+        return trpcSuccess(
+          { user: userWithoutPassword },
+          "Inicio de sesión exitoso",
+        );
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al iniciar sesión", 500);
       }
     }),
 
@@ -190,22 +194,16 @@ export const authRouter = createTRPCRouter({
       });
 
       if (!user) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Usuario no encontrado",
-        });
+        return trpcFailure("USER_NOT_FOUND", "Usuario no encontrado", 404);
       }
 
       const { password: _, ...userWithoutPassword } = user;
-      return userWithoutPassword;
-    } catch (error) {
-      if (error instanceof TRPCError) {
-        throw error;
-      }
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Error al obtener el perfil",
-      });
+      return trpcSuccess(
+        userWithoutPassword,
+        "Perfil recuperado correctamente",
+      );
+    } catch {
+      return trpcFailure("INTERNAL_ERROR", "Error al obtener el perfil", 500);
     }
   }),
 
@@ -218,14 +216,13 @@ export const authRouter = createTRPCRouter({
           select: { id: true, email: true },
         });
 
-        return {
-          exists: !!user,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Error al verificar el usuario",
-        });
+        return trpcSuccess({ exists: !!user }, "Usuario verificado");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al verificar el usuario",
+          500,
+        );
       }
     }),
 
@@ -233,6 +230,7 @@ export const authRouter = createTRPCRouter({
     .input(
       z.object({
         name: z.string().min(2).optional(),
+        email: z.string().email().optional(),
         phone: z.string().min(10).optional(),
         image: z.string().url().optional(),
         specialty: z.string().optional(),
@@ -255,50 +253,60 @@ export const authRouter = createTRPCRouter({
         ...userFields
       } = input;
 
+      if (typeof userFields.email === "string") {
+        userFields.email = userFields.email.toLowerCase().trim();
+      }
+
       try {
-        // Update user basic info
-        const updatedUser = await ctx.db.user.update({
-          where: { id: userId },
-          data: userFields,
-          include: {
-            doctor: true,
-            patient: true,
-          },
-        });
-
-        // Update doctor specific fields if user is a doctor
-        if (updatedUser.role === "DOCTOR" && updatedUser.doctor) {
-          await ctx.db.doctor.update({
-            where: { userId },
-            data: {
-              ...(specialty && { specialty }),
-              ...(about && { about }),
-              ...(experience !== undefined && { experience }),
+        await ctx.db.$transaction(async (tx) => {
+          // Update user basic info
+          const updatedUser = await tx.user.update({
+            where: { id: userId },
+            data: userFields,
+            include: {
+              doctor: true,
+              patient: true,
             },
           });
-        }
 
-        // Update patient specific fields if user is a patient
-        if (updatedUser.role === "PATIENT" && updatedUser.patient) {
-          await ctx.db.patient.update({
-            where: { userId },
-            data: {
-              ...(birthDate && { birthDate }),
-              ...(gender && { gender }),
-              ...(address && { address }),
-            },
-          });
-        }
+          // Update doctor specific fields if user is a doctor
+          if (updatedUser.role === "DOCTOR" && updatedUser.doctor) {
+            await tx.doctor.update({
+              where: { userId },
+              data: {
+                ...(specialty && { specialty }),
+                ...(about !== undefined && { about }),
+                ...(userFields.phone !== undefined && {
+                  phone: userFields.phone,
+                }),
+                ...(experience !== undefined && { experience }),
+              },
+            });
+          }
 
-        return {
-          status: 200,
-          message: "Perfil actualizado exitosamente",
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Error al actualizar el perfil",
+          // Update patient specific fields if user is a patient
+          if (updatedUser.role === "PATIENT" && updatedUser.patient) {
+            await tx.patient.update({
+              where: { userId },
+              data: {
+                ...(birthDate && { birthDate }),
+                ...(gender && { gender }),
+                ...(address !== undefined && { address }),
+                ...(userFields.phone !== undefined && {
+                  phone: userFields.phone,
+                }),
+              },
+            });
+          }
         });
+
+        return trpcSuccess(null, "Perfil actualizado exitosamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el perfil",
+          500,
+        );
       }
     }),
 
@@ -330,20 +338,18 @@ export const authRouter = createTRPCRouter({
         });
 
         if (!user) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Usuario no encontrado",
-          });
+          return trpcFailure("USER_NOT_FOUND", "Usuario no encontrado", 404);
         }
 
         // Verify current password
         const isValidPassword = await verify(user.password, currentPassword);
 
         if (!isValidPassword) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "La contraseña actual es incorrecta",
-          });
+          return trpcFailure(
+            "INVALID_CURRENT_PASSWORD",
+            "La contraseña actual es incorrecta",
+            401,
+          );
         }
 
         // Hash new password
@@ -355,18 +361,13 @@ export const authRouter = createTRPCRouter({
           data: { password: hashedNewPassword },
         });
 
-        return {
-          status: 200,
-          message: "Contraseña actualizada exitosamente",
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Error al cambiar la contraseña",
-        });
+        return trpcSuccess(null, "Contraseña actualizada exitosamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al cambiar la contraseña",
+          500,
+        );
       }
     }),
 });

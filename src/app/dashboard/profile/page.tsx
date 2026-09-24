@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { BriefcaseMedical, Loader2, Pencil, Star } from "lucide-react";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
+import { unwrapTrpcResult } from "~/types/trpc-response";
 
 type DoctorProfile = Exclude<
   RouterOutputs["doctor"]["getMyProfile"]["result"],
@@ -33,10 +34,13 @@ export default function DoctorProfilePage() {
   // Obtener perfil del doctor
   const { data: profileRes, isLoading: isLoadingProfile } =
     api.doctor.getMyProfile.useQuery();
+  const utils = api.useUtils();
   const profile = profileRes?.result;
 
   // Form state
   const [formData, setFormData] = useState({
+    name: profile?.user?.name ?? "",
+    email: profile?.user?.email ?? "",
     specialty: profile?.specialty ?? "",
     about: profile?.about ?? "",
     experience: profile?.experience ?? 0,
@@ -46,6 +50,8 @@ export default function DoctorProfilePage() {
   useEffect(() => {
     if (!profile) return;
     setFormData({
+      name: profile.user?.name ?? "",
+      email: profile.user?.email ?? "",
       specialty: profile.specialty ?? "",
       about: profile.about ?? "",
       experience: profile.experience ?? 0,
@@ -55,16 +61,22 @@ export default function DoctorProfilePage() {
 
   // Update profile mutation
   const updateProfile = api.doctor.updateProfile.useMutation({
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (response.error) {
+        toast.error(response.message);
+        return;
+      }
       toast.success("Perfil actualizado exitosamente");
       setIsEditing(false);
       // Refetch profile
+      void utils.doctor.getMyProfile.invalidate();
       router.refresh();
     },
     onError: (error) => {
       toast.error(error.message ?? "Error al actualizar perfil");
     },
   });
+  const updateAccount = api.auth.updateProfile.useMutation();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -76,12 +88,38 @@ export default function DoctorProfilePage() {
     }));
   };
 
-  const handleSubmit = () => {
-    updateProfile.mutate(formData);
+  const handleSubmit = async () => {
+    try {
+      if (
+        formData.name.trim() !== (profile?.user?.name ?? "") ||
+        formData.email.trim().toLowerCase() !== (profile?.user?.email ?? "")
+      ) {
+        unwrapTrpcResult(
+          await updateAccount.mutateAsync({
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+          }),
+        );
+      }
+      updateProfile.mutate({
+        specialty: formData.specialty,
+        about: formData.about,
+        experience: formData.experience,
+        phone: formData.phone,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la cuenta",
+      );
+    }
   };
 
   const handleCancel = () => {
     setFormData({
+      name: profile?.user?.name ?? "",
+      email: profile?.user?.email ?? "",
       specialty: profile?.specialty ?? "",
       about: profile?.about ?? "",
       experience: profile?.experience ?? 0,
@@ -199,6 +237,37 @@ export default function DoctorProfilePage() {
                 <CardTitle className="text-base">Editar perfil</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    htmlFor="name"
+                  >
+                    Nombre completo
+                  </label>
+                  <Input
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Tu nombre"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    htmlFor="email"
+                  >
+                    Correo electrónico
+                  </label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="tu@correo.com"
+                  />
+                </div>
                 <div>
                   <label
                     className="mb-2 block text-xs font-medium text-[#525252]"

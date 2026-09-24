@@ -13,6 +13,28 @@ import { ZodError } from "zod";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import {
+  resolveWorkspaceContext,
+  resolveWorkspaceContexts,
+} from "~/server/domain/workspaces/workspace-context";
+
+function getWorkspaceCookie(headers: Headers): string | undefined {
+  const cookieHeader = headers.get("cookie");
+  if (!cookieHeader) return undefined;
+
+  const value = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith("dopilot-workspace="))
+    ?.slice("dopilot-workspace=".length);
+
+  if (!value) return undefined;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * 1. CONTEXT
@@ -26,12 +48,44 @@ import { db } from "~/server/db";
  *
  * @see https://trpc.io/docs/server/context
  */
-export const createTRPCContext = async (opts: { headers: Headers }) => {
+export const createTRPCContext = async (opts: {
+  headers: Headers;
+  responseHeaders?: Headers;
+}) => {
   const session = await auth();
+  const selectedWorkspaceId = getWorkspaceCookie(opts.headers);
+  let workspacePromise: ReturnType<typeof resolveWorkspaceContext> | undefined;
+  let workspacesPromise:
+    | ReturnType<typeof resolveWorkspaceContexts>
+    | undefined;
+
+  const getWorkspace = () => {
+    if (!session?.user?.id) return Promise.resolve(null);
+    workspacePromise ??= resolveWorkspaceContext(
+      db,
+      session.user.id,
+      selectedWorkspaceId,
+    );
+    return workspacePromise;
+  };
+
+  const getWorkspaces = () => {
+    if (!session?.user?.id) return Promise.resolve([]);
+    workspacesPromise ??= resolveWorkspaceContexts(db, session.user.id);
+    return workspacesPromise;
+  };
 
   return {
     db,
     session,
+    getWorkspace,
+    getWorkspaces,
+    setWorkspaceCookie: (clinicId: string) => {
+      opts.responseHeaders?.append(
+        "set-cookie",
+        `dopilot-workspace=${encodeURIComponent(clinicId)}; Path=/; Max-Age=${60 * 60 * 24 * 30}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+      );
+    },
     ...opts,
   };
 };

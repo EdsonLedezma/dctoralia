@@ -1,23 +1,33 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "../ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-import { Input } from "../ui/input"
-import { Label } from "../ui/label"
-import { Alert, AlertDescription } from "../ui/alert"
-import { Badge } from "../ui/badge"
-import { Loader2, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react"
-import { useRegister } from "../../hooks/useRegister"
+import { useState, useEffect } from "react";
+import { Button } from "../ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Alert, AlertDescription } from "../ui/alert";
+import { Badge } from "../ui/badge";
+import { Loader2, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
+import { useRegister } from "../../hooks/useRegister";
 
 interface RegistrationFormProps {
-  role: "DOCTOR" | "PATIENT"
-  onSuccess?: () => void
+  role: "DOCTOR" | "PATIENT";
+  onSuccess?: () => void;
 }
 
-export default function RegistrationForm({ role, onSuccess }: RegistrationFormProps) {
-  const { register, isRegistering, registerError, isSuccess, resetRegister } = useRegister()
-  
+export default function RegistrationForm({
+  role,
+  onSuccess,
+}: RegistrationFormProps) {
+  const { register, isRegistering, registerError, isSuccess, resetRegister } =
+    useRegister();
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -25,44 +35,44 @@ export default function RegistrationForm({ role, onSuccess }: RegistrationFormPr
     phone: "",
     specialty: "",
     license: "",
-  })
+  });
 
-  const [showPassword, setShowPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState({
     length: false,
     uppercase: false,
     lowercase: false,
     number: false,
     special: false,
-  })
+  });
 
   // Handle success
   useEffect(() => {
     if (isSuccess) {
-      onSuccess?.()
+      onSuccess?.();
     }
-  }, [isSuccess, onSuccess])
+  }, [isSuccess, onSuccess]);
 
   // Validate password in real-time
   useEffect(() => {
-    const { password } = formData
+    const { password } = formData;
     setPasswordValidation({
       length: password.length >= 8,
       uppercase: /[A-Z]/.test(password),
       lowercase: /[a-z]/.test(password),
       number: /\d/.test(password),
       special: /[`~<>?,./!@#$%^&*()\\-_+="'|{}\\[\\];:\\\\]/.test(password),
-    })
-  }, [formData.password])
+    });
+  }, [formData]);
 
-  const isPasswordValid = Object.values(passwordValidation).every(Boolean)
+  const isPasswordValid = Object.values(passwordValidation).every(Boolean);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    resetRegister()
+    e.preventDefault();
+    resetRegister();
 
     if (!isPasswordValid) {
-      return
+      return;
     }
 
     try {
@@ -76,20 +86,20 @@ export default function RegistrationForm({ role, onSuccess }: RegistrationFormPr
           specialty: formData.specialty,
           license: formData.license,
         }),
-      }
+      };
 
-      await register(registrationData)
-    } catch (error) {
+      await register(registrationData);
+    } catch {
       // Error is handled by the hook
     }
-  }
+  };
 
   const updateFormData = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="mx-auto w-full max-w-md">
       <CardHeader>
         <CardTitle>
           Registro de {role === "DOCTOR" ? "Doctor" : "Paciente"}
@@ -198,11 +208,15 @@ export default function RegistrationForm({ role, onSuccess }: RegistrationFormPr
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={isRegistering}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </Button>
             </div>
 
@@ -210,37 +224,58 @@ export default function RegistrationForm({ role, onSuccess }: RegistrationFormPr
             {formData.password && (
               <div className="mt-2 space-y-1">
                 <div className="flex items-center space-x-2">
-                  <Badge variant={passwordValidation.length ? "default" : "secondary"}>
+                  <Badge
+                    variant={
+                      passwordValidation.length ? "default" : "secondary"
+                    }
+                  >
                     {passwordValidation.length ? "✓" : "✗"} Mínimo 8 caracteres
                   </Badge>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Badge variant={passwordValidation.uppercase ? "default" : "secondary"}>
+                  <Badge
+                    variant={
+                      passwordValidation.uppercase ? "default" : "secondary"
+                    }
+                  >
                     {passwordValidation.uppercase ? "✓" : "✗"} Una mayúscula
                   </Badge>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Badge variant={passwordValidation.lowercase ? "default" : "secondary"}>
+                  <Badge
+                    variant={
+                      passwordValidation.lowercase ? "default" : "secondary"
+                    }
+                  >
                     {passwordValidation.lowercase ? "✓" : "✗"} Una minúscula
                   </Badge>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Badge variant={passwordValidation.number ? "default" : "secondary"}>
+                  <Badge
+                    variant={
+                      passwordValidation.number ? "default" : "secondary"
+                    }
+                  >
                     {passwordValidation.number ? "✓" : "✗"} Un número
                   </Badge>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Badge variant={passwordValidation.special ? "default" : "secondary"}>
-                    {passwordValidation.special ? "✓" : "✗"} Un carácter especial
+                  <Badge
+                    variant={
+                      passwordValidation.special ? "default" : "secondary"
+                    }
+                  >
+                    {passwordValidation.special ? "✓" : "✗"} Un carácter
+                    especial
                   </Badge>
                 </div>
               </div>
             )}
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full" 
+          <Button
+            type="submit"
+            className="w-full"
             disabled={isRegistering || !isPasswordValid}
           >
             {isRegistering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -249,5 +284,5 @@ export default function RegistrationForm({ role, onSuccess }: RegistrationFormPr
         </form>
       </CardContent>
     </Card>
-  )
-} 
+  );
+}

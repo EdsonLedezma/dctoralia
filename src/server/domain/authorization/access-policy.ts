@@ -41,3 +41,30 @@ export function doctorOwnedScheduleScope(
 export function canManageAllAppointments(actor: AuthenticatedActor): boolean {
   return actor.role === "DOCTOR" || actor.role === "ADMIN";
 }
+
+/**
+ * Scope used when a clinician needs to read a patient's record. Doctors can
+ * only see patients with an appointment in their agenda; patients can only
+ * see themselves and admins retain the global scope.
+ */
+export function patientScopeForActor(
+  actor: AuthenticatedActor,
+): Prisma.PatientWhereInput {
+  switch (actor.role) {
+    case "PATIENT":
+      return { userId: actor.id };
+    case "DOCTOR":
+      return { appointments: { some: { doctor: { userId: actor.id } } } };
+    case "ADMIN":
+      return {};
+  }
+}
+
+/** Fields that may be mutated by the patient profile owner or an admin. */
+export function patientSelfScopeForActor(
+  actor: AuthenticatedActor,
+): Prisma.PatientWhereInput | null {
+  if (actor.role === "PATIENT") return { userId: actor.id };
+  if (actor.role === "ADMIN") return {};
+  return null;
+}

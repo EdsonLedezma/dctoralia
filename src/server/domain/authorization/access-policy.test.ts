@@ -5,6 +5,8 @@ import {
   canManageAllAppointments,
   doctorOwnedScheduleScope,
   doctorOwnedServiceScope,
+  patientScopeForActor,
+  patientSelfScopeForActor,
 } from "./access-policy";
 
 describe("access-policy", () => {
@@ -50,5 +52,26 @@ describe("access-policy", () => {
     expect(
       canManageAllAppointments({ id: "patient-user", role: "PATIENT" }),
     ).toBe(false);
+  });
+
+  it("limita la lectura del paciente al propio paciente o a su agenda", () => {
+    expect(
+      patientScopeForActor({ id: "patient-user", role: "PATIENT" }),
+    ).toEqual({ userId: "patient-user" });
+    expect(patientScopeForActor({ id: "doctor-user", role: "DOCTOR" })).toEqual(
+      { appointments: { some: { doctor: { userId: "doctor-user" } } } },
+    );
+  });
+
+  it("sólo permite mutar el perfil del paciente a su dueño o admin", () => {
+    expect(
+      patientSelfScopeForActor({ id: "patient-user", role: "PATIENT" }),
+    ).toEqual({ userId: "patient-user" });
+    expect(
+      patientSelfScopeForActor({ id: "doctor-user", role: "DOCTOR" }),
+    ).toBeNull();
+    expect(
+      patientSelfScopeForActor({ id: "admin-user", role: "ADMIN" }),
+    ).toEqual({});
   });
 });

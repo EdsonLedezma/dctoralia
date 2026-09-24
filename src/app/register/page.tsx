@@ -223,7 +223,7 @@ export default function RegisterPage() {
         specialty: doctorData.specialty,
         license: doctorData.license,
       });
-    } catch (error) {
+    } catch {
       // Error is handled by useEffect above
     }
   };
@@ -260,7 +260,7 @@ export default function RegisterPage() {
         phone: patientData.phone,
         role: patientData.role,
       });
-    } catch (error) {
+    } catch {
       // Error is handled by useEffect above
     }
   };

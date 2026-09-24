@@ -1,6 +1,32 @@
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "~/server/api/trpc";
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
+import type { PrismaClient } from "@prisma/client";
+import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
+
+async function refreshDoctorRating(db: PrismaClient, doctorId: string) {
+  const allReviews = await db.review.findMany({
+    where: { doctorId },
+    select: { rating: true },
+  });
+
+  const avgRating =
+    allReviews.length > 0
+      ? allReviews.reduce((sum, review) => sum + review.rating, 0) /
+        allReviews.length
+      : 0;
+
+  await db.doctor.update({
+    where: { id: doctorId },
+    data: {
+      rating: avgRating,
+      totalReviews: allReviews.length,
+    },
+  });
+}
 
 export const reviewRouter = createTRPCRouter({
   // Crear reseña (paciente al doctor tras completar cita)
@@ -11,7 +37,7 @@ export const reviewRouter = createTRPCRouter({
         appointmentId: z.string(),
         rating: z.number().min(1).max(5),
         comment: z.string().max(1000).optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -21,10 +47,11 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!patient) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "No eres un paciente registrado",
-          });
+          return trpcFailure(
+            "FORBIDDEN",
+            "No eres un paciente registrado",
+            403,
+          );
         }
 
         // Verificar que la cita existe y está COMPLETED
@@ -33,31 +60,31 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!appointment) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Cita no encontrada",
-          });
+          return trpcFailure(
+            "APPOINTMENT_NOT_FOUND",
+            "Cita no encontrada",
+            404,
+          );
         }
 
         if (appointment.status !== "COMPLETED") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Solo puedes dejar reseña en citas completadas",
-          });
+          return trpcFailure(
+            "APPOINTMENT_NOT_COMPLETED",
+            "Solo puedes dejar reseña en citas completadas",
+            400,
+          );
         }
 
         if (appointment.patientId !== patient.id) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "No tienes acceso a esta cita",
-          });
+          return trpcFailure("FORBIDDEN", "No tienes acceso a esta cita", 403);
         }
 
         if (appointment.doctorId !== input.doctorId) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "La cita no pertenece a este doctor",
-          });
+          return trpcFailure(
+            "DOCTOR_MISMATCH",
+            "La cita no pertenece a este doctor",
+            400,
+          );
         }
 
         // Crear o actualizar reseña
@@ -92,7 +119,8 @@ export const reviewRouter = createTRPCRouter({
 
         const avgRating =
           allReviews.length > 0
-            ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
+            ? allReviews.reduce((sum, r) => sum + r.rating, 0) /
+              allReviews.length
             : 0;
 
         await ctx.db.doctor.update({
@@ -103,20 +131,9 @@ export const reviewRouter = createTRPCRouter({
           },
         });
 
-        return {
-          status: 201,
-          message: "Reseña creada correctamente",
-          result: review,
-          error: null,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        return {
-          status: 500,
-          message: "Error al crear reseña",
-          result: null,
-          error,
-        };
+        return trpcSuccess(review, "Reseña creada correctamente", 201);
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al crear reseña", 500);
       }
     }),
 
@@ -130,12 +147,7 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!patient) {
-          return {
-            status: 404,
-            message: "No eres paciente",
-            result: null,
-            error: null,
-          };
+          return trpcFailure("PATIENT_NOT_FOUND", "No eres paciente", 404);
         }
 
         const review = await ctx.db.review.findUnique({
@@ -148,27 +160,16 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!review) {
-          return {
-            status: 404,
-            message: "No has dejado reseña para este doctor",
-            result: null,
-            error: null,
-          };
+          return trpcFailure(
+            "REVIEW_NOT_FOUND",
+            "No has dejado reseña para este doctor",
+            404,
+          );
         }
 
-        return {
-          status: 200,
-          message: "Tu reseña",
-          result: review,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al obtener tu reseña",
-          result: null,
-          error,
-        };
+        return trpcSuccess(review, "Tu reseña");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al obtener tu reseña", 500);
       }
     }),
 
@@ -189,19 +190,9 @@ export const reviewRouter = createTRPCRouter({
           orderBy: { createdAt: "desc" },
         });
 
-        return {
-          status: 200,
-          message: "Reseñas del doctor",
-          result: reviews,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al obtener reseñas",
-          result: null,
-          error,
-        };
+        return trpcSuccess(reviews, "Reseñas del doctor");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al obtener reseñas", 500);
       }
     }),
 
@@ -212,7 +203,7 @@ export const reviewRouter = createTRPCRouter({
         doctorId: z.string(),
         rating: z.number().min(1).max(5).optional(),
         comment: z.string().max(1000).optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -221,10 +212,7 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!patient) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "No eres paciente",
-          });
+          return trpcFailure("FORBIDDEN", "No eres paciente", 403);
         }
 
         const review = await ctx.db.review.findUnique({
@@ -237,10 +225,7 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!review) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Reseña no encontrada",
-          });
+          return trpcFailure("REVIEW_NOT_FOUND", "Reseña no encontrada", 404);
         }
 
         const updated = await ctx.db.review.update({
@@ -261,35 +246,11 @@ export const reviewRouter = createTRPCRouter({
         });
 
         // Recalcular promedio
-        const allReviews = await ctx.db.review.findMany({
-          where: { doctorId: input.doctorId },
-        });
+        await refreshDoctorRating(ctx.db, input.doctorId);
 
-        const avgRating =
-          allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
-
-        await ctx.db.doctor.update({
-          where: { id: input.doctorId },
-          data: {
-            rating: avgRating,
-            totalReviews: allReviews.length,
-          },
-        });
-
-        return {
-          status: 200,
-          message: "Reseña actualizada",
-          result: updated,
-          error: null,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        return {
-          status: 500,
-          message: "Error al actualizar reseña",
-          result: null,
-          error,
-        };
+        return trpcSuccess(updated, "Reseña actualizada");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al actualizar reseña", 500);
       }
     }),
 
@@ -303,13 +264,10 @@ export const reviewRouter = createTRPCRouter({
         });
 
         if (!patient) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "No eres paciente",
-          });
+          return trpcFailure("FORBIDDEN", "No eres paciente", 403);
         }
 
-        await ctx.db.review.delete({
+        const existingReview = await ctx.db.review.findUnique({
           where: {
             doctorId_patientId: {
               doctorId: input.doctorId,
@@ -318,39 +276,18 @@ export const reviewRouter = createTRPCRouter({
           },
         });
 
+        if (!existingReview) {
+          return trpcFailure("REVIEW_NOT_FOUND", "Reseña no encontrada", 404);
+        }
+
+        await ctx.db.review.delete({ where: { id: existingReview.id } });
+
         // Recalcular promedio
-        const allReviews = await ctx.db.review.findMany({
-          where: { doctorId: input.doctorId },
-        });
+        await refreshDoctorRating(ctx.db, input.doctorId);
 
-        const avgRating =
-          allReviews.length > 0
-            ? allReviews.reduce((sum, r) => sum + r.rating, 0) /
-              allReviews.length
-            : 0;
-
-        await ctx.db.doctor.update({
-          where: { id: input.doctorId },
-          data: {
-            rating: avgRating,
-            totalReviews: allReviews.length,
-          },
-        });
-
-        return {
-          status: 200,
-          message: "Reseña eliminada",
-          result: null,
-          error: null,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        return {
-          status: 500,
-          message: "Error al eliminar reseña",
-          result: null,
-          error,
-        };
+        return trpcSuccess(null, "Reseña eliminada");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al eliminar reseña", 500);
       }
     }),
-}); 
+});

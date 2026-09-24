@@ -151,7 +151,7 @@ export default function LoginPage() {
       } else {
         router.push("/patient/dashboard");
       }
-    } catch (error) {
+    } catch {
       const errorCode = "UNEXPECTED_ERROR";
       const errorMessage = "Error inesperado al iniciar sesión";
       setError(`${errorMessage} (Código: ${errorCode})`);

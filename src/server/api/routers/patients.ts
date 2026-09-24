@@ -2,6 +2,17 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { z } from "zod";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 import type { Prisma } from "@prisma/client";
+import {
+  patientScopeForActor,
+  patientSelfScopeForActor,
+} from "~/server/domain/authorization/access-policy";
+
+function actorFromSession(sessionUser: {
+  id: string;
+  role: "DOCTOR" | "PATIENT" | "ADMIN";
+}) {
+  return { id: sessionUser.id, role: sessionUser.role } as const;
+}
 
 export const usePatients = createTRPCRouter({
   // Crear paciente
@@ -16,7 +27,36 @@ export const usePatients = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (
+        ctx.session.user.role !== "DOCTOR" &&
+        ctx.session.user.role !== "ADMIN"
+      ) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo doctores o administradores pueden crear pacientes",
+          403,
+        );
+      }
       try {
+        const user = await ctx.db.user.findUnique({
+          where: { id: input.userId },
+          select: { id: true, role: true, patient: { select: { id: true } } },
+        });
+        if (!user || user.role !== "PATIENT") {
+          return trpcFailure(
+            "PATIENT_USER_REQUIRED",
+            "El usuario debe tener rol de paciente",
+            400,
+          );
+        }
+        if (user.patient) {
+          return trpcFailure(
+            "PATIENT_ALREADY_EXISTS",
+            "El perfil de paciente ya existe",
+            409,
+          );
+        }
+
         const newPatient = await ctx.db.patient.create({
           data: {
             userId: input.userId,
@@ -26,19 +66,9 @@ export const usePatients = createTRPCRouter({
             address: input.address,
           },
         });
-        return {
-          status: 201,
-          message: "Paciente creado correctamente",
-          result: newPatient,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al crear paciente",
-          result: null,
-          error,
-        };
+        return trpcSuccess(newPatient, "Paciente creado correctamente", 201);
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al crear paciente", 500);
       }
     }),
 
@@ -71,9 +101,31 @@ export const usePatients = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const actor = actorFromSession(ctx.session.user);
+      const ownershipScope = patientSelfScopeForActor(actor);
+      if (!ownershipScope) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo el paciente o un administrador puede editar el historial",
+          403,
+        );
+      }
+
       try {
+        const patient = await ctx.db.patient.findFirst({
+          where: { id: input.patientId, ...ownershipScope },
+          select: { id: true },
+        });
+        if (!patient) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
+        }
+
         const history = await ctx.db.medicalHistory.upsert({
-          where: { patientId: input.patientId },
+          where: { patientId: patient.id },
           update: {
             bloodType: input.bloodType,
             allergies: input.allergies,
@@ -86,7 +138,7 @@ export const usePatients = createTRPCRouter({
             lastUpdated: new Date(),
           },
           create: {
-            patientId: input.patientId,
+            patientId: patient.id,
             bloodType: input.bloodType,
             allergies: input.allergies,
             medications: input.medications,
@@ -97,42 +149,43 @@ export const usePatients = createTRPCRouter({
             notes: input.notes,
           },
         });
-        return {
-          status: 200,
-          message: "Historial médico guardado",
-          result: history,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al guardar historial médico",
-          result: null,
-          error,
-        };
+        return trpcSuccess(history, "Historial médico guardado");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al guardar historial médico",
+          500,
+        );
       }
     }),
 
   getMedicalHistory: protectedProcedure
     .input(z.object({ patientId: z.string() }))
     .query(async ({ input, ctx }) => {
+      const actor = actorFromSession(ctx.session.user);
       try {
-        const history = await ctx.db.medicalHistory.findUnique({
-          where: { patientId: input.patientId },
+        const patient = await ctx.db.patient.findFirst({
+          where: { id: input.patientId, ...patientScopeForActor(actor) },
+          select: { id: true },
         });
-        return {
-          status: 200,
-          message: "Historial médico",
-          result: history,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al obtener historial médico",
-          result: null,
-          error,
-        };
+        if (!patient) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
+        }
+
+        const history = await ctx.db.medicalHistory.findUnique({
+          where: { patientId: patient.id },
+        });
+        return trpcSuccess(history, "Historial médico");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al obtener historial médico",
+          500,
+        );
       }
     }),
 
@@ -140,31 +193,21 @@ export const usePatients = createTRPCRouter({
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
+      const actor = actorFromSession(ctx.session.user);
       try {
-        const patient = await ctx.db.patient.findUnique({
-          where: { id: input.id },
+        const patient = await ctx.db.patient.findFirst({
+          where: { id: input.id, ...patientScopeForActor(actor) },
         });
         if (!patient) {
-          return {
-            status: 404,
-            message: "Paciente no encontrado",
-            result: null,
-            error: new Error("Paciente no encontrado"),
-          };
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
         }
-        return {
-          status: 200,
-          message: "Paciente encontrado",
-          result: patient,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al buscar paciente",
-          result: null,
-          error,
-        };
+        return trpcSuccess(patient, "Paciente encontrado");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al buscar paciente", 500);
       }
     }),
 
@@ -172,24 +215,35 @@ export const usePatients = createTRPCRouter({
   updatePhone: protectedProcedure
     .input(z.object({ id: z.string(), phone: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const ownershipScope = patientSelfScopeForActor(
+        actorFromSession(ctx.session.user),
+      );
+      if (!ownershipScope) {
+        return trpcFailure("FORBIDDEN", "No puedes editar este paciente", 403);
+      }
       try {
+        const ownedPatient = await ctx.db.patient.findFirst({
+          where: { id: input.id, ...ownershipScope },
+          select: { id: true },
+        });
+        if (!ownedPatient) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
+        }
         const patient = await ctx.db.patient.update({
-          where: { id: input.id },
+          where: { id: ownedPatient.id },
           data: { phone: input.phone },
         });
-        return {
-          status: 200,
-          message: "Teléfono actualizado correctamente",
-          result: patient.phone,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al actualizar el teléfono",
-          result: null,
-          error,
-        };
+        return trpcSuccess(patient.phone, "Teléfono actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el teléfono",
+          500,
+        );
       }
     }),
 
@@ -197,24 +251,38 @@ export const usePatients = createTRPCRouter({
   updateAddress: protectedProcedure
     .input(z.object({ id: z.string(), address: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const ownershipScope = patientSelfScopeForActor(
+        actorFromSession(ctx.session.user),
+      );
+      if (!ownershipScope) {
+        return trpcFailure("FORBIDDEN", "No puedes editar este paciente", 403);
+      }
       try {
+        const ownedPatient = await ctx.db.patient.findFirst({
+          where: { id: input.id, ...ownershipScope },
+          select: { id: true },
+        });
+        if (!ownedPatient) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
+        }
         const patient = await ctx.db.patient.update({
-          where: { id: input.id },
+          where: { id: ownedPatient.id },
           data: { address: input.address },
         });
-        return {
-          status: 200,
-          message: "Dirección actualizada correctamente",
-          result: patient.address,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al actualizar la dirección",
-          result: null,
-          error,
-        };
+        return trpcSuccess(
+          patient.address,
+          "Dirección actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la dirección",
+          500,
+        );
       }
     }),
 
@@ -222,24 +290,38 @@ export const usePatients = createTRPCRouter({
   updateBirthDate: protectedProcedure
     .input(z.object({ id: z.string(), birthDate: z.date() }))
     .mutation(async ({ input, ctx }) => {
+      const ownershipScope = patientSelfScopeForActor(
+        actorFromSession(ctx.session.user),
+      );
+      if (!ownershipScope) {
+        return trpcFailure("FORBIDDEN", "No puedes editar este paciente", 403);
+      }
       try {
+        const ownedPatient = await ctx.db.patient.findFirst({
+          where: { id: input.id, ...ownershipScope },
+          select: { id: true },
+        });
+        if (!ownedPatient) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
+        }
         const patient = await ctx.db.patient.update({
-          where: { id: input.id },
+          where: { id: ownedPatient.id },
           data: { birthDate: input.birthDate },
         });
-        return {
-          status: 200,
-          message: "Fecha de nacimiento actualizada correctamente",
-          result: patient.birthDate,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al actualizar la fecha de nacimiento",
-          result: null,
-          error,
-        };
+        return trpcSuccess(
+          patient.birthDate,
+          "Fecha de nacimiento actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la fecha de nacimiento",
+          500,
+        );
       }
     }),
 
@@ -247,24 +329,35 @@ export const usePatients = createTRPCRouter({
   updateGender: protectedProcedure
     .input(z.object({ id: z.string(), gender: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const ownershipScope = patientSelfScopeForActor(
+        actorFromSession(ctx.session.user),
+      );
+      if (!ownershipScope) {
+        return trpcFailure("FORBIDDEN", "No puedes editar este paciente", 403);
+      }
       try {
+        const ownedPatient = await ctx.db.patient.findFirst({
+          where: { id: input.id, ...ownershipScope },
+          select: { id: true },
+        });
+        if (!ownedPatient) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
+        }
         const patient = await ctx.db.patient.update({
-          where: { id: input.id },
+          where: { id: ownedPatient.id },
           data: { gender: input.gender },
         });
-        return {
-          status: 200,
-          message: "Género actualizado correctamente",
-          result: patient.gender,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al actualizar el género",
-          result: null,
-          error,
-        };
+        return trpcSuccess(patient.gender, "Género actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el género",
+          500,
+        );
       }
     }),
 
@@ -272,202 +365,20 @@ export const usePatients = createTRPCRouter({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "ADMIN") {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo un administrador puede eliminar pacientes",
+          403,
+        );
+      }
       try {
         const deleted = await ctx.db.patient.delete({
           where: { id: input.id },
         });
-        return {
-          status: 200,
-          message: "Paciente eliminado correctamente",
-          result: deleted,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al eliminar paciente",
-          result: null,
-          error,
-        };
-      }
-    }),
-
-  // Valorar doctor (rating)
-  rateDoctor: protectedProcedure
-    .input(
-      z.object({
-        doctorId: z.string(),
-        patientId: z.string(),
-        rating: z.number().min(1).max(5),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      try {
-        // Actualizar o crear review
-        const review = await ctx.db.review.upsert({
-          where: {
-            doctorId_patientId: {
-              doctorId: input.doctorId,
-              patientId: input.patientId,
-            },
-          },
-          update: { rating: input.rating },
-          create: {
-            doctorId: input.doctorId,
-            patientId: input.patientId,
-            rating: input.rating,
-          },
-        });
-        return {
-          status: 200,
-          message: "Calificación registrada correctamente",
-          result: review,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al registrar calificación",
-          result: null,
-          error,
-        };
-      }
-    }),
-
-  // Agendar cita con doctor
-  bookAppointment: protectedProcedure
-    .input(
-      z.object({
-        doctorId: z.string(),
-        patientId: z.string(),
-        serviceId: z.string(),
-        date: z.date(),
-        time: z.string(),
-        duration: z.number(),
-        reason: z.string().optional(),
-        notes: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      try {
-        // Validar disponibilidad antes de crear
-        const dayOfWeek = input.date.getDay();
-        const schedule = await ctx.db.schedule.findFirst({
-          where: { doctorId: input.doctorId, dayOfWeek, isActive: true },
-        });
-        if (!schedule) {
-          return {
-            status: 400,
-            message: "El doctor no tiene horario disponible ese día",
-            result: null,
-            error: null,
-          };
-        }
-        const within =
-          input.time >= schedule.startTime && input.time <= schedule.endTime;
-        if (!within) {
-          return {
-            status: 400,
-            message: "Hora fuera del horario disponible",
-            result: null,
-            error: null,
-          };
-        }
-        const clash = await ctx.db.appointment.findFirst({
-          where: {
-            doctorId: input.doctorId,
-            date: input.date,
-            time: input.time,
-            status: { in: ["PENDING", "CONFIRMED"] },
-          },
-        });
-        if (clash) {
-          return {
-            status: 409,
-            message: "Horario ya ocupado",
-            result: null,
-            error: null,
-          };
-        }
-
-        const appointment = await ctx.db.appointment.create({
-          data: {
-            doctorId: input.doctorId,
-            patientId: input.patientId,
-            serviceId: input.serviceId,
-            date: input.date,
-            time: input.time,
-            duration: input.duration,
-            reason: input.reason,
-            notes: input.notes,
-          },
-        });
-        await ctx.db.notification.create({
-          data: {
-            doctorId: input.doctorId,
-            patientId: input.patientId,
-            type: "APPOINTMENT_BOOKED",
-            title: "Nueva cita agendada",
-            message: `Se agendó una cita para ${input.date.toISOString().slice(0, 10)} a las ${input.time}.`,
-            appointmentId: appointment.id,
-          },
-        });
-        return {
-          status: 201,
-          message: "Cita agendada correctamente",
-          result: appointment,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al agendar cita",
-          result: null,
-          error,
-        };
-      }
-    }),
-
-  // Dejar reseña al doctor
-  leaveReview: protectedProcedure
-    .input(
-      z.object({
-        doctorId: z.string(),
-        patientId: z.string(),
-        rating: z.number().min(1).max(5),
-        comment: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      try {
-        const review = await ctx.db.review.upsert({
-          where: {
-            doctorId_patientId: {
-              doctorId: input.doctorId,
-              patientId: input.patientId,
-            },
-          },
-          update: { rating: input.rating, comment: input.comment },
-          create: {
-            doctorId: input.doctorId,
-            patientId: input.patientId,
-            rating: input.rating,
-            comment: input.comment,
-          },
-        });
-        return {
-          status: 200,
-          message: "Reseña registrada correctamente",
-          result: review,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al dejar reseña",
-          result: null,
-          error,
-        };
+        return trpcSuccess(deleted, "Paciente eliminado correctamente");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al eliminar paciente", 500);
       }
     }),
 

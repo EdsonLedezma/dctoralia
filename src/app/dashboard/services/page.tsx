@@ -269,14 +269,14 @@ export default function ServicesManagementPage() {
                   />
                 ))}
               </div>
-            ) : isError || servicesRes?.ok === false ? (
+            ) : isError || servicesRes?.error ? (
               <Card className="border-[#ebebeb] bg-white shadow-none">
                 <CardContent className="p-10 text-center">
                   <p className="font-medium">
                     No pudimos cargar tus servicios.
                   </p>
                   <p className="mt-2 text-sm text-[#6b6b6b]">
-                    {servicesRes?.ok === false
+                    {servicesRes?.error
                       ? servicesRes.message
                       : "Intenta actualizar la página."}
                   </p>

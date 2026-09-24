@@ -1,60 +1,66 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useAuth } from "../../hooks/useAuth"
-import { Button } from "../ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-import { Input } from "../ui/input"
-import { Label } from "../ui/label"
-import { Alert, AlertDescription } from "../ui/alert"
-import { Loader2, CheckCircle, XCircle } from "lucide-react"
-import { signOut } from "next-auth/react"
+import { useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import { Button } from "../ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Alert, AlertDescription } from "../ui/alert";
+import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 export default function AuthTest() {
   const {
     user,
-    session,
     isAuthenticated,
     isLoading,
     signin,
     isSigningIn,
     signinError,
     resetSigninError,
-  } = useAuth()
+  } = useAuth();
 
   const [credentials, setCredentials] = useState({
     email: "",
     password: "",
-  })
+  });
 
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleSignin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setSuccess("")
-    resetSigninError()
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    resetSigninError();
 
     try {
-      const result = await signin(credentials.email, credentials.password)
-      const userName = result.user?.name ?? "usuario"
-      setSuccess(`¡Inicio de sesión exitoso! Bienvenido ${userName}`)
+      const result = await signin(credentials.email, credentials.password);
+      const userName = result.user?.name ?? "usuario";
+      setSuccess(`¡Inicio de sesión exitoso! Bienvenido ${userName}`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Error al iniciar sesión"
-      setError(errorMessage)
+      const errorMessage =
+        error instanceof Error ? error.message : "Error al iniciar sesión";
+      setError(errorMessage);
     }
-  }
+  };
 
   const handleSignout = async () => {
-    await signOut({ redirect: false })
-    setSuccess("")
-    setError("")
-  }
+    await signOut({ redirect: false });
+    setSuccess("");
+    setError("");
+  };
 
   if (isLoading) {
     return (
-      <Card className="w-full max-w-md mx-auto">
+      <Card className="mx-auto w-full max-w-md">
         <CardContent className="flex items-center justify-center p-6">
           <div className="flex items-center space-x-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -62,12 +68,12 @@ export default function AuthTest() {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (isAuthenticated) {
     return (
-      <Card className="w-full max-w-md mx-auto">
+      <Card className="mx-auto w-full max-w-md">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <CheckCircle className="h-5 w-5 text-green-600" />
@@ -76,36 +82,40 @@ export default function AuthTest() {
           <CardDescription>¡Autenticación exitosa!</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-sm space-y-2">
-            <p><strong>Nombre:</strong> {user?.name}</p>
-            <p><strong>Email:</strong> {user?.email}</p>
-            <p><strong>Rol:</strong> {user?.role}</p>
-            <p><strong>ID:</strong> {user?.id}</p>
+          <div className="space-y-2 text-sm">
+            <p>
+              <strong>Nombre:</strong> {user?.name}
+            </p>
+            <p>
+              <strong>Email:</strong> {user?.email}
+            </p>
+            <p>
+              <strong>Rol:</strong> {user?.role}
+            </p>
+            <p>
+              <strong>ID:</strong> {user?.id}
+            </p>
           </div>
-          
+
           <Button onClick={handleSignout} variant="outline" className="w-full">
             Cerrar Sesión
           </Button>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="mx-auto w-full max-w-md">
       <CardHeader>
         <CardTitle>Prueba de Autenticación</CardTitle>
-        <CardDescription>
-          Prueba la integración tRPC + NextAuth
-        </CardDescription>
+        <CardDescription>Prueba la integración tRPC + NextAuth</CardDescription>
       </CardHeader>
       <CardContent>
         {(error || signinError) && (
           <Alert variant="destructive" className="mb-4">
             <XCircle className="h-4 w-4" />
-            <AlertDescription>
-              {error || signinError?.message}
-            </AlertDescription>
+            <AlertDescription>{error || signinError?.message}</AlertDescription>
           </Alert>
         )}
 
@@ -123,7 +133,9 @@ export default function AuthTest() {
               id="email"
               type="email"
               value={credentials.email}
-              onChange={(e) => setCredentials(prev => ({ ...prev, email: e.target.value }))}
+              onChange={(e) =>
+                setCredentials((prev) => ({ ...prev, email: e.target.value }))
+              }
               placeholder="test@example.com"
               required
               disabled={isSigningIn}
@@ -136,7 +148,12 @@ export default function AuthTest() {
               id="password"
               type="password"
               value={credentials.password}
-              onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
+              onChange={(e) =>
+                setCredentials((prev) => ({
+                  ...prev,
+                  password: e.target.value,
+                }))
+              }
               placeholder="••••••••"
               required
               disabled={isSigningIn}
@@ -150,5 +167,5 @@ export default function AuthTest() {
         </form>
       </CardContent>
     </Card>
-  )
-} 
+  );
+}

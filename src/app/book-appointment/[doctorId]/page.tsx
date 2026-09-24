@@ -17,7 +17,14 @@ import {
 } from "~/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Calendar, User, CheckCircle, ArrowLeft, Heart } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  User,
+  CheckCircle,
+  ArrowLeft,
+  Heart,
+} from "lucide-react";
+import { Calendar as DateCalendar } from "~/components/ui/calendar";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -25,6 +32,7 @@ import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { unwrapTrpcResult } from "~/types/trpc-response";
 import { motion, useReducedMotion } from "motion/react";
+import { format, parseISO } from "date-fns";
 
 export default function BookAppointmentPage() {
   const [step, setStep] = useState(1);
@@ -52,10 +60,11 @@ export default function BookAppointmentPage() {
     price: `$${s.price}`,
     duration: s.duration,
   }));
-  const { data: profile } = api.auth.getProfile.useQuery(undefined, {
+  const { data: profileRes } = api.auth.getProfile.useQuery(undefined, {
     enabled: sessionStatus === "authenticated",
     retry: false,
   });
+  const profile = profileRes?.result ?? null;
   const patientId = profile?.patient?.id;
 
   // Calcular rango de fechas (próximos 30 días)
@@ -210,7 +219,7 @@ END:VCALENDAR`;
           </Link>
           <div className="flex items-center space-x-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#171717]">
-              <Calendar className="h-4 w-4 text-white" />
+              <CalendarIcon className="h-4 w-4 text-white" />
             </div>
             <span className="text-xl font-bold">Dctoralia</span>
           </div>
@@ -358,82 +367,90 @@ END:VCALENDAR`;
                   <Card className="border-[#ebebeb] bg-white shadow-none">
                     <CardHeader className="border-b border-[#ebebeb]">
                       <CardTitle className="flex items-center space-x-2">
-                        <Calendar className="h-5 w-5" />
+                        <CalendarIcon className="h-5 w-5" />
                         <span>Fecha y Hora</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                      <div>
-                        <Label className="mb-3 block text-base font-medium">
-                          Fecha disponible
-                        </Label>
-                        {availableDates.length === 0 ? (
-                          <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] p-4 text-center">
-                            <p className="text-[#6b6b6b]">
-                              El doctor aún no ha configurado sus horarios de
-                              atención. Por favor, contacta directamente con el
-                              consultorio.
-                            </p>
+                      {availableDates.length === 0 ? (
+                        <div className="rounded-md border border-dashed border-[#d4d4d4] bg-[#fafafa] p-6 text-center text-sm text-[#6b6b6b]">
+                          El doctor aún no ha configurado horarios de atención.
+                        </div>
+                      ) : (
+                        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px]">
+                          <div>
+                            <div className="mb-3 flex items-center justify-between">
+                              <Label className="text-sm font-medium">
+                                Selecciona una fecha
+                              </Label>
+                              <span className="text-xs text-[#737373]">
+                                {availableDates.length} días disponibles
+                              </span>
+                            </div>
+                            <div className="rounded-lg border border-[#e5e5e5] bg-white p-2 sm:p-3">
+                              <DateCalendar
+                                mode="single"
+                                selected={
+                                  selectedDate
+                                    ? parseISO(selectedDate)
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  const nextDate = date
+                                    ? format(date, "yyyy-MM-dd")
+                                    : "";
+                                  setSelectedDate(nextDate);
+                                  setSelectedTime("");
+                                }}
+                                disabled={(date) =>
+                                  !availableDates.includes(
+                                    format(date, "yyyy-MM-dd"),
+                                  )
+                                }
+                                className="mx-auto w-full [--cell-size:2.25rem] sm:[--cell-size:2.5rem]"
+                              />
+                            </div>
                           </div>
-                        ) : (
-                          <RadioGroup
-                            value={selectedDate}
-                            onValueChange={setSelectedDate}
-                          >
-                            <div className="grid grid-cols-2 gap-3">
-                              {availableDates.map((date) => (
-                                <div
-                                  key={date}
-                                  className="flex items-center space-x-2 rounded-md border border-[#ebebeb] p-3 hover:bg-[#fafafa]"
-                                >
-                                  <RadioGroupItem value={date} id={date} />
-                                  <Label
-                                    htmlFor={date}
-                                    className="cursor-pointer"
-                                  >
-                                    {formatDate(date)}
-                                  </Label>
-                                </div>
-                              ))}
-                            </div>
-                          </RadioGroup>
-                        )}
-                      </div>
 
-                      {selectedDate && (
-                        <div>
-                          <Label className="mb-3 block text-base font-medium">
-                            Hora disponible
-                          </Label>
-                          {timeSlots.length === 0 ? (
-                            <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] p-4 text-center">
-                              <p className="text-[#6b6b6b]">
-                                No hay horarios disponibles para esta fecha.
-                              </p>
+                          <div className="border-t border-[#ebebeb] pt-5 md:border-t-0 md:border-l md:pt-0 md:pl-6">
+                            <div className="mb-3 flex items-center justify-between">
+                              <Label className="text-sm font-medium">
+                                Horario
+                              </Label>
+                              {selectedDate && (
+                                <span className="text-xs text-[#737373]">
+                                  {formatDate(selectedDate)}
+                                </span>
+                              )}
                             </div>
-                          ) : (
-                            <RadioGroup
-                              value={selectedTime}
-                              onValueChange={setSelectedTime}
-                            >
-                              <div className="grid grid-cols-3 gap-3">
+                            {!selectedDate ? (
+                              <p className="text-sm text-[#737373]">
+                                Elige una fecha para ver horarios.
+                              </p>
+                            ) : timeSlots.length === 0 ? (
+                              <p className="text-sm text-[#737373]">
+                                No hay horarios disponibles para este día.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2">
                                 {timeSlots.map((time: string) => (
-                                  <div
+                                  <button
                                     key={time}
-                                    className="flex items-center space-x-2 rounded-md border border-[#ebebeb] p-3 hover:bg-[#fafafa]"
+                                    type="button"
+                                    onClick={() => setSelectedTime(time)}
+                                    aria-pressed={selectedTime === time}
+                                    className={`rounded-md border px-3 py-2 text-sm transition-colors ${
+                                      selectedTime === time
+                                        ? "border-[#171717] bg-[#171717] text-white"
+                                        : "border-[#e5e5e5] bg-white text-[#171717] hover:border-[#a3a3a3] hover:bg-[#fafafa]"
+                                    }`}
                                   >
-                                    <RadioGroupItem value={time} id={time} />
-                                    <Label
-                                      htmlFor={time}
-                                      className="cursor-pointer"
-                                    >
-                                      {time}
-                                    </Label>
-                                  </div>
+                                    {time}
+                                  </button>
                                 ))}
                               </div>
-                            </RadioGroup>
-                          )}
+                            )}
+                          </div>
                         </div>
                       )}
                     </CardContent>

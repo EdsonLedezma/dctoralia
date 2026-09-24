@@ -4,6 +4,24 @@ Fecha de diagnóstico: 16 de septiembre de 2026
 
 ## Estado de implementación
 
+### Actualización del 22 de septiembre de 2026
+
+Esta entrega **no representa el cierre completo del plan**. Las integraciones ya tienen código ejecutable, pero las automatizaciones a pacientes y el cobro de excedentes aún no están terminados.
+
+- Stripe: Checkout y portal mediante tRPC, autorización del propietario, precio Pro validado en 800 MXN/mes, precios Enterprise/Custom configurables por contrato, webhook firmado/deduplicado, sincronización de estado y periodo. Las suscripciones nuevas comienzan pausadas.
+- Workspace: alta transaccional para doctores sin workspace, enlace de operación existente no asignada, facturación y tabla de comunicaciones en UI compacta con estados de carga/error. Se revalidan capacidades de altas de doctores/ubicaciones dentro de transacciones serializables.
+- Sent: SDK instalado, dispatcher autenticado, recuperación de leases, ID del proveedor, sandbox persistido por mensaje, HMAC, inbox sanitizado y estados de entrega monotónicos. El botón de prueba encola únicamente un mensaje sandbox al teléfono propio.
+- Contratos: eliminado `ok` del nivel raíz de tRPC; quedan exactamente `result`, `error`, `status`, `message`. Registro con usuario/perfil atómicos y edición de perfiles sin falsos éxitos ni borrado de antecedentes médicos.
+- Seguridad: layouts doctor/paciente con autorización en servidor; retiradas las procedures obsoletas `patients.bookAppointment`, `patients.leaveReview` y `patients.rateDoctor` (sin consumidores), conservando `appointments.create` y `review.create`.
+- La selección de workspace usa transporte no streaming para garantizar el header de cookie; una selección obsoleta no oculta otras membresías válidas.
+- Se añadió `.env.example` completo y `docs/INTEGRACIONES.md` con configuración y limitaciones reales.
+
+**Acción del propietario:** el esquema de esta entrega añade campos respecto del ya aplicado. Revisa y ejecuta `pnpm db:push` manualmente; el agente no consultó ni migró la base de datos.
+
+**Pendientes de producto, no sólo de credenciales:** consentimiento/opt-out/quiet hours, cinco recetas automáticas, comandos entrantes, perfiles de Sent por workspace, ledger de costos reales y cargo idempotente de excedentes. También queda conectar ubicaciones a todo el recorrido de disponibilidad/reserva y comprobar los E2E autenticados, accesibilidad y regresión visual móvil. Vapi permanece como fase futura.
+
+### Trabajo previo conservado
+
 La primera iteración ejecutable ya cubre el núcleo de la Entrega 1, el shell autenticado prioritario y la primera capa visual de la Entrega 3:
 
 - Citas, servicios y horarios validan ownership por sesión, contratos serializables y conflictos por duración.
@@ -35,7 +53,19 @@ La primera iteración ejecutable ya cubre el núcleo de la Entrega 1, el shell a
 - El flujo público de reserva comparte tokens de Dopilot: progreso con hairlines, tarjetas sin sombras, estados neutrales y formularios responsive sin descripciones repetidas.
 - La revisión mobile a 390px eliminó overflow horizontal en el directorio y la reserva; el shell añade safe area, viewport dinámico, navegación táctil desplazable, targets de 44px y evita zoom de inputs en iOS/Android.
 - La consulta de perfil en la reserva pública sólo se ejecuta con sesión autenticada y sin retries innecesarios, evitando ruido de errores UNAUTHORIZED en clientes anónimos.
-- La siguiente vertical prioritaria es separar las páginas grandes en componentes de ruta y cerrar la deuda de lint sin relajar los guardrails del build.
+- Reseñas, perfiles de doctor y pacientes normalizan errores serializables; las mutaciones del doctor validan ownership del perfil y el historial exige una cita compartida.
+- Prisma ya tiene la frontera inicial multi-consultorio (`Clinic`, `ClinicLocation`, `ClinicMember` y enlaces opcionales/indexados en la operación); falta revisar y ejecutar el backfill/migración en el entorno del propietario.
+- El catálogo comercial vive en `server/domain/subscriptions`: Pro para un doctor independiente (800 MXN/mes con 150 MXN de crédito Sent.dm y excedente facturable), Enterprise para workspaces de clínicas/hospitales y Custom para esos workspaces con desarrollo personalizado y mensajería extendida.
+- Las policies de workspace ya separan capacidad comercial y autorización técnica: `canInviteDoctor`, `canCreateLocation`, `canUseExtendedMessaging`, `canRequestCustomDevelopment` y `canBillMessagingOverage` requieren membresía/rol y suscripción activa.
+- El contexto de workspace se resuelve por membresía en servidor, se memoiza por request y se expone de forma sanitizada mediante `workspace.getMine`; ningún router debe aceptar un `clinicId` sin comprobarlo contra ese contexto.
+- La selección de workspace ya es persistente y segura: `workspace.listMine` expone sólo las membresías del usuario, `workspace.select` valida la membresía y devuelve el contrato tRPC uniforme mientras escribe una cookie HTTP-only desde los headers del adaptador; el contexto tRPC vuelve a validar esa cookie en cada request.
+- `workspace.members.list`, `addDoctor` y `removeDoctor` ya aplican la suscripción activa, el rol de manager, el límite del plan y una transacción para mantener sincronizados `Doctor.clinicId` y `ClinicMember`.
+- El ciclo inicial de invitaciones está preparado en `workspace.invitations`: token hashado, expiración, listado, revocación y aceptación ligada al correo autenticado; todavía no envía mensajes porque el adaptador de Sent pertenece a la Entrega 6.
+- La primera pantalla de administración de workspace ya está disponible en `/dashboard/workspace` con tabla responsive de miembros, invitaciones, skeletons, diálogo de invitación y confirmación de retiro; la página compone componentes privados y consume únicamente tRPC.
+- La administración de workspace también permite listar, crear, editar y archivar ubicaciones activas respetando el límite comercial del plan; la UI usa un diálogo compacto y conserva las ubicaciones archivadas fuera de nuevas citas sin borrar historial.
+- La auditoría de contratos ya no encuentra `NextResponse` ni rutas HTTP manuales de dominio: autenticación, perfiles, pacientes, doctores y reseñas devuelven exclusivamente `TrpcResponse`; el router de ejemplo `post` fue retirado.
+- La capa de Sent tiene outbox/inbox en Prisma, clave idempotente, seguimiento del proveedor, reintentos y dead-letter; el SDK vive exclusivamente en la frontera de integración.
+- La suite actual contiene 49 pruebas unitarias con dobles de dependencias externas. Un build y pruebas unitarias verdes no equivalen a validar Stripe/Sent ni la base de datos reales.
 
 ## 1. Resultado objetivo
 
@@ -51,7 +81,7 @@ La meta no es copiar literalmente la interfaz o marca de Vercel. Se reutilizan s
 
 ### Base técnica que sí se conserva
 
-- Next.js 15.2 con App Router, React 19, TypeScript estricto, tRPC 11, Prisma 6 y pnpm.
+- Next.js 16.3.5 con App Router, React 19, TypeScript estricto, tRPC 11, Prisma 6 y pnpm. El proyecto usa Webpack de forma explícita mientras se separa el cliente tRPC del runtime nativo de `argon2` para poder reactivar Turbopack con seguridad.
 - Tailwind CSS 4 y shadcn/ui ya inicializado correctamente con `new-york`, Radix, RSC y Lucide.
 - Componentes base shadcn existentes: alert, avatar, badge, button, card, checkbox, dialog, input, label, radio-group, select, sonner, tabs y textarea.
 - Flujos internos ya disponibles en tRPC para citas, horarios, servicios, pacientes, notificaciones y reseñas.
@@ -255,12 +285,20 @@ Criterio de salida: cero escrituras cross-tenant/cross-user en pruebas y ningún
 
 ### Entrega 2 — Modelo SaaS de consultorio
 
+Estado: frontera de datos y catálogo de planes preparados en `prisma/schema.prisma` y `server/domain/subscriptions`; aún no se ha ejecutado ninguna migración ni backfill.
+
 - Diseñar `Clinic`, `ClinicLocation`, `ClinicMember` y roles internos: owner, admin, doctor, receptionist.
 - Relacionar agenda, servicios, citas, pacientes y automatizaciones con `clinicId`.
 - Definir zona horaria por clínica y ubicación; almacenar instantes de forma inequívoca.
 - Añadir slugs públicos, estado de publicación y perfil verificable para doctor/clínica.
 - Definir índices para búsquedas por clínica, doctor, paciente, fecha, estado y disponibilidad.
 - Preparar estrategia de backfill desde el modelo actual de doctor individual.
+- Asociar una suscripción por clínica/workspace con ciclo, estado, proveedor, crédito de mensajería y consumo mensual auditable.
+- Separar límites comerciales de permisos técnicos: el plan define capacidades y una policy decide si el actor puede ejecutarlas.
+- Exponer estas policies desde routers de clínica/workspace cuando exista el contexto de clínica en sesión; no confiar en `clinicId` enviado por la UI.
+- Resolver el selector de workspace para usuarios con varias membresías usando una selección validada en servidor, manteniendo una membresía por defecto segura mientras se construye esa UI.
+- Añadir invitaciones con expiración y roles de recepción cuando el modelo de identidad soporte ese rol; por ahora el flujo seguro sólo agrega perfiles de doctor existentes.
+- Conectar la creación de invitaciones al outbox de Sent sin devolver tokens crudos a la UI cuando exista el proveedor de mensajería.
 
 Esta fase sólo debe editar `prisma/schema.prisma` y código. El agente no ejecutará migraciones ni comandos de base de datos; el propietario deberá revisar y ejecutar `pnpm db:push` cuando se le indique.
 
@@ -306,6 +344,10 @@ Criterio de salida: las cinco tareas frecuentes del consultorio se completan sin
 
 ### Entrega 6 — Automatizaciones con Sent
 
+El crédito mensual y el excedente de Sent.dm se contabilizarán por `ClinicSubscription` y `SubscriptionUsagePeriod`; Enterprise y Custom quedarán sujetos al contrato de mensajería configurado para cada workspace.
+
+Estado: SDK, dispatcher y webhook implementados; prueba sandbox disponible desde Workspace. No se habilitan todavía recetas automáticas a pacientes ni facturación de consumo real.
+
 Sent se integra detrás de un puerto propio, no directamente desde componentes o routers.
 
 ```text
@@ -318,10 +360,10 @@ Evento de dominio
   -> Estado de entrega + siguiente automatización
 ```
 
-- Crear interfaz `MessagingProvider` y adaptador `SentMessagingProvider`.
-- Usar el API v3 y el SDK TypeScript sólo dentro de `server/integrations/sent`.
-- Añadir outbox/inbox, reintentos con backoff, idempotencia y dead-letter visible.
-- Verificar HMAC sobre el body crudo del webhook antes de parsear o mutar.
+- Crear interfaz `MessagingProvider` y adaptador `SentMessagingProvider`. ✅
+- Usar el SDK TypeScript detrás del adaptador de Sent. ✅
+- Añadir outbox/inbox, reintentos con backoff, idempotencia y dead-letter visible. ✅ SDK real, leases y tabla de estados; falta validación contra la cuenta configurada.
+- Verificar HMAC sobre el body crudo del webhook antes de parsear o mutar. ✅ Pruebas de firma válida, alterada, replay y rotación.
 - Persistir mensaje, canal, template, estado, intentos, timestamps y correlación con cita.
 - Incorporar consentimiento, opt-out, quiet hours, plantillas y redacción de PII en logs.
 - Empezar con cinco recetas: confirmación al reservar, recordatorio 24h, recordatorio corto, recuperación de cancelación/no-show y solicitud de reseña.
@@ -398,7 +440,7 @@ La primera vertical completa debe ser “reservar y confirmar una cita”. Oblig
 
 La siguiente implementación debe limitarse a dos PRs pequeños:
 
-1. **PR de confianza:** contrato tRPC común, policies de appointments/services/schedule, errores seguros y tests de ownership.
-2. **PR de golden path visual:** tokens del `design.md`, tipografía, primitives shadcn faltantes, shell de doctor y refactor de `/dashboard` a Server Component con componentes privados.
+1. **PR de automatización:** outbox transaccional, puerto `MessagingProvider` y adaptador de Sent sin acoplar credenciales o SDK a routers/UI.
+2. **PR de operación:** conectar ubicaciones a disponibilidad, filtros del directorio y configuración de clínica usando el contexto de workspace validado.
 
-Después se implementa la reserva end-to-end y recién entonces se inicia Sent. De esta forma la automatización se conecta a reglas de negocio estables en lugar de amplificar la deuda actual.
+La reserva base ya está operativa; estas dos entregas deben conectar sus eventos a reglas de negocio estables antes de habilitar envíos reales de Sent. El proveedor se activa primero en sandbox y con trazabilidad completa.

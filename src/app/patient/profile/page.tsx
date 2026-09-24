@@ -28,6 +28,7 @@ import { api, type RouterInputs } from "~/trpc/react";
 import { toast } from "sonner";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
+import { unwrapTrpcResult } from "~/types/trpc-response";
 
 type BloodType = NonNullable<
   RouterInputs["patients"]["upsertMedicalHistory"]["bloodType"]
@@ -57,7 +58,8 @@ type ProfileFormData = {
 export default function PatientProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
 
-  const { data: profile, refetch } = api.auth.getProfile.useQuery();
+  const { data: profileRes, refetch } = api.auth.getProfile.useQuery();
+  const profile = profileRes?.result ?? null;
   const patient = profile?.patient;
   const user = profile;
 
@@ -72,6 +74,7 @@ export default function PatientProfilePage() {
   const updateBirthDate = api.patients.updateBirthDate.useMutation();
   const updateGender = api.patients.updateGender.useMutation();
   const upsertMedicalHistory = api.patients.upsertMedicalHistory.useMutation();
+  const updateAccount = api.auth.updateProfile.useMutation();
 
   const [profileData, setProfileData] = useState<ProfileFormData>({
     firstName: user?.name?.split(" ")[0] ?? "",
@@ -127,33 +130,55 @@ export default function PatientProfilePage() {
     if (!patient?.id) return;
 
     try {
+      const nextName =
+        `${profileData.firstName} ${profileData.lastName}`.trim();
+      if (
+        nextName !== (user?.name ?? "") ||
+        profileData.email !== (user?.email ?? "")
+      ) {
+        unwrapTrpcResult(
+          await updateAccount.mutateAsync({
+            name: nextName,
+            email: profileData.email.trim().toLowerCase(),
+          }),
+        );
+      }
+
       // Actualizar datos del paciente
       if (profileData.phone !== patient.phone) {
-        await updatePhone.mutateAsync({
-          id: patient.id,
-          phone: profileData.phone,
-        });
+        unwrapTrpcResult(
+          await updatePhone.mutateAsync({
+            id: patient.id,
+            phone: profileData.phone,
+          }),
+        );
       }
       if (profileData.address !== patient.address) {
-        await updateAddress.mutateAsync({
-          id: patient.id,
-          address: profileData.address,
-        });
+        unwrapTrpcResult(
+          await updateAddress.mutateAsync({
+            id: patient.id,
+            address: profileData.address,
+          }),
+        );
       }
       if (
         profileData.birthDate &&
         profileData.birthDate !== patient.birthDate?.toISOString().split("T")[0]
       ) {
-        await updateBirthDate.mutateAsync({
-          id: patient.id,
-          birthDate: new Date(profileData.birthDate),
-        });
+        unwrapTrpcResult(
+          await updateBirthDate.mutateAsync({
+            id: patient.id,
+            birthDate: new Date(profileData.birthDate),
+          }),
+        );
       }
       if (profileData.gender !== patient.gender) {
-        await updateGender.mutateAsync({
-          id: patient.id,
-          gender: profileData.gender,
-        });
+        unwrapTrpcResult(
+          await updateGender.mutateAsync({
+            id: patient.id,
+            gender: profileData.gender,
+          }),
+        );
       }
 
       // Actualizar historial médico
@@ -171,13 +196,15 @@ export default function PatientProfilePage() {
             .split(",")
             .map((m) => m.trim())
             .filter(Boolean),
-          chronicDiseases: [],
-          surgeries: [],
-          immunizations: [],
+          chronicDiseases: medicalHistory?.chronicDiseases ?? [],
+          surgeries: medicalHistory?.surgeries ?? [],
+          immunizations: medicalHistory?.immunizations ?? [],
           notes: profileData.medicalHistory,
         };
 
-      await upsertMedicalHistory.mutateAsync(medicalHistoryInput);
+      unwrapTrpcResult(
+        await upsertMedicalHistory.mutateAsync(medicalHistoryInput),
+      );
 
       toast.success("Perfil actualizado correctamente");
       setIsEditing(false);

@@ -1,5 +1,32 @@
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "~/server/api/trpc";
 import { z } from "zod";
+import type { PrismaClient, Role } from "@prisma/client";
+import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
+
+async function getManagedDoctorId(
+  ctx: { db: PrismaClient; session: { user: { id: string; role: Role } } },
+  requestedId: string,
+): Promise<string | null> {
+  if (ctx.session.user.role === "ADMIN") {
+    const doctor = await ctx.db.doctor.findUnique({
+      where: { id: requestedId },
+      select: { id: true },
+    });
+    return doctor?.id ?? null;
+  }
+
+  if (ctx.session.user.role !== "DOCTOR") return null;
+
+  const doctor = await ctx.db.doctor.findUnique({
+    where: { userId: ctx.session.user.id },
+    select: { id: true },
+  });
+  return doctor?.id === requestedId ? doctor.id : null;
+}
 
 export const useDoctor = createTRPCRouter({
   // Listar doctores (público)
@@ -13,19 +40,9 @@ export const useDoctor = createTRPCRouter({
         },
         orderBy: { createdAt: "desc" },
       });
-      return {
-        status: 200,
-        message: "Doctores obtenidos correctamente",
-        result: doctors,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al obtener doctores",
-        result: null,
-        error,
-      };
+      return trpcSuccess(doctors, "Doctores obtenidos correctamente");
+    } catch {
+      return trpcFailure("INTERNAL_ERROR", "Error al obtener doctores", 500);
     }
   }),
 
@@ -45,9 +62,13 @@ export const useDoctor = createTRPCRouter({
         },
         orderBy: { createdAt: "desc" },
       });
-      return { status: 200, message: "Doctores disponibles", result: doctors, error: null };
-    } catch (error) {
-      return { status: 500, message: "Error al listar doctores disponibles", result: null, error };
+      return trpcSuccess(doctors, "Doctores disponibles");
+    } catch {
+      return trpcFailure(
+        "INTERNAL_ERROR",
+        "Error al listar doctores disponibles",
+        500,
+      );
     }
   }),
 
@@ -81,65 +102,44 @@ export const useDoctor = createTRPCRouter({
           },
           orderBy: { createdAt: "desc" },
         });
-        return {
-          status: 200,
-          message: "Resultados de búsqueda de doctores",
-          result: doctors,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al buscar doctores",
-          result: null,
-          error,
-        };
+        return trpcSuccess(doctors, "Resultados de búsqueda de doctores");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al buscar doctores", 500);
       }
     }),
 
   // Obtener doctor por ID (público)
-  getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
-    try {
-      const doctor = await ctx.db.doctor.findUnique({
-        where: { id: input.id },
-        include: {
-          user: { select: { id: true, name: true, image: true, email: true } },
-          services: true,
-          schedules: true,
-          reviews: {
-            include: {
-              patient: {
-                include: {
-                  user: { select: { name: true, image: true } },
+  getById: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const doctor = await ctx.db.doctor.findUnique({
+          where: { id: input.id },
+          include: {
+            user: {
+              select: { id: true, name: true, image: true, email: true },
+            },
+            services: true,
+            schedules: true,
+            reviews: {
+              include: {
+                patient: {
+                  include: {
+                    user: { select: { name: true, image: true } },
+                  },
                 },
               },
             },
           },
-        },
-      });
-      if (!doctor) {
-        return {
-          status: 404,
-          message: "Doctor no encontrado",
-          result: null,
-          error: new Error("Doctor no encontrado"),
-        };
+        });
+        if (!doctor) {
+          return trpcFailure("DOCTOR_NOT_FOUND", "Doctor no encontrado", 404);
+        }
+        return trpcSuccess(doctor, "Doctor encontrado");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al buscar doctor", 500);
       }
-      return {
-        status: 200,
-        message: "Doctor encontrado",
-        result: doctor,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al buscar doctor",
-        result: null,
-        error,
-      };
-    }
-  }),
+    }),
 
   // Obtener perfil de doctor por userId (protegido)
   getByUser: protectedProcedure.query(async ({ ctx }) => {
@@ -153,108 +153,133 @@ export const useDoctor = createTRPCRouter({
         },
       });
       if (!doctor) {
-        return {
-          status: 404,
-          message: "Perfil de doctor no encontrado",
-          result: null,
-          error: new Error("Perfil de doctor no encontrado"),
-        };
+        return trpcFailure(
+          "DOCTOR_NOT_FOUND",
+          "Perfil de doctor no encontrado",
+          404,
+        );
       }
-      return {
-        status: 200,
-        message: "Perfil de doctor encontrado",
-        result: doctor,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al obtener perfil de doctor",
-        result: null,
-        error,
-      };
+      return trpcSuccess(doctor, "Perfil de doctor encontrado");
+    } catch {
+      return trpcFailure(
+        "INTERNAL_ERROR",
+        "Error al obtener perfil de doctor",
+        500,
+      );
     }
   }),
 
   // Actualizar especialidad
-  updateSpecialty: protectedProcedure.input(z.object({ id: z.string(), specialty: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const doctor = await ctx.db.doctor.update({ where: { id: input.id }, data: { specialty: input.specialty } });
-      return {
-        status: 200,
-        message: "Especialidad actualizada correctamente",
-        result: doctor.specialty,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar la especialidad",
-        result: null,
-        error,
-      };
-    }
-  }),
+  updateSpecialty: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        specialty: z.string().trim().min(1).max(120),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const doctorId = await getManagedDoctorId(ctx, input.id);
+      if (!doctorId) {
+        return trpcFailure("FORBIDDEN", "No tienes acceso a este perfil", 403);
+      }
+      try {
+        const doctor = await ctx.db.doctor.update({
+          where: { id: doctorId },
+          data: { specialty: input.specialty },
+        });
+        return trpcSuccess(
+          doctor.specialty,
+          "Especialidad actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la especialidad",
+          500,
+        );
+      }
+    }),
 
   // Actualizar cédula
-  updateLicense: protectedProcedure.input(z.object({ id: z.string(), license: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const doctor = await ctx.db.doctor.update({ where: { id: input.id }, data: { license: input.license } });
-      return {
-        status: 200,
-        message: "Cédula profesional actualizada correctamente",
-        result: doctor.license,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar la cédula profesional",
-        result: null,
-        error,
-      };
-    }
-  }),
+  updateLicense: protectedProcedure
+    .input(
+      z.object({ id: z.string(), license: z.string().trim().min(1).max(80) }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const doctorId = await getManagedDoctorId(ctx, input.id);
+      if (!doctorId) {
+        return trpcFailure("FORBIDDEN", "No tienes acceso a este perfil", 403);
+      }
+      try {
+        const doctor = await ctx.db.doctor.update({
+          where: { id: doctorId },
+          data: { license: input.license },
+        });
+        return trpcSuccess(
+          doctor.license,
+          "Cédula profesional actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la cédula profesional",
+          500,
+        );
+      }
+    }),
 
   // Actualizar teléfono
-  updatePhone: protectedProcedure.input(z.object({ id: z.string(), phone: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const doctor = await ctx.db.doctor.update({ where: { id: input.id }, data: { phone: input.phone } });
-      return {
-        status: 200,
-        message: "Teléfono actualizado correctamente",
-        result: doctor.phone,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar el teléfono",
-        result: null,
-        error,
-      };
-    }
-  }),
+  updatePhone: protectedProcedure
+    .input(
+      z.object({ id: z.string(), phone: z.string().trim().min(1).max(30) }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const doctorId = await getManagedDoctorId(ctx, input.id);
+      if (!doctorId) {
+        return trpcFailure("FORBIDDEN", "No tienes acceso a este perfil", 403);
+      }
+      try {
+        const doctor = await ctx.db.doctor.update({
+          where: { id: doctorId },
+          data: { phone: input.phone },
+        });
+        return trpcSuccess(doctor.phone, "Teléfono actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el teléfono",
+          500,
+        );
+      }
+    }),
 
   // Actualizar descripción
-  updateAbout: protectedProcedure.input(z.object({ id: z.string(), about: z.string() })).mutation(async ({ input, ctx }) => {
-    try {
-      const doctor = await ctx.db.doctor.update({ where: { id: input.id }, data: { about: input.about } });
-      return {
-        status: 200,
-        message: "Descripción actualizada correctamente",
-        result: doctor.about,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al actualizar la descripción",
-        result: null,
-        error,
-      };
-    }
-  }),
+  updateAbout: protectedProcedure
+    .input(
+      z.object({ id: z.string(), about: z.string().trim().min(1).max(2000) }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const doctorId = await getManagedDoctorId(ctx, input.id);
+      if (!doctorId) {
+        return trpcFailure("FORBIDDEN", "No tienes acceso a este perfil", 403);
+      }
+      try {
+        const doctor = await ctx.db.doctor.update({
+          where: { id: doctorId },
+          data: { about: input.about },
+        });
+        return trpcSuccess(
+          doctor.about,
+          "Descripción actualizada correctamente",
+        );
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la descripción",
+          500,
+        );
+      }
+    }),
 
   // Actualizar perfil completo del doctor
   updateProfile: protectedProcedure
@@ -264,7 +289,7 @@ export const useDoctor = createTRPCRouter({
         about: z.string().optional(),
         experience: z.number().int().min(0).optional(),
         phone: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -273,12 +298,11 @@ export const useDoctor = createTRPCRouter({
         });
 
         if (!doctor) {
-          return {
-            status: 404,
-            message: "Perfil de doctor no encontrado",
-            result: null,
-            error: new Error("Doctor no encontrado"),
-          };
+          return trpcFailure(
+            "DOCTOR_NOT_FOUND",
+            "Perfil de doctor no encontrado",
+            404,
+          );
         }
 
         const updated = await ctx.db.doctor.update({
@@ -290,25 +314,17 @@ export const useDoctor = createTRPCRouter({
             phone: input.phone,
           },
           include: {
-            user: { select: { id: true, name: true, image: true, email: true } },
+            user: {
+              select: { id: true, name: true, image: true, email: true },
+            },
             services: true,
             schedules: true,
           },
         });
 
-        return {
-          status: 200,
-          message: "Perfil actualizado correctamente",
-          result: updated,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al actualizar perfil",
-          result: null,
-          error,
-        };
+        return trpcSuccess(updated, "Perfil actualizado correctamente");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al actualizar perfil", 500);
       }
     }),
 
@@ -339,27 +355,16 @@ export const useDoctor = createTRPCRouter({
       });
 
       if (!doctor) {
-        return {
-          status: 404,
-          message: "Perfil de doctor no encontrado",
-          result: null,
-          error: new Error("Doctor no encontrado"),
-        };
+        return trpcFailure(
+          "DOCTOR_NOT_FOUND",
+          "Perfil de doctor no encontrado",
+          404,
+        );
       }
 
-      return {
-        status: 200,
-        message: "Perfil del doctor",
-        result: doctor,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        status: 500,
-        message: "Error al obtener perfil",
-        result: null,
-        error,
-      };
+      return trpcSuccess(doctor, "Perfil del doctor");
+    } catch {
+      return trpcFailure("INTERNAL_ERROR", "Error al obtener perfil", 500);
     }
   }),
 
@@ -368,7 +373,7 @@ export const useDoctor = createTRPCRouter({
     .input(
       z.object({
         search: z.string().optional(),
-      })
+      }),
     )
     .query(async ({ input, ctx }) => {
       try {
@@ -377,12 +382,7 @@ export const useDoctor = createTRPCRouter({
         });
 
         if (!doctor) {
-          return {
-            status: 404,
-            message: "Doctor no encontrado",
-            result: [],
-            error: null,
-          };
+          return trpcFailure("DOCTOR_NOT_FOUND", "Doctor no encontrado", 404);
         }
 
         const patients = await ctx.db.patient.findMany({
@@ -415,19 +415,9 @@ export const useDoctor = createTRPCRouter({
           orderBy: { createdAt: "desc" },
         });
 
-        return {
-          status: 200,
-          message: "Mis pacientes",
-          result: patients,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al obtener pacientes",
-          result: [],
-          error,
-        };
+        return trpcSuccess(patients, "Mis pacientes");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al obtener pacientes", 500);
       }
     }),
 
@@ -441,18 +431,18 @@ export const useDoctor = createTRPCRouter({
         });
 
         if (!doctor) {
-          return {
-            status: 404,
-            message: "No eres doctor",
-            result: null,
-            error: null,
-          };
+          return trpcFailure("DOCTOR_PROFILE_NOT_FOUND", "No eres doctor", 404);
         }
 
-        const patient = await ctx.db.patient.findUnique({
-          where: { id: input.patientId },
+        const patient = await ctx.db.patient.findFirst({
+          where: {
+            id: input.patientId,
+            appointments: { some: { doctorId: doctor.id } },
+          },
           include: {
-            user: { select: { name: true, email: true, phone: true, image: true } },
+            user: {
+              select: { name: true, email: true, phone: true, image: true },
+            },
             appointments: {
               where: { doctorId: doctor.id },
               include: {
@@ -466,27 +456,16 @@ export const useDoctor = createTRPCRouter({
         });
 
         if (!patient) {
-          return {
-            status: 404,
-            message: "Paciente no encontrado",
-            result: null,
-            error: null,
-          };
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "Paciente no encontrado",
+            404,
+          );
         }
 
-        return {
-          status: 200,
-          message: "Historial del paciente",
-          result: patient,
-          error: null,
-        };
-      } catch (error) {
-        return {
-          status: 500,
-          message: "Error al obtener historial",
-          result: null,
-          error,
-        };
+        return trpcSuccess(patient, "Historial del paciente");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al obtener historial", 500);
       }
     }),
 });

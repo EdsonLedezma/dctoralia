@@ -47,10 +47,135 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  doctor   Doctor?
-  patient  Patient?
+  accounts          Account[]
+  sessions          Session[]
+  doctor            Doctor?
+  patient           Patient?
+  clinicMemberships ClinicMember[]
+  clinicInvitations ClinicInvitation[] @relation("ClinicInvitations")
+}
+
+/// Tenant boundary for a medical practice. Links on current operational
+/// models are optional until the owner runs the reviewed backfill migration.
+model Clinic {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("America/Mexico_City")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locations     ClinicLocation[]
+  members       ClinicMember[]
+  invitations   ClinicInvitation[]
+  subscription  ClinicSubscription?
+  doctors       Doctor[]         @relation("ClinicDoctors")
+  patients      Patient[]        @relation("ClinicPatients")
+  services      Service[]        @relation("ClinicServices")
+  appointments  Appointment[]    @relation("ClinicAppointments")
+  schedules     Schedule[]       @relation("ClinicSchedules")
+  reviews       Review[]         @relation("ClinicReviews")
+  notifications Notification[]   @relation("ClinicNotifications")
+  messageOutbox  MessageOutbox[]
+  messageInbox   MessageInbox[]
+}
+
+model ClinicLocation {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  address   String?
+  timezone  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments Appointment[] @relation("LocationAppointments")
+
+  @@index([clinicId, isActive])
+}
+
+model ClinicMember {
+  id        String           @id @default(cuid())
+  clinicId  String
+  userId    String
+  role      ClinicMemberRole @default(DOCTOR)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, userId])
+  @@index([userId])
+}
+
+model ClinicInvitation {
+  id              String           @id @default(cuid())
+  clinicId        String
+  invitedByUserId String
+  email           String
+  role            ClinicMemberRole @default(DOCTOR)
+  tokenHash       String           @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  clinic        Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  invitedByUser User   @relation("ClinicInvitations", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, email])
+  @@index([clinicId, expiresAt])
+}
+
+model ClinicSubscription {
+  id                       String             @id @default(cuid())
+  clinicId                 String             @unique
+  plan                     SubscriptionPlan   @default(PRO)
+  status                   SubscriptionStatus @default(PAUSED)
+  currency                 String             @default("MXN")
+  monthlyPriceMxn          Int?
+  includedMessagingMxn     Int?
+  messagingOverageAllowed  Boolean            @default(false)
+  customDevelopmentEnabled Boolean            @default(false)
+  extendedMessagingEnabled Boolean            @default(false)
+  provider                 String?
+  providerCustomerId       String?
+  providerSubscriptionId   String?
+  currentPeriodStart      DateTime?
+  currentPeriodEnd        DateTime?
+  cancelAtPeriodEnd        Boolean            @default(false)
+  checkoutSessionId        String?
+  checkoutAttempt          Int                @default(0)
+  billingLockToken         String?
+  billingLockUntil         DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  clinic      Clinic                    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  usagePeriods SubscriptionUsagePeriod[]
+
+  @@index([plan, status])
+  @@index([providerSubscriptionId])
+}
+
+model SubscriptionUsagePeriod {
+  id                   String   @id @default(cuid())
+  clinicSubscriptionId String
+  periodStart          DateTime
+  periodEnd            DateTime
+  messagingUsedMxn     Int      @default(0)
+  messagingOverageMxn  Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  subscription ClinicSubscription @relation(fields: [clinicSubscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicSubscriptionId, periodStart])
+  @@index([periodEnd])
 }
 
 model VerificationToken {
@@ -72,15 +197,19 @@ model Doctor {
   experience   Int? // años de experiencia
   rating       Float? // promedio de calificaciones
   totalReviews Int? // total de reseñas
+  clinicId     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  appointments Appointment[] @relation("DoctorAppointments")
-  services     Service[]     @relation("DoctorServices")
-  schedules    Schedule[]
-  reviews      Review[]      @relation("DoctorReviews")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic        Clinic?        @relation("ClinicDoctors", fields: [clinicId], references: [id], onDelete: SetNull)
+  appointments  Appointment[]  @relation("DoctorAppointments")
+  services      Service[]      @relation("DoctorServices")
+  schedules     Schedule[]
+  reviews       Review[]       @relation("DoctorReviews")
   notifications Notification[] @relation("DoctorNotifications")
+
+  @@index([clinicId])
 }
 
 model Patient {
@@ -90,14 +219,18 @@ model Patient {
   birthDate DateTime?
   gender    String?
   address   String?
+  clinicId  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  appointments Appointment[] @relation("PatientAppointments")
-  reviews      Review[]      @relation("PatientReviews")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic         Clinic?         @relation("ClinicPatients", fields: [clinicId], references: [id], onDelete: SetNull)
+  appointments   Appointment[]   @relation("PatientAppointments")
+  reviews        Review[]        @relation("PatientReviews")
   medicalHistory MedicalHistory?
-  notifications Notification[] @relation("PatientNotifications")
+  notifications  Notification[]  @relation("PatientNotifications")
+
+  @@index([clinicId])
 }
 
 model Service {
@@ -110,30 +243,41 @@ model Service {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  clinicId    String?
 
   doctor       Doctor        @relation("DoctorServices", fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic       Clinic?       @relation("ClinicServices", fields: [clinicId], references: [id], onDelete: SetNull)
   appointments Appointment[] @relation("ServiceAppointments")
+
+  @@index([clinicId, isActive])
 }
 
 model Appointment {
-  id        String            @id @default(cuid())
-  doctorId  String
-  patientId String
-  serviceId String
-  date      DateTime
-  time      String
-  duration  Int // en minutos
-  status    AppointmentStatus @default(PENDING)
+  id         String               @id @default(cuid())
+  doctorId   String
+  patientId  String
+  serviceId  String
+  date       DateTime
+  time       String
+  duration   Int // en minutos
+  status     AppointmentStatus    @default(PENDING)
   // Severidad percibida de la consulta/cita. Se utilizará para el algoritmo de card de salud.
-  severity  AppointmentSeverity?
-  notes     String?
-  reason    String?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  severity   AppointmentSeverity?
+  notes      String?
+  reason     String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  clinicId   String?
+  locationId String?
 
-  doctor  Doctor  @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
-  patient Patient @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
-  service Service @relation("ServiceAppointments", fields: [serviceId], references: [id], onDelete: Cascade)
+  doctor   Doctor          @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  patient  Patient         @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  service  Service         @relation("ServiceAppointments", fields: [serviceId], references: [id], onDelete: Cascade)
+  clinic   Clinic?         @relation("ClinicAppointments", fields: [clinicId], references: [id], onDelete: SetNull)
+  location ClinicLocation? @relation("LocationAppointments", fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, date, status])
+  @@index([locationId, date])
 }
 
 model Schedule {
@@ -145,10 +289,13 @@ model Schedule {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  clinicId  String?
 
-  doctor Doctor @relation(fields: [doctorId], references: [id])
+  doctor Doctor  @relation(fields: [doctorId], references: [id])
+  clinic Clinic? @relation("ClinicSchedules", fields: [clinicId], references: [id], onDelete: SetNull)
 
   @@unique([doctorId, dayOfWeek])
+  @@index([clinicId, isActive])
 }
 
 model Review {
@@ -159,17 +306,41 @@ model Review {
   comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  clinicId  String?
 
   doctor  Doctor  @relation("DoctorReviews", fields: [doctorId], references: [id])
   patient Patient @relation("PatientReviews", fields: [patientId], references: [id])
+  clinic  Clinic? @relation("ClinicReviews", fields: [clinicId], references: [id], onDelete: SetNull)
 
   @@unique([doctorId, patientId])
+  @@index([clinicId, doctorId])
 }
 
 enum Role {
   DOCTOR
   PATIENT
   ADMIN
+}
+
+enum ClinicMemberRole {
+  OWNER
+  ADMIN
+  DOCTOR
+  RECEPTIONIST
+}
+
+enum SubscriptionPlan {
+  PRO
+  ENTERPRISE
+  CUSTOM
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELED
 }
 
 enum AppointmentStatus {
@@ -190,10 +361,10 @@ enum AppointmentSeverity {
 
 // Estado de salud agregado a historial médico; la lógica de cálculo vendrá después
 enum HealthStatus {
-  HEALTHY           // saludable
-  LOW_IMMUNITY      // defensas bajas
-  SICK_LOW_RISK     // enfermo con bajo riesgo
-  SICK_HIGH_RISK    // enfermo alto riesgo
+  HEALTHY // saludable
+  LOW_IMMUNITY // defensas bajas
+  SICK_LOW_RISK // enfermo con bajo riesgo
+  SICK_HIGH_RISK // enfermo alto riesgo
 }
 
 // Tipo de sangre opcional
@@ -210,35 +381,117 @@ enum BloodType {
 
 // Historial médico principal por paciente
 model MedicalHistory {
-  id           String       @id @default(cuid())
-  patientId    String       @unique
-  bloodType    BloodType?
-  allergies    String[]     // lista de alergias
-  medications  String[]     // medicamentos actuales
-  chronicDiseases String[]  // padecimientos crónicos
-  surgeries    String[]     // cirugías previas
-  immunizations String[]    // vacunas
-  healthStatus HealthStatus @default(HEALTHY)
-  notes        String?
-  lastUpdated  DateTime     @default(now())
+  id              String       @id @default(cuid())
+  patientId       String       @unique
+  bloodType       BloodType?
+  allergies       String[] // lista de alergias
+  medications     String[] // medicamentos actuales
+  chronicDiseases String[] // padecimientos crónicos
+  surgeries       String[] // cirugías previas
+  immunizations   String[] // vacunas
+  healthStatus    HealthStatus @default(HEALTHY)
+  notes           String?
+  lastUpdated     DateTime     @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
 // Notificaciones para eventos de citas
 model Notification {
-  id         String             @id @default(cuid())
-  doctorId   String
-  patientId  String
-  type       NotificationType
-  title      String
-  message    String
+  id            String           @id @default(cuid())
+  doctorId      String
+  patientId     String
+  type          NotificationType
+  title         String
+  message       String
   appointmentId String?
-  isRead     Boolean            @default(false)
-  createdAt  DateTime           @default(now())
+  isRead        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  clinicId      String?
 
-  doctor     Doctor    @relation("DoctorNotifications", fields: [doctorId], references: [id], onDelete: Cascade)
-  patient    Patient   @relation("PatientNotifications", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation("DoctorNotifications", fields: [doctorId], references: [id], onDelete: Cascade)
+  patient Patient @relation("PatientNotifications", fields: [patientId], references: [id], onDelete: Cascade)
+  clinic  Clinic? @relation("ClinicNotifications", fields: [clinicId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, createdAt])
+}
+
+/// Durable outbound messages. Rows are created in the same transaction as the
+/// domain event and claimed by a dispatcher with an idempotency key.
+model MessageOutbox {
+  id                String              @id @default(cuid())
+  clinicId          String?
+  provider          String              @default("sent")
+  channel           MessageChannel
+  recipient         String
+  template          String
+  payload           Json
+  idempotencyKey    String              @unique
+  correlationId     String?
+  providerMessageId String?             @unique
+  leaseToken        String?
+  leaseUntil        DateTime?
+  sandbox           Boolean             @default(true)
+  status            MessageDeliveryStatus @default(PENDING)
+  attempts          Int                 @default(0)
+  nextAttemptAt     DateTime            @default(now())
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  lastErrorCode     String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([clinicId, createdAt])
+}
+
+model BillingWebhookEvent {
+  id          String   @id
+  eventType   String
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Deduplicated inbound provider events. The unique provider/event pair makes
+/// webhook retries safe before any automation mutates the domain.
+model MessageInbox {
+  id                String    @id @default(cuid())
+  clinicId          String?
+  provider          String
+  externalEventId   String
+  eventType         String?
+  payload           Json
+  signatureVerified Boolean   @default(false)
+  processedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEventId])
+  @@index([clinicId, createdAt])
+}
+
+enum MessageChannel {
+  SMS
+  WHATSAPP
+  RCS
+}
+
+enum MessageDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  DEAD_LETTER
+  CANCELLED
 }
 
 enum NotificationType {

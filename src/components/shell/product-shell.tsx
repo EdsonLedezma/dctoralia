@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   Bell,
+  Building2,
   CalendarDays,
   ChevronDown,
   CircleHelp,
@@ -21,6 +22,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +30,16 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { api } from "~/trpc/react";
+import { unwrapTrpcResult } from "~/types/trpc-response";
 
 type ShellRole = "DOCTOR" | "PATIENT";
 
@@ -41,6 +53,7 @@ const doctorNav: NavItem[] = [
   { label: "Resumen", href: "/dashboard", icon: LayoutDashboard },
   { label: "Agenda", href: "/dashboard/appointments", icon: CalendarDays },
   { label: "Pacientes", href: "/dashboard/patients", icon: Users },
+  { label: "Workspace", href: "/dashboard/workspace", icon: Building2 },
   { label: "Servicios", href: "/dashboard/services", icon: WalletCards },
   { label: "Horarios", href: "/dashboard/schedule", icon: Clock3 },
   { label: "Notificaciones", href: "/dashboard/notifications", icon: Bell },
@@ -85,6 +98,91 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
+type WorkspaceOption = {
+  clinicId: string;
+  name: string;
+  slug: string;
+  plan: "PRO" | "ENTERPRISE" | "CUSTOM" | null;
+  membershipRole: "OWNER" | "ADMIN" | "DOCTOR" | "RECEPTIONIST";
+};
+
+function WorkspaceSwitcher({
+  workspaces,
+  activeClinicId,
+  compact = false,
+}: {
+  workspaces: WorkspaceOption[];
+  activeClinicId: string | null;
+  compact?: boolean;
+}) {
+  const [switching, setSwitching] = useState(false);
+  const selectWorkspaceMutation = api.workspace.select.useMutation();
+  const activeWorkspace =
+    workspaces.find((workspace) => workspace.clinicId === activeClinicId) ??
+    workspaces[0];
+
+  if (!activeWorkspace || workspaces.length < 2) return null;
+
+  const selectWorkspace = async (clinicId: string) => {
+    if (clinicId === activeWorkspace.clinicId || switching) return;
+    setSwitching(true);
+    try {
+      unwrapTrpcResult(await selectWorkspaceMutation.mutateAsync({ clinicId }));
+      window.location.reload();
+    } catch (error) {
+      setSwitching(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar de workspace",
+      );
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={switching}
+          className={`flex min-h-10 items-center gap-2 rounded-md text-left transition-colors hover:bg-[#161616] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${compact ? "w-full px-2" : "w-full px-2"}`}
+          aria-label="Cambiar espacio de trabajo"
+        >
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#262626] text-[11px] font-medium text-white">
+            {activeWorkspace.name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
+            {activeWorkspace.name}
+          </span>
+          <span className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-[#a1a1aa]">
+            {activeWorkspace.plan ?? "Workspace"}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#a1a1aa]" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel>Espacios de trabajo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {workspaces.map((workspace) => (
+          <DropdownMenuItem
+            key={workspace.clinicId}
+            onSelect={() => void selectWorkspace(workspace.clinicId)}
+            className="gap-3 py-2"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f5f5f5] text-xs font-medium">
+              {workspace.name.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+            {workspace.clinicId === activeWorkspace.clinicId && (
+              <span className="text-xs text-[#737373]">Actual</span>
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function ProductShell({
   role,
   children,
@@ -94,10 +192,16 @@ export function ProductShell({
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const workspacesQuery = api.workspace.listMine.useQuery(undefined, {
+    enabled: role === "DOCTOR",
+    staleTime: 60_000,
+  });
   const items = role === "DOCTOR" ? doctorNav : patientNav;
   const displayName =
     session?.user?.name ?? (role === "DOCTOR" ? "Consultorio" : "Paciente");
   const initial = displayName.slice(0, 1).toUpperCase();
+  const workspaceOptions = workspacesQuery.data?.result?.workspaces ?? [];
+  const activeClinicId = workspacesQuery.data?.result?.activeClinicId ?? null;
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
 
@@ -138,22 +242,28 @@ export function ProductShell({
 
       <aside className="hidden w-[208px] shrink-0 border-r border-[#252525] bg-[#050505] text-[#a1a1aa] md:flex md:flex-col">
         <div className="border-b border-[#252525] p-2">
-          <button
-            type="button"
-            className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left transition-colors duration-150 hover:bg-[#161616] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
-            aria-label="Cambiar espacio de trabajo"
-          >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#262626] text-[11px] font-medium text-white">
-              {initial}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
-              {displayName}
-            </span>
-            <span className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-[#a1a1aa]">
-              {role === "DOCTOR" ? "Pro" : "Paciente"}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-          </button>
+          {role === "DOCTOR" && workspaceOptions.length > 1 ? (
+            <WorkspaceSwitcher
+              workspaces={workspaceOptions}
+              activeClinicId={activeClinicId}
+            />
+          ) : (
+            <button
+              type="button"
+              className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left transition-colors duration-150 hover:bg-[#161616] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+              aria-label="Espacio de trabajo"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#262626] text-[11px] font-medium text-white">
+                {initial}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
+                {displayName}
+              </span>
+              <span className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-[#a1a1aa]">
+                {role === "DOCTOR" ? "Pro" : "Paciente"}
+              </span>
+            </button>
+          )}
         </div>
 
         <div className="px-2 pt-2">
@@ -277,6 +387,15 @@ export function ProductShell({
               Dctoralia
             </Link>
             <div className="flex items-center gap-1">
+              {role === "DOCTOR" && workspaceOptions.length > 1 && (
+                <div className="mr-1 w-10">
+                  <WorkspaceSwitcher
+                    workspaces={workspaceOptions}
+                    activeClinicId={activeClinicId}
+                    compact
+                  />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={openCommandMenu}

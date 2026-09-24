@@ -1,13 +1,11 @@
 export type TrpcResponse<TResult, TError extends string = string> =
   | {
-      ok: true;
       result: TResult;
       error: null;
       status: number;
       message: string;
     }
   | {
-      ok: false;
       result: null;
       error: TError;
       status: number;
@@ -20,7 +18,6 @@ export function trpcSuccess<TResult>(
   status = 200,
 ): TrpcResponse<TResult, never> {
   return {
-    ok: true,
     result,
     error: null,
     status,
@@ -34,7 +31,6 @@ export function trpcFailure<TError extends string>(
   status: number,
 ): TrpcResponse<never, TError> {
   return {
-    ok: false,
     result: null,
     error,
     status,
@@ -45,9 +41,10 @@ export function trpcFailure<TError extends string>(
 export function unwrapTrpcResult<TResult, TError extends string>(
   response: TrpcResponse<TResult, TError>,
 ): TResult {
-  if (!response.ok) {
+  if (response.error !== null) {
     throw new Error(response.message);
   }
 
-  return response.result;
+  // TypeScript does not narrow a generic string discriminator to this branch.
+  return response.result as TResult;
 }

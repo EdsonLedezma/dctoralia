@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
-import { Clock, Plus, Trash2, Eye, EyeOff } from "lucide-react";
+import { Plus, MoreHorizontal, Eye, EyeOff, Trash2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import {
@@ -16,9 +16,33 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { unwrapTrpcResult } from "~/types/trpc-response";
-import { MotionList } from "~/components/shared/motion-list";
 import DashboardWrapper from "~/components/auth/DashboardWrapper";
 import { ProductShell } from "~/components/shell/product-shell";
+import { Skeleton } from "~/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 
 const DAYS_OF_WEEK = [
   { value: 0, label: "Domingo" },
@@ -45,6 +69,7 @@ export default function ScheduleManagementPage() {
     startTime: "",
     endTime: "",
   });
+  const [scheduleToDelete, setScheduleToDelete] = useState<string | null>(null);
 
   const {
     data: schedulesRes,
@@ -98,8 +123,6 @@ export default function ScheduleManagementPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este horario?")) return;
-
     try {
       const response = await deleteSchedule.mutateAsync({ id });
       unwrapTrpcResult(response);
@@ -109,6 +132,8 @@ export default function ScheduleManagementPage() {
       toast.error(
         error instanceof Error ? error.message : "Error al eliminar el horario",
       );
+    } finally {
+      setScheduleToDelete(null);
     }
   };
 
@@ -236,110 +261,159 @@ export default function ScheduleManagementPage() {
 
             {/* Schedules List Grouped by Day */}
             {isLoading ? (
-              <div className="grid gap-4" aria-label="Cargando horarios">
-                {[1, 2, 3].map((item) => (
-                  <div
-                    key={item}
-                    className="h-24 animate-pulse rounded-lg border border-[#ebebeb] bg-white"
-                  />
-                ))}
-              </div>
-            ) : isError || schedulesRes?.ok === false ? (
+              <Card className="border-[#ebebeb] bg-white shadow-none">
+                <CardContent
+                  className="space-y-3 p-6"
+                  aria-label="Cargando horarios"
+                >
+                  {[1, 2, 3, 4].map((item) => (
+                    <Skeleton key={item} className="h-12 w-full" />
+                  ))}
+                </CardContent>
+              </Card>
+            ) : isError || schedulesRes?.error ? (
               <Card className="border-[#ebebeb] bg-white shadow-none">
                 <CardContent className="p-10 text-center">
                   <p className="font-medium">No pudimos cargar tus horarios.</p>
                   <p className="mt-2 text-sm text-[#6b6b6b]">
-                    {schedulesRes?.ok === false
+                    {schedulesRes?.error
                       ? schedulesRes.message
                       : "Intenta actualizar la página."}
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              <MotionList className="grid gap-4">
-                {groupedSchedules.map((group) => (
-                  <Card
-                    key={group.dayValue}
-                    className="border-[#ebebeb] bg-white shadow-none"
-                  >
-                    <CardHeader className="border-b border-[#ebebeb]">
-                      <CardTitle className="flex items-center justify-between text-lg">
-                        <span>{group.day}</span>
-                        {group.schedules.length === 0 && (
-                          <Badge variant="secondary">
-                            Sin horario configurado
-                          </Badge>
+              <Card className="overflow-hidden border-[#ebebeb] bg-white shadow-none">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Día</TableHead>
+                          <TableHead>Horario</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="w-12" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groupedSchedules.flatMap((group) =>
+                          group.schedules.length > 0
+                            ? group.schedules.map((schedule) => (
+                                <TableRow
+                                  key={schedule.id}
+                                  className={
+                                    !schedule.isActive
+                                      ? "opacity-60"
+                                      : undefined
+                                  }
+                                >
+                                  <TableCell className="font-medium">
+                                    {group.day}
+                                  </TableCell>
+                                  <TableCell className="font-mono text-sm">
+                                    {schedule.startTime} – {schedule.endTime}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant={
+                                        schedule.isActive
+                                          ? "default"
+                                          : "secondary"
+                                      }
+                                    >
+                                      {schedule.isActive
+                                        ? "Activo"
+                                        : "Inactivo"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          aria-label={`Acciones para ${group.day}`}
+                                        >
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            void handleToggleActive(
+                                              schedule.id,
+                                              schedule.isActive,
+                                            )
+                                          }
+                                        >
+                                          {schedule.isActive ? (
+                                            <EyeOff className="mr-2 h-4 w-4" />
+                                          ) : (
+                                            <Eye className="mr-2 h-4 w-4" />
+                                          )}
+                                          {schedule.isActive
+                                            ? "Desactivar"
+                                            : "Activar"}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="text-red-600 focus:text-red-600"
+                                          onSelect={() =>
+                                            setScheduleToDelete(schedule.id)
+                                          }
+                                        >
+                                          <Trash2 className="mr-2 h-4 w-4" />
+                                          Eliminar
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            : [],
                         )}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {group.schedules.length === 0 ? (
-                        <p className="text-sm text-[#6b6b6b]">
-                          No hay horarios configurados para este día
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {group.schedules.map((schedule) => (
-                            <div
-                              key={schedule.id}
-                              className={`flex items-center justify-between rounded-md border border-[#ebebeb] bg-[#fafafa] p-3 ${!schedule.isActive ? "opacity-60" : ""}`}
+                        {schedules.length === 0 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={4}
+                              className="h-24 text-center text-sm text-[#737373]"
                             >
-                              <div className="flex items-center space-x-3">
-                                <Clock className="h-4 w-4 text-[#6b6b6b]" />
-                                <span className="font-medium">
-                                  {schedule.startTime} - {schedule.endTime}
-                                </span>
-                                <Badge
-                                  variant={
-                                    schedule.isActive ? "default" : "secondary"
-                                  }
-                                >
-                                  {schedule.isActive ? "Activo" : "Inactivo"}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleToggleActive(
-                                      schedule.id,
-                                      schedule.isActive,
-                                    )
-                                  }
-                                >
-                                  {schedule.isActive ? (
-                                    <>
-                                      <EyeOff className="mr-1 h-4 w-4" />
-                                      Desactivar
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Eye className="mr-1 h-4 w-4" />
-                                      Activar
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleDelete(schedule.id)}
-                                >
-                                  <Trash2 className="mr-1 h-4 w-4" />
-                                  Eliminar
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </MotionList>
+                              Aún no tienes horarios configurados.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>
+        <AlertDialog
+          open={!!scheduleToDelete}
+          onOpenChange={(open) => !open && setScheduleToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar este horario?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Las citas existentes no se modifican, pero este horario dejará
+                de ofrecerse.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() =>
+                  scheduleToDelete && void handleDelete(scheduleToDelete)
+                }
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </ProductShell>
     </DashboardWrapper>
   );

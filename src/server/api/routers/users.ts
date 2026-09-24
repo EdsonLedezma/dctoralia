@@ -1,270 +1,251 @@
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { z } from "zod";
 import { hash } from "argon2";
+import { z } from "zod";
+
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
+
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  image: true,
+  role: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const userIdSchema = z.object({ id: z.string().min(1) });
+
+function canManageUser(actor: { id: string; role: string }, userId: string) {
+  return actor.role === "ADMIN" || actor.id === userId;
+}
+
+function forbidden(message: string) {
+  return trpcFailure("FORBIDDEN", message, 403);
+}
 
 export const useUsers = createTRPCRouter({
-    // Crear usuario (solo admin)
-    create: protectedProcedure
-        .input(
-            z.object({
-            name: z.string(),
-            email: z.string(),
-            password: z.string(),
-            phone: z.string().optional(),
-            role: z.enum(["ADMIN", "DOCTOR", "PATIENT"]).optional().default("PATIENT"),
-            })
-        )
-        .mutation(async ({ input, ctx }) => {
-            if (ctx.session.user.role !== "ADMIN") {
-                return {
-                    status: 403,
-                    message: "Solo los administradores pueden crear usuarios",
-                    result: null,
-                    error: new Error("No autorizado"),
-                };
-            }
-            try {
-                const hashedPassword = await hash(input.password);
-                const newUser = await ctx.db.user.create({
-                    data: {
-                        name: input.name,
-                        email: input.email,
-                        password: hashedPassword,
-                        phone: input.phone ?? "",
-                        role: input.role,
-                    },
-                });
-                return {
-                    status: 201,
-                    message: "Usuario creado correctamente",
-                    result: newUser,
-                    error: null,
-                };
-            } catch (err) {
-                return {
-                    status: 500,
-                    message: "Error al crear el usuario",
-                    result: null,
-                    error: err,
-                };
-            }
-        }),
+  create: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().trim().min(2),
+        email: z.string().email(),
+        password: z.string().min(8),
+        phone: z.string().trim().optional(),
+        role: z
+          .enum(["ADMIN", "DOCTOR", "PATIENT"])
+          .optional()
+          .default("PATIENT"),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (
+        ctx.session.user.role !== "ADMIN" &&
+        !(ctx.session.user.role === "DOCTOR" && input.role === "PATIENT")
+      ) {
+        return forbidden(
+          "Sólo administradores o doctores pueden crear pacientes",
+        );
+      }
 
-    // Obtener usuario por ID
-    getById: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
-        try {
-            const user = await ctx.db.user.findUnique({ where: { id: input.id } });
-            if (!user) {
-                return {
-                    status: 404,
-                    message: "Usuario no encontrado",
-                    result: null,
-                    error: new Error("Usuario no encontrado"),
-                };
-            }
-            return {
-                status: 200,
-                message: "Usuario encontrado",
-                result: user,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al buscar usuario",
-                result: null,
-                error,
-            };
-        }
+      try {
+        const user = await ctx.db.user.create({
+          data: {
+            name: input.name,
+            email: input.email.toLowerCase(),
+            password: await hash(input.password),
+            phone: input.phone ?? "",
+            role: input.role,
+          },
+          select: publicUserSelect,
+        });
+        return trpcSuccess(user, "Usuario creado correctamente", 201);
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al crear el usuario", 500);
+      }
     }),
 
-    // Obtener todos los usuarios (solo admin)
-    getAll: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "DOCTOR") {
-            return {
-                status: 403,
-                message: "No autorizado",
-                result: null,
-                error: new Error("No autorizado"),
-            };
+  getById: protectedProcedure
+    .input(userIdSchema)
+    .query(async ({ input, ctx }) => {
+      if (!canManageUser(ctx.session.user, input.id)) {
+        return forbidden("No tienes acceso a este usuario");
+      }
+
+      try {
+        const user = await ctx.db.user.findUnique({
+          where: { id: input.id },
+          select: publicUserSelect,
+        });
+        if (!user) {
+          return trpcFailure("USER_NOT_FOUND", "Usuario no encontrado", 404);
         }
-        try {
-            const users = await ctx.db.user.findMany();
-            return {
-                status: 200,
-                message: "Usuarios obtenidos correctamente",
-                result: users,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al obtener usuarios",
-                result: null,
-                error,
-            };
-        }
+        return trpcSuccess(user, "Usuario encontrado");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al buscar usuario", 500);
+      }
     }),
 
-    // Obtener todos los usuarios con perfil de paciente y doctor (solo admin)
-    getAllWithProfile: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.session.user.role !== "ADMIN" && ctx.session.user.role !== "DOCTOR") {
-            return {
-                status: 403,
-                message: "Solo los administradores o doctores pueden ver todos los usuarios",
-                result: null,
-                error: new Error("No autorizado"),
-            };
-        }
-        try {
-            const users = await ctx.db.user.findMany({
-                include: {
-                    patient: true,
-                    doctor: true,
-                },
-            });
-            return {
-                status: 200,
-                message: "Usuarios obtenidos correctamente",
-                result: users,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al obtener usuarios",
-                result: null,
-                error,
-            };
-        }
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "ADMIN") {
+      return forbidden("Sólo los administradores pueden listar usuarios");
+    }
+
+    try {
+      const users = await ctx.db.user.findMany({ select: publicUserSelect });
+      return trpcSuccess(users, "Usuarios obtenidos correctamente");
+    } catch {
+      return trpcFailure("INTERNAL_ERROR", "Error al obtener usuarios", 500);
+    }
+  }),
+
+  getAllWithProfile: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "ADMIN") {
+      return forbidden(
+        "Sólo los administradores pueden ver todos los usuarios",
+      );
+    }
+
+    try {
+      const users = await ctx.db.user.findMany({
+        select: {
+          ...publicUserSelect,
+          patient: true,
+          doctor: true,
+        },
+      });
+      return trpcSuccess(users, "Usuarios obtenidos correctamente");
+    } catch {
+      return trpcFailure("INTERNAL_ERROR", "Error al obtener usuarios", 500);
+    }
+  }),
+
+  delete: protectedProcedure
+    .input(userIdSchema)
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "ADMIN") {
+        return forbidden("Sólo los administradores pueden eliminar usuarios");
+      }
+
+      try {
+        const deleted = await ctx.db.user.delete({
+          where: { id: input.id },
+          select: { id: true },
+        });
+        return trpcSuccess(deleted, "Usuario eliminado correctamente");
+      } catch {
+        return trpcFailure("INTERNAL_ERROR", "Error al eliminar usuario", 500);
+      }
     }),
 
-    // Eliminar usuario (solo admin)
-    delete: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
-        if (ctx.session.user.role !== "ADMIN") {
-            return {
-                status: 403,
-                message: "Solo los administradores pueden eliminar usuarios",
-                result: null,
-                error: new Error("No autorizado"),
-            };
-        }
-        try {
-            const deleted = await ctx.db.user.delete({ where: { id: input.id } });
-            return {
-                status: 200,
-                message: "Usuario eliminado correctamente",
-                result: deleted,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al eliminar usuario",
-                result: null,
-                error,
-            };
-        }
+  updateName: protectedProcedure
+    .input(userIdSchema.extend({ name: z.string().trim().min(2) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!canManageUser(ctx.session.user, input.id)) {
+        return forbidden("No puedes editar este usuario");
+      }
+      try {
+        const user = await ctx.db.user.update({
+          where: { id: input.id },
+          data: { name: input.name },
+          select: { name: true },
+        });
+        return trpcSuccess(user.name, "Nombre actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el nombre",
+          500,
+        );
+      }
     }),
 
-    // Actualizar nombre
-    updateName: protectedProcedure.input(z.object({ id: z.string(), name: z.string() })).mutation(async ({ input, ctx }) => {
-        try {
-            const user = await ctx.db.user.update({ where: { id: input.id }, data: { name: input.name } });
-            return {
-                status: 200,
-                message: "Nombre actualizado correctamente",
-                result: user.name,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al actualizar el nombre",
-                result: null,
-                error,
-            };
-        }
+  updateEmail: protectedProcedure
+    .input(userIdSchema.extend({ email: z.string().email() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!canManageUser(ctx.session.user, input.id)) {
+        return forbidden("No puedes editar este usuario");
+      }
+      try {
+        const user = await ctx.db.user.update({
+          where: { id: input.id },
+          data: { email: input.email.toLowerCase() },
+          select: { email: true },
+        });
+        return trpcSuccess(user.email, "Email actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el email",
+          500,
+        );
+      }
     }),
 
-    // Actualizar email
-    updateEmail: protectedProcedure.input(z.object({ id: z.string(), email: z.string() })).mutation(async ({ input, ctx }) => {
-        try {
-            const user = await ctx.db.user.update({ where: { id: input.id }, data: { email: input.email } });
-            return {
-                status: 200,
-                message: "Email actualizado correctamente",
-                result: user.email,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al actualizar el email",
-                result: null,
-                error,
-            };
-        }
+  updatePhone: protectedProcedure
+    .input(userIdSchema.extend({ phone: z.string().trim().min(10) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!canManageUser(ctx.session.user, input.id)) {
+        return forbidden("No puedes editar este usuario");
+      }
+      try {
+        const user = await ctx.db.user.update({
+          where: { id: input.id },
+          data: { phone: input.phone },
+          select: { phone: true },
+        });
+        return trpcSuccess(user.phone, "Teléfono actualizado correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar el teléfono",
+          500,
+        );
+      }
     }),
 
-    // Actualizar teléfono
-    updatePhone: protectedProcedure.input(z.object({ id: z.string(), phone: z.string() })).mutation(async ({ input, ctx }) => {
-        try {
-            const user = await ctx.db.user.update({ where: { id: input.id }, data: { phone: input.phone } });
-            return {
-                status: 200,
-                message: "Teléfono actualizado correctamente",
-                result: user.phone,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al actualizar el teléfono",
-                result: null,
-                error,
-            };
-        }
+  updatePassword: protectedProcedure
+    .input(userIdSchema.extend({ password: z.string().min(8) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!canManageUser(ctx.session.user, input.id)) {
+        return forbidden("No puedes editar este usuario");
+      }
+      try {
+        await ctx.db.user.update({
+          where: { id: input.id },
+          data: { password: await hash(input.password) },
+          select: { id: true },
+        });
+        return trpcSuccess(null, "Contraseña actualizada correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la contraseña",
+          500,
+        );
+      }
     }),
 
-    // Actualizar password
-    updatePassword: protectedProcedure.input(z.object({ id: z.string(), password: z.string() })).mutation(async ({ input, ctx }) => {
-        try {
-            const hashedPassword = await hash(input.password);
-            const user = await ctx.db.user.update({ where: { id: input.id }, data: { password: hashedPassword } });
-            return {
-                status: 200,
-                message: "Contraseña actualizada correctamente",
-                result: null,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al actualizar la contraseña",
-                result: null,
-                error,
-            };
-        }
-    }),
-
-    // Actualizar imagen
-    updateImage: protectedProcedure.input(z.object({ id: z.string(), image: z.string() })).mutation(async ({ input, ctx }) => {
-        try {
-            const user = await ctx.db.user.update({ where: { id: input.id }, data: { image: input.image } });
-            return {
-                status: 200,
-                message: "Imagen actualizada correctamente",
-                result: user.image,
-                error: null,
-            };
-        } catch (error) {
-            return {
-                status: 500,
-                message: "Error al actualizar la imagen",
-                result: null,
-                error,
-            };
-        }
+  updateImage: protectedProcedure
+    .input(userIdSchema.extend({ image: z.string().url() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!canManageUser(ctx.session.user, input.id)) {
+        return forbidden("No puedes editar este usuario");
+      }
+      try {
+        const user = await ctx.db.user.update({
+          where: { id: input.id },
+          data: { image: input.image },
+          select: { image: true },
+        });
+        return trpcSuccess(user.image, "Imagen actualizada correctamente");
+      } catch {
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "Error al actualizar la imagen",
+          500,
+        );
+      }
     }),
 });
