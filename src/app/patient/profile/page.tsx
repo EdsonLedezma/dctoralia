@@ -13,12 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { Avatar, AvatarFallback } from "~/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import {
   Edit,
   Save,
   X,
   Camera,
+  Loader2,
   Phone,
   Mail,
   Heart,
@@ -34,10 +35,22 @@ type BloodType = NonNullable<
   RouterInputs["patients"]["upsertMedicalHistory"]["bloodType"]
 >;
 
+const bloodTypeLabels: Record<BloodType, string> = {
+  A_POS: "A+",
+  A_NEG: "A−",
+  B_POS: "B+",
+  B_NEG: "B−",
+  AB_POS: "AB+",
+  AB_NEG: "AB−",
+  O_POS: "O+",
+  O_NEG: "O−",
+};
+
 type ProfileFormData = {
   firstName: string;
   lastName: string;
   email: string;
+  imageUrl: string;
   phone: string;
   birthDate: string;
   gender: string;
@@ -57,22 +70,30 @@ type ProfileFormData = {
 
 export default function PatientProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  const { data: profileRes, refetch } = api.auth.getProfile.useQuery();
+  const {
+    data: profileRes,
+    isLoading: isProfileLoading,
+    isError: isProfileError,
+    refetch,
+  } = api.auth.getProfile.useQuery();
   const profile = profileRes?.result ?? null;
   const patient = profile?.patient;
   const user = profile;
 
-  const { data: medicalHistoryRes } = api.patients.getMedicalHistory.useQuery(
+  const {
+    data: medicalHistoryRes,
+    isLoading: isHistoryLoading,
+    isError: isHistoryError,
+  } = api.patients.getMedicalHistory.useQuery(
     { patientId: patient?.id ?? "" },
     { enabled: !!patient?.id },
   );
   const medicalHistory = medicalHistoryRes?.result;
+  const profileLoadFailed = isProfileError || !!profileRes?.error;
+  const historyLoadFailed = isHistoryError || !!medicalHistoryRes?.error;
 
-  const updatePhone = api.patients.updatePhone.useMutation();
-  const updateAddress = api.patients.updateAddress.useMutation();
-  const updateBirthDate = api.patients.updateBirthDate.useMutation();
-  const updateGender = api.patients.updateGender.useMutation();
   const upsertMedicalHistory = api.patients.upsertMedicalHistory.useMutation();
   const updateAccount = api.auth.updateProfile.useMutation();
 
@@ -80,6 +101,7 @@ export default function PatientProfilePage() {
     firstName: user?.name?.split(" ")[0] ?? "",
     lastName: user?.name?.split(" ").slice(1).join(" ") ?? "",
     email: user?.email ?? "",
+    imageUrl: user?.image ?? "",
     phone: patient?.phone ?? "",
     birthDate: patient?.birthDate?.toISOString().split("T")[0] ?? "",
     gender: patient?.gender ?? "",
@@ -98,88 +120,81 @@ export default function PatientProfilePage() {
   });
 
   useEffect(() => {
-    if (patient && user && medicalHistory) {
+    if (patient && user && medicalHistoryRes !== undefined && !isEditing) {
       setProfileData({
         firstName: user.name?.split(" ")[0] ?? "",
         lastName: user.name?.split(" ").slice(1).join(" ") ?? "",
         email: user.email ?? "",
+        imageUrl: user.image ?? "",
         phone: patient.phone ?? "",
         birthDate: patient.birthDate?.toISOString().split("T")[0] ?? "",
         gender: patient.gender ?? "",
         address: patient.address ?? "",
-        bloodType: medicalHistory.bloodType ?? "",
-        height: "",
-        weight: "",
-        emergencyContact: "",
-        emergencyPhone: "",
-        emergencyRelation: "",
-        medicalHistory: medicalHistory.notes ?? "",
-        allergies: medicalHistory.allergies?.join(", ") ?? "",
-        currentMedications: medicalHistory.medications?.join(", ") ?? "",
-        insuranceProvider: "",
-        insuranceNumber: "",
+        bloodType: medicalHistory?.bloodType ?? "",
+        height: medicalHistory?.height ?? "",
+        weight: medicalHistory?.weight ?? "",
+        emergencyContact: medicalHistory?.emergencyName ?? "",
+        emergencyPhone: medicalHistory?.emergencyPhone ?? "",
+        emergencyRelation: medicalHistory?.emergencyRelation ?? "",
+        medicalHistory: medicalHistory?.notes ?? "",
+        allergies: medicalHistory?.allergies?.join(", ") ?? "",
+        currentMedications: medicalHistory?.medications?.join(", ") ?? "",
+        insuranceProvider: medicalHistory?.insuranceProvider ?? "",
+        insuranceNumber: medicalHistory?.insuranceNumber ?? "",
       });
     }
-  }, [patient, user, medicalHistory]);
+  }, [patient, user, medicalHistory, medicalHistoryRes, isEditing]);
 
   const handleInputChange = (field: string, value: string) => {
+    setHasChanges(true);
     setProfileData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
-    if (!patient?.id) return;
+    if (
+      !patient?.id ||
+      updateAccount.isPending ||
+      upsertMedicalHistory.isPending
+    )
+      return;
+
+    if (`${profileData.firstName} ${profileData.lastName}`.trim().length < 2) {
+      toast.error("Escribe tu nombre completo.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileData.email.trim())) {
+      toast.error("Revisa el correo electrónico.");
+      return;
+    }
+    if (profileData.phone.replace(/\D/g, "").length < 10) {
+      toast.error("El teléfono debe tener al menos 10 dígitos.");
+      return;
+    }
+    if (profileData.imageUrl.trim()) {
+      try {
+        new URL(profileData.imageUrl.trim());
+      } catch {
+        toast.error("Escribe un enlace válido para la foto.");
+        return;
+      }
+    }
 
     try {
       const nextName =
         `${profileData.firstName} ${profileData.lastName}`.trim();
-      if (
-        nextName !== (user?.name ?? "") ||
-        profileData.email !== (user?.email ?? "")
-      ) {
-        unwrapTrpcResult(
-          await updateAccount.mutateAsync({
-            name: nextName,
-            email: profileData.email.trim().toLowerCase(),
-          }),
-        );
-      }
-
-      // Actualizar datos del paciente
-      if (profileData.phone !== patient.phone) {
-        unwrapTrpcResult(
-          await updatePhone.mutateAsync({
-            id: patient.id,
-            phone: profileData.phone,
-          }),
-        );
-      }
-      if (profileData.address !== patient.address) {
-        unwrapTrpcResult(
-          await updateAddress.mutateAsync({
-            id: patient.id,
-            address: profileData.address,
-          }),
-        );
-      }
-      if (
-        profileData.birthDate &&
-        profileData.birthDate !== patient.birthDate?.toISOString().split("T")[0]
-      ) {
-        unwrapTrpcResult(
-          await updateBirthDate.mutateAsync({
-            id: patient.id,
-            birthDate: new Date(profileData.birthDate),
-          }),
-        );
-      }
-      if (profileData.gender !== patient.gender) {
-        unwrapTrpcResult(
-          await updateGender.mutateAsync({
-            id: patient.id,
-            gender: profileData.gender,
-          }),
-        );
-      }
+      unwrapTrpcResult(
+        await updateAccount.mutateAsync({
+          name: nextName,
+          email: profileData.email.trim().toLowerCase(),
+          image: profileData.imageUrl.trim() || null,
+          phone: profileData.phone,
+          birthDate: profileData.birthDate
+            ? new Date(`${profileData.birthDate}T12:00:00`)
+            : null,
+          gender: profileData.gender || null,
+          address: profileData.address,
+        }),
+      );
 
       // Actualizar historial médico
       const medicalHistoryInput: RouterInputs["patients"]["upsertMedicalHistory"] =
@@ -187,7 +202,14 @@ export default function PatientProfilePage() {
           patientId: patient.id,
           ...(profileData.bloodType
             ? { bloodType: profileData.bloodType }
-            : {}),
+            : { bloodType: null }),
+          height: profileData.height,
+          weight: profileData.weight,
+          emergencyName: profileData.emergencyContact,
+          emergencyPhone: profileData.emergencyPhone,
+          emergencyRelation: profileData.emergencyRelation,
+          insuranceProvider: profileData.insuranceProvider,
+          insuranceNumber: profileData.insuranceNumber,
           allergies: profileData.allergies
             .split(",")
             .map((a) => a.trim())
@@ -206,11 +228,16 @@ export default function PatientProfilePage() {
         await upsertMedicalHistory.mutateAsync(medicalHistoryInput),
       );
 
+      await refetch();
       toast.success("Perfil actualizado correctamente");
+      setHasChanges(false);
       setIsEditing(false);
-      void refetch();
-    } catch {
-      toast.error("Error al actualizar el perfil");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Error al actualizar el perfil",
+      );
     }
   };
 
@@ -255,6 +282,43 @@ export default function PatientProfilePage() {
     `${profileData.firstName[0] ?? ""}${profileData.lastName[0] ?? ""}`.toUpperCase();
   const age = calculateAge(profileData.birthDate);
 
+  if (isProfileLoading || (!!patient?.id && isHistoryLoading)) {
+    return (
+      <ProductShell role="PATIENT">
+        <main
+          className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-8"
+          aria-label="Cargando perfil"
+        >
+          <div className="h-32 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
+          <div className="h-56 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
+          <div className="h-48 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
+        </main>
+      </ProductShell>
+    );
+  }
+
+  if (profileLoadFailed || !profile || !patient || historyLoadFailed) {
+    return (
+      <ProductShell role="PATIENT">
+        <main className="mx-auto max-w-3xl px-4 py-12 sm:px-8">
+          <Card className="border-[#ebebeb] bg-white shadow-none">
+            <CardContent className="p-6 text-center">
+              <h1 className="text-lg font-semibold">
+                No pudimos cargar tu perfil
+              </h1>
+              <p className="mt-2 text-sm text-[#6b6b6b]">
+                Intenta de nuevo. Tus cambios guardados siguen protegidos.
+              </p>
+              <Button className="mt-5" onClick={() => void refetch()}>
+                Reintentar
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+      </ProductShell>
+    );
+  }
+
   return (
     <ProductShell role="PATIENT">
       <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
@@ -267,17 +331,23 @@ export default function PatientProfilePage() {
                   <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                     <div className="relative">
                       <Avatar className="h-16 w-16 rounded-full border border-[#ebebeb] sm:h-20 sm:w-20">
+                        <AvatarImage
+                          src={profileData.imageUrl || undefined}
+                          alt=""
+                        />
                         <AvatarFallback className="text-lg font-medium text-[#525252] sm:text-xl">
                           {initials || "P"}
                         </AvatarFallback>
                       </Avatar>
                       {isEditing && (
-                        <Button
-                          size="sm"
-                          className="absolute -right-2 -bottom-2 h-8 w-8 rounded-full p-0"
+                        <label
+                          htmlFor="imageUrl"
+                          title="Editar enlace de foto"
+                          className="absolute -right-2 -bottom-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#171717] text-white shadow-sm transition-transform duration-150 ease-out hover:scale-105"
                         >
-                          <Camera className="h-4 w-4" />
-                        </Button>
+                          <Camera aria-hidden="true" className="h-4 w-4" />
+                          <span className="sr-only">Editar foto de perfil</span>
+                        </label>
                       )}
                     </div>
                     <div className="min-w-0">
@@ -306,28 +376,59 @@ export default function PatientProfilePage() {
                   </div>
                   {!isEditing ? (
                     <Button
-                      onClick={() => setIsEditing(true)}
+                      onClick={() => {
+                        setHasChanges(false);
+                        setIsEditing(true);
+                      }}
                       className="w-full sm:w-auto"
                     >
                       <Edit className="mr-2 h-4 w-4" />
                       Editar Perfil
                     </Button>
                   ) : (
-                    <div className="flex w-full gap-2 sm:w-auto">
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                      {hasChanges && (
+                        <span
+                          className="px-1 text-xs text-[#737373]"
+                          aria-live="polite"
+                        >
+                          Cambios sin guardar
+                        </span>
+                      )}
                       <Button
                         variant="outline"
-                        onClick={() => setIsEditing(false)}
+                        disabled={
+                          updateAccount.isPending ||
+                          upsertMedicalHistory.isPending
+                        }
+                        onClick={() => {
+                          setHasChanges(false);
+                          setIsEditing(false);
+                        }}
                         className="flex-1 sm:flex-none"
                       >
                         <X className="mr-2 h-4 w-4" />
                         Cancelar
                       </Button>
                       <Button
-                        onClick={handleSave}
+                        onClick={() => void handleSave()}
+                        disabled={
+                          !hasChanges ||
+                          updateAccount.isPending ||
+                          upsertMedicalHistory.isPending
+                        }
                         className="flex-1 sm:flex-none"
                       >
-                        <Save className="mr-2 h-4 w-4" />
-                        Guardar
+                        {updateAccount.isPending ||
+                        upsertMedicalHistory.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        {updateAccount.isPending ||
+                        upsertMedicalHistory.isPending
+                          ? "Guardando…"
+                          : "Guardar"}
                       </Button>
                     </div>
                   )}
@@ -340,7 +441,12 @@ export default function PatientProfilePage() {
           <div className="border-y border-[#ebebeb] bg-white px-4 py-4 sm:px-5">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
               {[
-                ["Tipo de sangre", profileData.bloodType || "No registrado"],
+                [
+                  "Tipo de sangre",
+                  profileData.bloodType
+                    ? bloodTypeLabels[profileData.bloodType]
+                    : "No registrado",
+                ],
                 [
                   "Altura",
                   profileData.height
@@ -374,6 +480,26 @@ export default function PatientProfilePage() {
             </CardHeader>
             <CardContent className="space-y-5 p-5 sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
+                {isEditing && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="imageUrl">
+                      Foto de perfil · enlace de imagen
+                    </Label>
+                    <Input
+                      id="imageUrl"
+                      type="url"
+                      value={profileData.imageUrl}
+                      onChange={(event) =>
+                        handleInputChange("imageUrl", event.target.value)
+                      }
+                      placeholder="https://…"
+                    />
+                    <p className="text-xs text-[#737373]">
+                      Usa un enlace público a una imagen. La foto se actualiza
+                      al guardar.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="firstName">Nombre</Label>
                   {isEditing ? (
@@ -428,6 +554,9 @@ export default function PatientProfilePage() {
                   {isEditing ? (
                     <Input
                       id="phone"
+                      type="tel"
+                      required
+                      minLength={10}
                       value={profileData.phone}
                       onChange={(e) =>
                         handleInputChange("phone", e.target.value)
@@ -521,19 +650,20 @@ export default function PatientProfilePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="A+">A+</SelectItem>
-                        <SelectItem value="A-">A-</SelectItem>
-                        <SelectItem value="B+">B+</SelectItem>
-                        <SelectItem value="B-">B-</SelectItem>
-                        <SelectItem value="AB+">AB+</SelectItem>
-                        <SelectItem value="AB-">AB-</SelectItem>
-                        <SelectItem value="O+">O+</SelectItem>
-                        <SelectItem value="O-">O-</SelectItem>
+                        {Object.entries(bloodTypeLabels).map(
+                          ([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
                   ) : (
                     <p className="py-2 text-sm">
-                      {profileData.bloodType || "No registrado"}
+                      {profileData.bloodType
+                        ? bloodTypeLabels[profileData.bloodType]
+                        : "No registrado"}
                     </p>
                   )}
                 </div>
@@ -542,6 +672,9 @@ export default function PatientProfilePage() {
                   {isEditing ? (
                     <Input
                       id="height"
+                      type="number"
+                      min="0"
+                      step="0.1"
                       value={profileData.height}
                       onChange={(e) =>
                         handleInputChange("height", e.target.value)
@@ -560,6 +693,9 @@ export default function PatientProfilePage() {
                   {isEditing ? (
                     <Input
                       id="weight"
+                      type="number"
+                      min="0"
+                      step="0.1"
                       value={profileData.weight}
                       onChange={(e) =>
                         handleInputChange("weight", e.target.value)

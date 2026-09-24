@@ -232,12 +232,12 @@ export const authRouter = createTRPCRouter({
         name: z.string().min(2).optional(),
         email: z.string().email().optional(),
         phone: z.string().min(10).optional(),
-        image: z.string().url().optional(),
+        image: z.string().url().nullable().optional(),
         specialty: z.string().optional(),
         about: z.string().optional(),
         experience: z.number().min(0).optional(),
-        birthDate: z.date().optional(),
-        gender: z.string().optional(),
+        birthDate: z.date().nullable().optional(),
+        gender: z.string().nullable().optional(),
         address: z.string().optional(),
       }),
     )
@@ -289,8 +289,8 @@ export const authRouter = createTRPCRouter({
             await tx.patient.update({
               where: { userId },
               data: {
-                ...(birthDate && { birthDate }),
-                ...(gender && { gender }),
+                ...(birthDate !== undefined && { birthDate }),
+                ...(gender !== undefined && { gender: gender || null }),
                 ...(address !== undefined && { address }),
                 ...(userFields.phone !== undefined && {
                   phone: userFields.phone,

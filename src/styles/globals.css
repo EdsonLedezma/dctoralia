@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="dropdown-menu-content"][data-state],
+  [data-slot="dropdown-menu-sub-content"][data-state],
+  [data-slot="select-content"][data-state] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {

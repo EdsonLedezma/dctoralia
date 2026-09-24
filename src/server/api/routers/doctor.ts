@@ -286,6 +286,7 @@ export const useDoctor = createTRPCRouter({
     .input(
       z.object({
         specialty: z.string().optional(),
+        license: z.string().min(1).optional(),
         about: z.string().optional(),
         experience: z.number().int().min(0).optional(),
         phone: z.string().optional(),
@@ -309,6 +310,7 @@ export const useDoctor = createTRPCRouter({
           where: { id: doctor.id },
           data: {
             specialty: input.specialty,
+            license: input.license,
             about: input.about,
             experience: input.experience,
             phone: input.phone,

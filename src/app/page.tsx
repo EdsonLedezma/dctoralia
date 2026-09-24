@@ -88,32 +88,32 @@ export default function LandingPage() {
             />
             <div className="mx-auto max-w-4xl text-center">
               <p
-                data-reveal
+                data-reveal="hero"
                 className="mb-5 font-mono text-[11px] tracking-[0.14em] text-[#6b6b6b] uppercase"
               >
                 Plataforma operativa para consultorios.
               </p>
               <h1
-                data-reveal
+                data-reveal="hero"
                 className="text-5xl font-semibold tracking-[-0.065em] text-balance sm:text-7xl"
               >
                 Menos coordinación. Más tiempo para cuidar.
               </h1>
               <p
-                data-reveal
+                data-reveal="hero"
                 className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#4d4d4d] sm:text-xl"
               >
                 Dctoralia reúne agenda, pacientes y automatizaciones en una
                 experiencia precisa para tu consultorio.
               </p>
               <div
-                data-reveal
+                data-reveal="hero"
                 className="mt-9 flex flex-col justify-center gap-3 sm:flex-row"
               >
                 <Link href="/register">
-                  <Button size="lg" className="h-12 rounded-full px-7">
+                  <Button size="lg" className="group h-12 rounded-full px-7">
                     Comenzar gratis
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
                   </Button>
                 </Link>
                 <Link href="/patient/doctors">
@@ -126,7 +126,10 @@ export default function LandingPage() {
                   </Button>
                 </Link>
               </div>
-              <p data-reveal className="mt-4 font-mono text-xs text-[#888]">
+              <p
+                data-reveal="hero"
+                className="mt-4 font-mono text-xs text-[#888]"
+              >
                 Sin tarjeta · Configuración en minutos
               </p>
             </div>
@@ -152,7 +155,7 @@ export default function LandingPage() {
                 <Card
                   key={title}
                   data-reveal
-                  className="gap-4 border-[#ebebeb] p-2 transition-colors duration-200 hover:border-[#d4d4d4]"
+                  className="gap-4 border-[#ebebeb] p-2 transition-[border-color,transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:border-[#d4d4d4] hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
                 >
                   <CardHeader className="gap-4 p-5">
                     <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#f5f5f5]">
@@ -221,9 +224,9 @@ export default function LandingPage() {
             </p>
             <div data-reveal className="mt-7">
               <Link href="/register">
-                <Button size="lg" className="h-12 rounded-full px-7">
+                <Button size="lg" className="group h-12 rounded-full px-7">
                   Crear mi consultorio
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
                 </Button>
               </Link>
             </div>

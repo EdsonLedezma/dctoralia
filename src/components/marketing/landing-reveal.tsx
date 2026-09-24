@@ -2,10 +2,11 @@
 
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { ReactNode } from "react";
 import { useRef } from "react";
 
-gsap.registerPlugin(useGSAP);
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 export function LandingReveal({ children }: { children: ReactNode }) {
   const scope = useRef<HTMLDivElement>(null);
@@ -17,14 +18,39 @@ export function LandingReveal({ children }: { children: ReactNode }) {
       ).matches;
       if (reduceMotion) return;
 
-      gsap.from("[data-reveal]", {
-        opacity: 0,
-        y: 18,
-        duration: 0.52,
-        ease: "power2.out",
-        stagger: 0.07,
-        clearProps: "transform",
-      });
+      gsap.fromTo(
+        "[data-reveal='hero']",
+        { autoAlpha: 0, y: 10 },
+        {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.38,
+          ease: "power2.out",
+          stagger: 0.045,
+          clearProps: "transform,opacity,visibility",
+        },
+      );
+
+      gsap.utils
+        .toArray<HTMLElement>("[data-reveal]:not([data-reveal='hero'])")
+        .forEach((element) => {
+          gsap.fromTo(
+            element,
+            { autoAlpha: 0, y: 8 },
+            {
+              autoAlpha: 1,
+              y: 0,
+              duration: 0.3,
+              ease: "power2.out",
+              clearProps: "transform,opacity,visibility",
+              scrollTrigger: {
+                trigger: element,
+                start: "top 90%",
+                once: true,
+              },
+            },
+          );
+        });
     },
     { scope },
   );

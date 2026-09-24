@@ -88,6 +88,7 @@ export const usePatients = createTRPCRouter({
             "O_POS",
             "O_NEG",
           ])
+          .nullable()
           .optional(),
         allergies: z.array(z.string()).default([]),
         medications: z.array(z.string()).default([]),
@@ -97,6 +98,13 @@ export const usePatients = createTRPCRouter({
         healthStatus: z
           .enum(["HEALTHY", "LOW_IMMUNITY", "SICK_LOW_RISK", "SICK_HIGH_RISK"])
           .optional(),
+        height: z.string().max(16).optional(),
+        weight: z.string().max(16).optional(),
+        emergencyName: z.string().max(120).optional(),
+        emergencyPhone: z.string().max(40).optional(),
+        emergencyRelation: z.string().max(80).optional(),
+        insuranceProvider: z.string().max(120).optional(),
+        insuranceNumber: z.string().max(80).optional(),
         notes: z.string().optional(),
       }),
     )
@@ -134,6 +142,13 @@ export const usePatients = createTRPCRouter({
             surgeries: input.surgeries,
             immunizations: input.immunizations,
             healthStatus: input.healthStatus,
+            height: input.height,
+            weight: input.weight,
+            emergencyName: input.emergencyName,
+            emergencyPhone: input.emergencyPhone,
+            emergencyRelation: input.emergencyRelation,
+            insuranceProvider: input.insuranceProvider,
+            insuranceNumber: input.insuranceNumber,
             notes: input.notes,
             lastUpdated: new Date(),
           },
@@ -146,6 +161,13 @@ export const usePatients = createTRPCRouter({
             surgeries: input.surgeries,
             immunizations: input.immunizations,
             healthStatus: input.healthStatus ?? "HEALTHY",
+            height: input.height,
+            weight: input.weight,
+            emergencyName: input.emergencyName,
+            emergencyPhone: input.emergencyPhone,
+            emergencyRelation: input.emergencyRelation,
+            insuranceProvider: input.insuranceProvider,
+            insuranceNumber: input.insuranceNumber,
             notes: input.notes,
           },
         });
