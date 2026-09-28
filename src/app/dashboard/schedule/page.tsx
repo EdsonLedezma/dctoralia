@@ -172,44 +172,114 @@ export default function ScheduleManagementPage() {
             {isCreating && (
               <Card className="mb-6 border-[#ebebeb] bg-white shadow-none">
                 <CardHeader className="border-b border-[#ebebeb]">
-                  <CardTitle>Crear Nuevo Horario</CardTitle>
+                  <CardTitle className="text-base font-semibold">Configurar Nuevo Horario</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div>
-                        <Label htmlFor="dayOfWeek">Día de la Semana</Label>
-                        <Select
-                          value={formData.dayOfWeek}
-                          onValueChange={(value) =>
-                            setFormData({ ...formData, dayOfWeek: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar día" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DAYS_OF_WEEK.map((day) => (
-                              <SelectItem
-                                key={day.value}
-                                value={day.value.toString()}
-                              >
-                                {day.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                <CardContent className="pt-6">
+                  {/* Presets */}
+                  <div className="mb-6 space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                      Plantillas Rápidas
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-[#ebebeb] bg-[#fafafa] hover:bg-[#171717] hover:text-white"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                          }))
+                        }
+                      >
+                        Jornada Completa (09:00 – 18:00)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-[#ebebeb] bg-[#fafafa] hover:bg-[#171717] hover:text-white"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            startTime: "08:00",
+                            endTime: "14:00",
+                          }))
+                        }
+                      >
+                        Turno Mañana (08:00 – 14:00)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-[#ebebeb] bg-[#fafafa] hover:bg-[#171717] hover:text-white"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            startTime: "14:00",
+                            endTime: "20:00",
+                          }))
+                        }
+                      >
+                        Turno Tarde (14:00 – 20:00)
+                      </Button>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
+                      <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                        Día de la Semana
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {DAYS_OF_WEEK.map((day) => {
+                          const isConfigured = schedules.some(
+                            (s) => s.dayOfWeek === day.value,
+                          );
+                          const isSelected =
+                            formData.dayOfWeek === day.value.toString();
+                          return (
+                            <button
+                              key={day.value}
+                              type="button"
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  dayOfWeek: day.value.toString(),
+                                }))
+                              }
+                              className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                                isSelected
+                                  ? "border-[#171717] bg-[#171717] text-white"
+                                  : isConfigured
+                                    ? "border-[#ebebeb] bg-[#f5f5f5] text-[#737373] opacity-60"
+                                    : "border-[#ebebeb] bg-white text-[#171717] hover:border-[#171717]"
+                              }`}
+                            >
+                              {day.label}
+                              {isConfigured && !isSelected && " (Configurado)"}
+                            </button>
+                          );
+                        })}
                       </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <Label htmlFor="startTime">Hora de Inicio</Label>
+                        <Label htmlFor="startTime" className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                          Hora de Inicio
+                        </Label>
                         <Select
                           value={formData.startTime}
                           onValueChange={(value) =>
                             setFormData({ ...formData, startTime: value })
                           }
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="00:00" />
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Seleccionar hora inicio" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60">
                             {TIME_SLOTS.map((time) => (
@@ -221,15 +291,17 @@ export default function ScheduleManagementPage() {
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="endTime">Hora de Fin</Label>
+                        <Label htmlFor="endTime" className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                          Hora de Fin
+                        </Label>
                         <Select
                           value={formData.endTime}
                           onValueChange={(value) =>
                             setFormData({ ...formData, endTime: value })
                           }
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="00:00" />
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Seleccionar hora fin" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60">
                             {TIME_SLOTS.map((time) => (
@@ -241,9 +313,19 @@ export default function ScheduleManagementPage() {
                         </Select>
                       </div>
                     </div>
+
                     <div className="flex flex-col gap-3 pt-4 sm:flex-row">
-                      <Button type="submit" className="w-full sm:w-auto">
-                        Crear Horario
+                      <Button
+                        type="submit"
+                        disabled={
+                          !formData.dayOfWeek ||
+                          !formData.startTime ||
+                          !formData.endTime ||
+                          createSchedule.isPending
+                        }
+                        className="w-full sm:w-auto"
+                      >
+                        {createSchedule.isPending ? "Guardando..." : "Guardar Horario"}
                       </Button>
                       <Button
                         type="button"

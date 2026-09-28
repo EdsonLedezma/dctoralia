@@ -22,6 +22,7 @@ import { api } from "~/trpc/react";
 import { ProductShell } from "~/components/shell/product-shell";
 import { toast } from "sonner";
 import { unwrapTrpcResult } from "~/types/trpc-response";
+import { TimeSlotPicker } from "~/components/ui/time-slot-picker";
 
 const appointmentTypes = [
   "Consulta General",
@@ -205,26 +206,24 @@ export default function NewAppointmentPage() {
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="time">Hora</Label>
-                    <Select
-                      onValueChange={(value) =>
-                        handleInputChange("time", value)
-                      }
-                      value={formData.time}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar hora" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {timeSlots.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="time" className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                        Seleccionar Hora
+                      </Label>
+                      {formData.time && (
+                        <span className="rounded bg-[#171717] px-2 py-0.5 text-xs font-mono font-medium text-white">
+                          {formData.time}
+                        </span>
+                      )}
+                    </div>
+                    <div className="rounded-lg border border-[#ebebeb] bg-white p-3 shadow-xs">
+                      <TimeSlotPicker
+                        slots={timeSlots}
+                        selectedTime={formData.time || null}
+                        onSelectTime={(time) => handleInputChange("time", time)}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="duration">Duración (minutos)</Label>

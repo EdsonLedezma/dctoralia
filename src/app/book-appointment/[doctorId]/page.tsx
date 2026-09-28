@@ -32,6 +32,7 @@ import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { unwrapTrpcResult } from "~/types/trpc-response";
 import { motion, useReducedMotion } from "motion/react";
+import { TimeSlotPicker } from "~/components/ui/time-slot-picker";
 import { format, parseISO } from "date-fns";
 
 export default function BookAppointmentPage() {
@@ -371,23 +372,23 @@ END:VCALENDAR`;
                         <span>Fecha y Hora</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                    <CardContent className="space-y-6 pt-6">
                       {availableDates.length === 0 ? (
                         <div className="rounded-md border border-dashed border-[#d4d4d4] bg-[#fafafa] p-6 text-center text-sm text-[#6b6b6b]">
                           El doctor aún no ha configurado horarios de atención.
                         </div>
                       ) : (
-                        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px]">
+                        <div className="grid gap-6 md:grid-cols-[1fr_300px]">
                           <div>
                             <div className="mb-3 flex items-center justify-between">
-                              <Label className="text-sm font-medium">
+                              <Label className="text-sm font-medium text-[#171717]">
                                 Selecciona una fecha
                               </Label>
-                              <span className="text-xs text-[#737373]">
+                              <span className="rounded-full bg-[#f5f5f5] px-2.5 py-0.5 text-xs font-medium text-[#525252]">
                                 {availableDates.length} días disponibles
                               </span>
                             </div>
-                            <div className="rounded-lg border border-[#e5e5e5] bg-white p-2 sm:p-3">
+                            <div className="rounded-lg border border-[#ebebeb] bg-white p-2 sm:p-3 shadow-xs">
                               <DateCalendar
                                 mode="single"
                                 selected={
@@ -413,42 +414,35 @@ END:VCALENDAR`;
                           </div>
 
                           <div className="border-t border-[#ebebeb] pt-5 md:border-t-0 md:border-l md:pt-0 md:pl-6">
-                            <div className="mb-3 flex items-center justify-between">
-                              <Label className="text-sm font-medium">
-                                Horario
-                              </Label>
+                            <div className="mb-4 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm font-semibold text-[#171717]">
+                                  Horarios disponibles
+                                </Label>
+                                {selectedTime && (
+                                  <span className="rounded bg-[#171717] px-2 py-0.5 text-xs font-mono font-medium text-white">
+                                    {selectedTime}
+                                  </span>
+                                )}
+                              </div>
                               {selectedDate && (
-                                <span className="text-xs text-[#737373]">
+                                <p className="text-xs text-[#737373] capitalize">
                                   {formatDate(selectedDate)}
-                                </span>
+                                </p>
                               )}
                             </div>
+
                             {!selectedDate ? (
-                              <p className="text-sm text-[#737373]">
-                                Elige una fecha para ver horarios.
-                              </p>
-                            ) : timeSlots.length === 0 ? (
-                              <p className="text-sm text-[#737373]">
-                                No hay horarios disponibles para este día.
+                              <p className="rounded-md border border-dashed border-[#ebebeb] bg-[#fafafa] p-4 text-center text-xs text-[#737373]">
+                                Selecciona una fecha en el calendario para consultar los horarios de atención.
                               </p>
                             ) : (
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2">
-                                {timeSlots.map((time: string) => (
-                                  <button
-                                    key={time}
-                                    type="button"
-                                    onClick={() => setSelectedTime(time)}
-                                    aria-pressed={selectedTime === time}
-                                    className={`rounded-md border px-3 py-2 text-sm transition-colors ${
-                                      selectedTime === time
-                                        ? "border-[#171717] bg-[#171717] text-white"
-                                        : "border-[#e5e5e5] bg-white text-[#171717] hover:border-[#a3a3a3] hover:bg-[#fafafa]"
-                                    }`}
-                                  >
-                                    {time}
-                                  </button>
-                                ))}
-                              </div>
+                              <TimeSlotPicker
+                                slots={timeSlots}
+                                selectedTime={selectedTime}
+                                onSelectTime={setSelectedTime}
+                                emptyMessage="No hay horarios disponibles para este día."
+                              />
                             )}
                           </div>
                         </div>
