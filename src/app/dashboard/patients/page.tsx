@@ -214,9 +214,12 @@ export default function PatientsPage() {
                                   .join("")
                                   .toLocaleUpperCase("es")}
                               </span>
-                              <span className="font-medium text-[#171717]">
+                              <Link
+                                href={`/dashboard/patients/${patient.id}`}
+                                className="font-medium text-[#171717] hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#171717]"
+                              >
                                 {patient.user.name}
-                              </span>
+                              </Link>
                             </div>
                           </TableCell>
                           <TableCell className="text-[#525252]">

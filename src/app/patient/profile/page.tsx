@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { upload } from "@vercel/blob/client";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -71,6 +72,10 @@ type ProfileFormData = {
 export default function PatientProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarProgress, setAvatarProgress] = useState(0);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const {
     data: profileRes,
@@ -145,6 +150,36 @@ export default function PatientProfilePage() {
     }
   }, [patient, user, medicalHistory, medicalHistoryRes, isEditing]);
 
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(null);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [avatarFile]);
+
+  const handleAvatarSelected = (file: File | undefined) => {
+    if (!file) return;
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/avif",
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Elige una imagen JPG, PNG, WebP o AVIF.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La foto debe pesar menos de 5 MB.");
+      return;
+    }
+    setAvatarFile(file);
+    setHasChanges(true);
+  };
+
   const handleInputChange = (field: string, value: string) => {
     setHasChanges(true);
     setProfileData((prev) => ({ ...prev, [field]: value }));
@@ -153,8 +188,10 @@ export default function PatientProfilePage() {
   const handleSave = async () => {
     if (
       !patient?.id ||
+      !user?.id ||
       updateAccount.isPending ||
-      upsertMedicalHistory.isPending
+      upsertMedicalHistory.isPending ||
+      isUploadingAvatar
     )
       return;
 
@@ -170,23 +207,31 @@ export default function PatientProfilePage() {
       toast.error("El teléfono debe tener al menos 10 dígitos.");
       return;
     }
-    if (profileData.imageUrl.trim()) {
-      try {
-        new URL(profileData.imageUrl.trim());
-      } catch {
-        toast.error("Escribe un enlace válido para la foto.");
-        return;
-      }
-    }
-
     try {
+      let nextImageUrl = profileData.imageUrl.trim();
+      if (avatarFile) {
+        setIsUploadingAvatar(true);
+        setAvatarProgress(0);
+        const blob = await upload(
+          `avatars/patients/${user.id}/profile`,
+          avatarFile,
+          {
+            access: "private",
+            handleUploadUrl: "/api/avatar-upload",
+            contentType: avatarFile.type,
+            onUploadProgress: ({ percentage }) => setAvatarProgress(percentage),
+          },
+        );
+        nextImageUrl = blob.pathname;
+      }
+
       const nextName =
         `${profileData.firstName} ${profileData.lastName}`.trim();
       unwrapTrpcResult(
         await updateAccount.mutateAsync({
           name: nextName,
           email: profileData.email.trim().toLowerCase(),
-          image: profileData.imageUrl.trim() || null,
+          image: nextImageUrl || null,
           phone: profileData.phone,
           birthDate: profileData.birthDate
             ? new Date(`${profileData.birthDate}T12:00:00`)
@@ -229,6 +274,8 @@ export default function PatientProfilePage() {
       );
 
       await refetch();
+      setProfileData((current) => ({ ...current, imageUrl: nextImageUrl }));
+      setAvatarFile(null);
       toast.success("Perfil actualizado correctamente");
       setHasChanges(false);
       setIsEditing(false);
@@ -238,6 +285,8 @@ export default function PatientProfilePage() {
           ? error.message
           : "Error al actualizar el perfil",
       );
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -332,7 +381,12 @@ export default function PatientProfilePage() {
                     <div className="relative">
                       <Avatar className="h-16 w-16 rounded-full border border-[#ebebeb] sm:h-20 sm:w-20">
                         <AvatarImage
-                          src={profileData.imageUrl || undefined}
+                          src={
+                            avatarPreview ??
+                            (profileData.imageUrl.startsWith("avatars/")
+                              ? "/api/patient-avatar"
+                              : profileData.imageUrl || undefined)
+                          }
                           alt=""
                         />
                         <AvatarFallback className="text-lg font-medium text-[#525252] sm:text-xl">
@@ -341,13 +395,29 @@ export default function PatientProfilePage() {
                       </Avatar>
                       {isEditing && (
                         <label
-                          htmlFor="imageUrl"
-                          title="Editar enlace de foto"
+                          htmlFor="avatarUpload"
+                          title="Cambiar foto de perfil"
                           className="absolute -right-2 -bottom-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#171717] text-white shadow-sm transition-transform duration-150 ease-out hover:scale-105"
                         >
                           <Camera aria-hidden="true" className="h-4 w-4" />
-                          <span className="sr-only">Editar foto de perfil</span>
+                          <span className="sr-only">
+                            Cambiar foto de perfil
+                          </span>
                         </label>
+                      )}
+                      {isEditing && (
+                        <input
+                          id="avatarUpload"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/avif"
+                          className="sr-only"
+                          onChange={(event) => {
+                            handleAvatarSelected(
+                              event.currentTarget.files?.[0],
+                            );
+                            event.currentTarget.value = "";
+                          }}
+                        />
                       )}
                     </div>
                     <div className="min-w-0">
@@ -399,9 +469,11 @@ export default function PatientProfilePage() {
                         variant="outline"
                         disabled={
                           updateAccount.isPending ||
-                          upsertMedicalHistory.isPending
+                          upsertMedicalHistory.isPending ||
+                          isUploadingAvatar
                         }
                         onClick={() => {
+                          setAvatarFile(null);
                           setHasChanges(false);
                           setIsEditing(false);
                         }}
@@ -415,19 +487,24 @@ export default function PatientProfilePage() {
                         disabled={
                           !hasChanges ||
                           updateAccount.isPending ||
-                          upsertMedicalHistory.isPending
+                          upsertMedicalHistory.isPending ||
+                          isUploadingAvatar
                         }
                         className="flex-1 sm:flex-none"
                       >
                         {updateAccount.isPending ||
-                        upsertMedicalHistory.isPending ? (
+                        upsertMedicalHistory.isPending ||
+                        isUploadingAvatar ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
                           <Save className="mr-2 h-4 w-4" />
                         )}
                         {updateAccount.isPending ||
-                        upsertMedicalHistory.isPending
-                          ? "Guardando…"
+                        upsertMedicalHistory.isPending ||
+                        isUploadingAvatar
+                          ? isUploadingAvatar
+                            ? `Subiendo ${Math.round(avatarProgress)}%…`
+                            : "Guardando…"
                           : "Guardar"}
                       </Button>
                     </div>
@@ -481,23 +558,32 @@ export default function PatientProfilePage() {
             <CardContent className="space-y-5 p-5 sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 {isEditing && (
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="imageUrl">
-                      Foto de perfil · enlace de imagen
-                    </Label>
-                    <Input
-                      id="imageUrl"
-                      type="url"
-                      value={profileData.imageUrl}
-                      onChange={(event) =>
-                        handleInputChange("imageUrl", event.target.value)
-                      }
-                      placeholder="https://…"
-                    />
-                    <p className="text-xs text-[#737373]">
-                      Usa un enlace público a una imagen. La foto se actualiza
-                      al guardar.
-                    </p>
+                  <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                    <Label htmlFor="avatarUpload">Foto de perfil</Label>
+                    <span className="text-xs text-[#737373]">
+                      JPG, PNG, WebP o AVIF · máximo 5 MB
+                    </span>
+                    {profileData.imageUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setAvatarFile(null);
+                          handleInputChange("imageUrl", "");
+                        }}
+                      >
+                        Quitar foto
+                      </Button>
+                    )}
+                    {isUploadingAvatar && (
+                      <span
+                        className="w-full text-xs text-[#737373]"
+                        aria-live="polite"
+                      >
+                        Subiendo foto… {Math.round(avatarProgress)}%
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className="space-y-2">

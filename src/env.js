@@ -19,6 +19,8 @@ export const env = createEnv({
     // Removed Google OAuth envs
     POSTGRES_URL_NON_POOLING: z.string(),
     POSTGRES_PRISMA_URL: z.string(),
+    BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+    PATIENT_BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
     APP_URL: z.string().url().optional(),
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
@@ -54,6 +56,8 @@ export const env = createEnv({
     // Removed Google OAuth envs
     POSTGRES_URL_NON_POOLING: process.env.POSTGRES_URL_NON_POOLING,
     POSTGRES_PRISMA_URL: process.env.POSTGRES_PRISMA_URL,
+    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+    PATIENT_BLOB_READ_WRITE_TOKEN: process.env.PATIENT_BLOB_READ_WRITE_TOKEN,
     APP_URL: process.env.APP_URL,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,

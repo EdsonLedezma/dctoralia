@@ -60,6 +60,10 @@ export async function createDoctorWorkspace(
         where: { doctorId: doctor.id, clinicId: null },
         data: { clinicId: clinic.id },
       });
+      await tx.appointmentLifecycleEvent.updateMany({
+        where: { doctorId: doctor.id, clinicId: null },
+        data: { clinicId: clinic.id },
+      });
       return { clinicId: clinic.id };
     },
     { isolationLevel: "Serializable" },

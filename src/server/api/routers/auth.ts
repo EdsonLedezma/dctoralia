@@ -232,7 +232,7 @@ export const authRouter = createTRPCRouter({
         name: z.string().min(2).optional(),
         email: z.string().email().optional(),
         phone: z.string().min(10).optional(),
-        image: z.string().url().nullable().optional(),
+        image: z.string().min(1).max(2048).nullable().optional(),
         specialty: z.string().optional(),
         about: z.string().optional(),
         experience: z.number().min(0).optional(),
@@ -255,6 +255,40 @@ export const authRouter = createTRPCRouter({
 
       if (typeof userFields.email === "string") {
         userFields.email = userFields.email.toLowerCase().trim();
+      }
+
+      if (userFields.image !== undefined && userFields.image !== null) {
+        const patientAvatarPath = `avatars/patients/${userId}/profile`;
+        const isPrivatePatientAvatar =
+          ctx.session.user.role === "PATIENT" &&
+          (userFields.image === patientAvatarPath ||
+            userFields.image.startsWith(`${patientAvatarPath}-`));
+        const isPublicDoctorAvatar =
+          ctx.session.user.role === "DOCTOR" &&
+          z.string().url().safeParse(userFields.image).success;
+
+        // Keep an existing public URL during profile edits so older accounts
+        // remain usable until they upload a replacement private avatar.
+        let isUnchangedLegacyPatientAvatar = false;
+        if (ctx.session.user.role === "PATIENT" && !isPrivatePatientAvatar) {
+          const existing = await ctx.db.user.findUnique({
+            where: { id: userId },
+            select: { image: true },
+          });
+          isUnchangedLegacyPatientAvatar = existing?.image === userFields.image;
+        }
+
+        if (
+          !isPrivatePatientAvatar &&
+          !isPublicDoctorAvatar &&
+          !isUnchangedLegacyPatientAvatar
+        ) {
+          return trpcFailure(
+            "INVALID_PROFILE_IMAGE",
+            "La foto de perfil no tiene un formato permitido",
+            400,
+          );
+        }
       }
 
       try {

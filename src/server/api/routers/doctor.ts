@@ -6,6 +6,8 @@ import {
 import { z } from "zod";
 import type { PrismaClient, Role } from "@prisma/client";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
+import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import { resolveClinicalActor } from "~/server/domain/clinical/access";
 
 async function getManagedDoctorId(
   ctx: { db: PrismaClient; session: { user: { id: string; role: Role } } },
@@ -387,14 +389,38 @@ export const useDoctor = createTRPCRouter({
           return trpcFailure("DOCTOR_NOT_FOUND", "Doctor no encontrado", 404);
         }
 
+        const workspace = await ctx.getWorkspace();
+
         const patients = await ctx.db.patient.findMany({
           where: {
             AND: [
-              {
-                appointments: {
-                  some: { doctorId: doctor.id },
-                },
-              },
+              workspace
+                ? {
+                    OR: [
+                      { clinicId: workspace.clinicId },
+                      {
+                        clinicMemberships: {
+                          some: {
+                            clinicId: workspace.clinicId,
+                            status: "ACTIVE",
+                          },
+                        },
+                      },
+                      {
+                        appointments: {
+                          some: {
+                            clinicId: workspace.clinicId,
+                            doctorId: doctor.id,
+                          },
+                        },
+                      },
+                    ],
+                  }
+                : {
+                    appointments: {
+                      some: { doctorId: doctor.id },
+                    },
+                  },
               input.search
                 ? {
                     user: {
@@ -407,12 +433,14 @@ export const useDoctor = createTRPCRouter({
           include: {
             user: { select: { name: true, email: true, image: true } },
             appointments: {
-              where: { doctorId: doctor.id },
+              where: {
+                doctorId: doctor.id,
+                ...(workspace ? { clinicId: workspace.clinicId } : {}),
+              },
               include: { service: true },
               orderBy: { date: "desc" },
               take: 5,
             },
-            medicalHistory: true,
           },
           orderBy: { createdAt: "desc" },
         });
@@ -436,17 +464,39 @@ export const useDoctor = createTRPCRouter({
           return trpcFailure("DOCTOR_PROFILE_NOT_FOUND", "No eres doctor", 404);
         }
 
+        const workspace = await ctx.getWorkspace();
+
         const patient = await ctx.db.patient.findFirst({
           where: {
             id: input.patientId,
-            appointments: { some: { doctorId: doctor.id } },
+            OR: [
+              {
+                appointments: {
+                  some: {
+                    doctorId: doctor.id,
+                    ...(workspace ? { clinicId: workspace.clinicId } : {}),
+                  },
+                },
+              },
+              {
+                careEpisodes: {
+                  some: {
+                    primaryDoctorId: doctor.id,
+                    ...(workspace ? { clinicId: workspace.clinicId } : {}),
+                  },
+                },
+              },
+            ],
           },
           include: {
             user: {
               select: { name: true, email: true, phone: true, image: true },
             },
             appointments: {
-              where: { doctorId: doctor.id },
+              where: {
+                doctorId: doctor.id,
+                ...(workspace ? { clinicId: workspace.clinicId } : {}),
+              },
               include: {
                 service: true,
                 doctor: { select: { user: { select: { name: true } } } },
@@ -463,6 +513,20 @@ export const useDoctor = createTRPCRouter({
             "Paciente no encontrado",
             404,
           );
+        }
+
+        const actor = await resolveClinicalActor({
+          db: ctx.db,
+          userId: ctx.session.user.id,
+          role: ctx.session.user.role,
+          workspace,
+        });
+        if (actor) {
+          await recordClinicalRead(ctx.db, actor, {
+            resourceType: "PATIENT_HISTORY",
+            resourceId: patient.id,
+            patientId: patient.id,
+          });
         }
 
         return trpcSuccess(patient, "Historial del paciente");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -10,7 +11,7 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { toast } from "sonner";
-import { BriefcaseMedical, Pencil, Star, UserRound } from "lucide-react";
+import { BriefcaseMedical, Camera, Pencil, Star } from "lucide-react";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
 import { unwrapTrpcResult } from "~/types/trpc-response";
@@ -25,6 +26,10 @@ type DoctorReview = DoctorProfile["reviews"][number];
 export default function DoctorProfilePage() {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarProgress, setAvatarProgress] = useState(0);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const { data: session } = useSession();
   const homeHref = session?.user
     ? session.user.role === "DOCTOR"
@@ -68,6 +73,16 @@ export default function DoctorProfilePage() {
     });
   }, [profile]);
 
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(null);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [avatarFile]);
+
   // Update profile mutation
   const updateProfile = api.doctor.updateProfile.useMutation({
     onSuccess: (response) => {
@@ -97,18 +112,51 @@ export default function DoctorProfilePage() {
     }));
   };
 
+  const handleAvatarSelected = (file: File | undefined) => {
+    if (!file) return;
+    if (
+      !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(
+        file.type,
+      )
+    ) {
+      toast.error("Elige una imagen JPG, PNG, WebP o AVIF.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La foto debe pesar menos de 5 MB.");
+      return;
+    }
+    setAvatarFile(file);
+  };
+
   const handleSubmit = async () => {
     try {
+      let nextImageUrl = formData.image.trim();
+      if (avatarFile) {
+        setIsUploadingAvatar(true);
+        setAvatarProgress(0);
+        const blob = await upload(
+          `avatars/doctors/${profile?.user?.id}/profile`,
+          avatarFile,
+          {
+            access: "public",
+            handleUploadUrl: "/api/avatar-upload",
+            contentType: avatarFile.type,
+            onUploadProgress: ({ percentage }) => setAvatarProgress(percentage),
+          },
+        );
+        nextImageUrl = blob.url;
+      }
       if (
         formData.name.trim() !== (profile?.user?.name ?? "") ||
         formData.email.trim().toLowerCase() !== (profile?.user?.email ?? "") ||
-        formData.image.trim() !== (profile?.user?.image ?? "")
+        nextImageUrl !== (profile?.user?.image ?? "")
       ) {
         unwrapTrpcResult(
           await updateAccount.mutateAsync({
             name: formData.name.trim(),
             email: formData.email.trim().toLowerCase(),
-            image: formData.image.trim() || null,
+            image: nextImageUrl || null,
           }),
         );
       }
@@ -119,16 +167,21 @@ export default function DoctorProfilePage() {
         experience: formData.experience,
         phone: formData.phone,
       });
+      setFormData((current) => ({ ...current, image: nextImageUrl }));
+      setAvatarFile(null);
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
           : "No se pudo actualizar la cuenta",
       );
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
   const handleCancel = () => {
+    setAvatarFile(null);
     setFormData({
       name: profile?.user?.name ?? "",
       email: profile?.user?.email ?? "",
@@ -185,6 +238,7 @@ export default function DoctorProfilePage() {
     profile.services?.filter((service) => service.isActive) ?? [];
   const reviews = profile.reviews?.slice(0, 5) ?? [];
   const hasChanges =
+    !!avatarFile ||
     formData.name !== (profile.user?.name ?? "") ||
     formData.email !== (profile.user?.email ?? "") ||
     formData.image !== (profile.user?.image ?? "") ||
@@ -204,10 +258,10 @@ export default function DoctorProfilePage() {
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex items-start gap-4">
                     <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#171717] text-sm font-medium text-white">
-                      {formData.image ? (
+                      {(avatarPreview ?? formData.image) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={formData.image}
+                          src={avatarPreview ?? formData.image}
                           alt=""
                           className="h-full w-full object-cover"
                         />
@@ -215,9 +269,30 @@ export default function DoctorProfilePage() {
                         (profile.user?.name?.slice(0, 2) ?? "DR").toUpperCase()
                       )}
                       {isEditing && (
-                        <UserRound className="absolute right-0 bottom-0 h-4 w-4 rounded-full bg-white p-0.5 text-[#171717]" />
+                        <label
+                          htmlFor="doctorAvatarUpload"
+                          title="Cambiar foto de perfil"
+                          className="absolute right-0 bottom-0 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white text-[#171717] shadow-sm transition-transform hover:scale-105"
+                        >
+                          <Camera aria-hidden="true" className="h-3.5 w-3.5" />
+                          <span className="sr-only">
+                            Cambiar foto de perfil
+                          </span>
+                        </label>
                       )}
                     </div>
+                    {isEditing && (
+                      <input
+                        id="doctorAvatarUpload"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        className="sr-only"
+                        onChange={(event) => {
+                          handleAvatarSelected(event.currentTarget.files?.[0]);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    )}
                     <div>
                       <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
                         Perfil profesional
@@ -293,21 +368,36 @@ export default function DoctorProfilePage() {
                 <div className="sm:col-span-2">
                   <label
                     className="mb-2 block text-xs font-medium text-[#525252]"
-                    htmlFor="image"
+                    htmlFor="doctorAvatarUpload"
                   >
-                    Foto de perfil · enlace de imagen
+                    Foto de perfil
                   </label>
-                  <Input
-                    id="image"
-                    name="image"
-                    type="url"
-                    value={formData.image}
-                    onChange={handleChange}
-                    placeholder="https://…"
-                  />
-                  <p className="mt-1 text-xs text-[#737373]">
-                    Usa un enlace público a una imagen.
+                  <p className="text-xs text-[#737373]">
+                    JPG, PNG, WebP o AVIF · máximo 5 MB. Usa el icono de la foto
+                    para elegir una imagen.
                   </p>
+                  {formData.image && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        setAvatarFile(null);
+                        setFormData((current) => ({ ...current, image: "" }));
+                      }}
+                    >
+                      Quitar foto
+                    </Button>
+                  )}
+                  {isUploadingAvatar && (
+                    <p
+                      className="mt-2 text-xs text-[#737373]"
+                      aria-live="polite"
+                    >
+                      Subiendo foto… {Math.round(avatarProgress)}%
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label
@@ -426,7 +516,9 @@ export default function DoctorProfilePage() {
                     onClick={handleCancel}
                     variant="outline"
                     disabled={
-                      updateProfile.isPending || updateAccount.isPending
+                      updateProfile.isPending ||
+                      updateAccount.isPending ||
+                      isUploadingAvatar
                     }
                   >
                     Cancelar
@@ -436,12 +528,17 @@ export default function DoctorProfilePage() {
                     disabled={
                       !hasChanges ||
                       updateProfile.isPending ||
-                      updateAccount.isPending
+                      updateAccount.isPending ||
+                      isUploadingAvatar
                     }
                     aria-live="polite"
                   >
-                    {updateProfile.isPending || updateAccount.isPending
-                      ? "Guardando…"
+                    {updateProfile.isPending ||
+                    updateAccount.isPending ||
+                    isUploadingAvatar
+                      ? isUploadingAvatar
+                        ? `Subiendo ${Math.round(avatarProgress)}%…`
+                        : "Guardando…"
                       : hasChanges
                         ? "Guardar cambios"
                         : "Sin cambios"}

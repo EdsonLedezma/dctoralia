@@ -13,6 +13,7 @@ import {
   isSlotInsideSchedule,
   isTodayOrFuture,
 } from "~/server/domain/appointments/appointment-time";
+import { recordAppointmentLifecycleEvent } from "~/server/domain/appointments/lifecycle";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 
 const timeSchema = z
@@ -319,6 +320,18 @@ export const useAppointment = createTRPCRouter({
               include: appointmentInclude,
             });
 
+            await recordAppointmentLifecycleEvent(tx, {
+              clinicId: created.clinicId,
+              appointmentId: created.id,
+              patientId: created.patientId,
+              doctorId: created.doctorId,
+              actorUserId: ctx.session.user.id,
+              eventType: "CREATED",
+              toStatus: created.status,
+              scheduledAt: created.date,
+              scheduledTime: created.time,
+            });
+
             await tx.notification.create({
               data: {
                 doctorId: doctor.id,
@@ -468,6 +481,23 @@ export const useAppointment = createTRPCRouter({
               include: appointmentInclude,
             });
 
+            await recordAppointmentLifecycleEvent(tx, {
+              clinicId: updated.clinicId,
+              appointmentId: updated.id,
+              patientId: updated.patientId,
+              doctorId: updated.doctorId,
+              actorUserId: ctx.session.user.id,
+              eventType: "RESCHEDULED",
+              fromStatus: current.status,
+              toStatus: updated.status,
+              scheduledAt: updated.date,
+              scheduledTime: updated.time,
+              metadata: {
+                previousDate: current.date.toISOString(),
+                previousTime: current.time,
+              },
+            });
+
             await tx.notification.create({
               data: {
                 doctorId: current.doctorId,
@@ -553,10 +583,28 @@ export const useAppointment = createTRPCRouter({
         }
 
         const appointment = await ctx.db.$transaction(async (tx) => {
-          const updated = await tx.appointment.update({
-            where: { id: current.id },
+          const changed = await tx.appointment.updateMany({
+            where: { id: current.id, status: current.status },
             data: { status: "CANCELLED" },
+          });
+          if (changed.count !== 1) return null;
+          const updated = await tx.appointment.findUniqueOrThrow({
+            where: { id: current.id },
             include: appointmentInclude,
+          });
+
+          await recordAppointmentLifecycleEvent(tx, {
+            clinicId: updated.clinicId,
+            appointmentId: updated.id,
+            patientId: updated.patientId,
+            doctorId: updated.doctorId,
+            actorUserId: ctx.session.user.id,
+            eventType: "STATUS_CHANGED",
+            fromStatus: current.status,
+            toStatus: updated.status,
+            scheduledAt: updated.date,
+            scheduledTime: updated.time,
+            metadata: input.reason ? { reasonProvided: true } : undefined,
           });
 
           const reasonSuffix = input.reason ? ` Motivo: ${input.reason}` : "";
@@ -573,6 +621,14 @@ export const useAppointment = createTRPCRouter({
 
           return updated;
         });
+
+        if (!appointment) {
+          return trpcFailure(
+            "CONFLICT",
+            "La cita cambió mientras intentabas cancelarla. Actualiza e inténtalo de nuevo.",
+            409,
+          );
+        }
 
         return trpcSuccess(appointment, "Cita cancelada correctamente");
       } catch (error) {
@@ -622,10 +678,40 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        const appointment = await ctx.db.appointment.update({
-          where: { id: current.id },
-          data: { status: input.status },
+        if (current.status === input.status) {
+          return trpcSuccess(current.status, "La cita ya tenía ese estado");
+        }
+        const appointment = await ctx.db.$transaction(async (tx) => {
+          const changed = await tx.appointment.updateMany({
+            where: { id: current.id, status: current.status },
+            data: { status: input.status },
+          });
+          if (changed.count !== 1) return null;
+          const updated = await tx.appointment.findUniqueOrThrow({
+            where: { id: current.id },
+          });
+          await recordAppointmentLifecycleEvent(tx, {
+            clinicId: updated.clinicId,
+            appointmentId: updated.id,
+            patientId: updated.patientId,
+            doctorId: updated.doctorId,
+            actorUserId: ctx.session.user.id,
+            eventType: "STATUS_CHANGED",
+            fromStatus: current.status,
+            toStatus: updated.status,
+            scheduledAt: updated.date,
+            scheduledTime: updated.time,
+          });
+          return updated;
         });
+
+        if (!appointment) {
+          return trpcFailure(
+            "CONFLICT",
+            "La cita cambió mientras intentabas actualizarla. Actualiza e inténtalo de nuevo.",
+            409,
+          );
+        }
 
         return trpcSuccess(
           appointment.status,
@@ -670,6 +756,18 @@ export const useAppointment = createTRPCRouter({
             "APPOINTMENT_NOT_FOUND",
             "Cita no encontrada",
             404,
+          );
+        }
+
+        const signedEncounter = await ctx.db.clinicalEncounter.findFirst({
+          where: { appointmentId: current.id, status: "SIGNED" },
+          select: { id: true },
+        });
+        if (signedEncounter) {
+          return trpcFailure(
+            "ENCOUNTER_SIGNED",
+            "La consulta está firmada. Registra una enmienda para corregirla.",
+            409,
           );
         }
 

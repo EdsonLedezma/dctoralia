@@ -37,6 +37,14 @@ export const usePatients = createTRPCRouter({
           403,
         );
       }
+      const workspace = await ctx.getWorkspace();
+      if (ctx.session.user.role === "DOCTOR" && !workspace) {
+        return trpcFailure(
+          "WORKSPACE_REQUIRED",
+          "Selecciona o configura un consultorio para agregar pacientes al seguimiento.",
+          400,
+        );
+      }
       try {
         const user = await ctx.db.user.findUnique({
           where: { id: input.userId },
@@ -57,14 +65,26 @@ export const usePatients = createTRPCRouter({
           );
         }
 
-        const newPatient = await ctx.db.patient.create({
-          data: {
-            userId: input.userId,
-            phone: input.phone,
-            birthDate: input.birthDate,
-            gender: input.gender,
-            address: input.address,
-          },
+        const newPatient = await ctx.db.$transaction(async (tx) => {
+          const patient = await tx.patient.create({
+            data: {
+              userId: input.userId,
+              phone: input.phone,
+              birthDate: input.birthDate,
+              gender: input.gender,
+              address: input.address,
+            },
+          });
+          if (workspace) {
+            await tx.clinicPatient.create({
+              data: {
+                clinicId: workspace.clinicId,
+                patientId: patient.id,
+                addedByUserId: ctx.session.user.id,
+              },
+            });
+          }
+          return patient;
         });
         return trpcSuccess(newPatient, "Paciente creado correctamente", 201);
       } catch {
