@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "argon2";
 import nextEnv from "@next/env";
 import { fileURLToPath } from "node:url";
@@ -54,7 +55,10 @@ async function main() {
   });
   const passwordHash = await hash(DEMO_PASSWORD);
   // Same connection and env precedence as the app, without its query/error logger.
-  const db = new PrismaClient({ datasourceUrl: config.url, log: [] });
+  const db = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: config.url }),
+    log: [],
+  });
   try {
     phase = "conexión/carga";
     const applied = await db.$transaction(

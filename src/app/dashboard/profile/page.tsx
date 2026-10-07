@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { upload } from "@vercel/blob/client";
+import { uploadPresigned } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -15,6 +15,7 @@ import { BriefcaseMedical, Camera, Pencil, Star } from "lucide-react";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
 import { unwrapTrpcResult } from "~/types/trpc-response";
+import { avatarUrl } from "~/lib/avatar-url";
 
 type DoctorProfile = Exclude<
   RouterOutputs["doctor"]["getMyProfile"]["result"],
@@ -135,17 +136,17 @@ export default function DoctorProfilePage() {
       if (avatarFile) {
         setIsUploadingAvatar(true);
         setAvatarProgress(0);
-        const blob = await upload(
+        const blob = await uploadPresigned(
           `avatars/doctors/${profile?.user?.id}/profile`,
           avatarFile,
           {
-            access: "public",
+            access: "private",
             handleUploadUrl: "/api/avatar-upload",
             contentType: avatarFile.type,
             onUploadProgress: ({ percentage }) => setAvatarProgress(percentage),
           },
         );
-        nextImageUrl = blob.url;
+        nextImageUrl = blob.pathname;
       }
       if (
         formData.name.trim() !== (profile?.user?.name ?? "") ||
@@ -156,7 +157,9 @@ export default function DoctorProfilePage() {
           await updateAccount.mutateAsync({
             name: formData.name.trim(),
             email: formData.email.trim().toLowerCase(),
-            image: nextImageUrl || null,
+            ...(avatarFile || nextImageUrl !== (profile?.user?.image ?? "")
+              ? { image: nextImageUrl || null }
+              : {}),
           }),
         );
       }
@@ -261,7 +264,7 @@ export default function DoctorProfilePage() {
                       {(avatarPreview ?? formData.image) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={avatarPreview ?? formData.image}
+                          src={avatarPreview ?? avatarUrl(formData.image, profile.userId)}
                           alt=""
                           className="h-full w-full object-cover"
                         />

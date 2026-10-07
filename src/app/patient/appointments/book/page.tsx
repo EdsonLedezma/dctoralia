@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { api, type RouterOutputs } from "src/trpc/react";
 import { ProductShell } from "~/components/shell/product-shell";
+import { avatarUrl } from "~/lib/avatar-url";
 
 type Doctor = Exclude<
   RouterOutputs["doctor"]["getAll"]["result"],
@@ -39,6 +40,7 @@ export default function BookAppointmentPage() {
   const { data } = api.doctor.getAll.useQuery();
   const doctors = (data?.result ?? []).map((d: Doctor) => ({
     id: d.id,
+    userId: d.user?.id ?? "",
     name: d.user?.name ?? "",
     specialty: d.specialty,
     rating: d.rating ?? 0,
@@ -165,7 +167,7 @@ export default function BookAppointmentPage() {
                           <Avatar className="h-20 w-20">
                             {doctor.image && (
                               <AvatarImage
-                                src={doctor.image}
+                                src={avatarUrl(doctor.image, doctor.userId)}
                                 alt={doctor.name}
                               />
                             )}

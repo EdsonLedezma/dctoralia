@@ -14,6 +14,8 @@ import {
   isTodayOrFuture,
 } from "~/server/domain/appointments/appointment-time";
 import { recordAppointmentLifecycleEvent } from "~/server/domain/appointments/lifecycle";
+import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import { resolveClinicalActor } from "~/server/domain/clinical/access";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 
 const timeSchema = z
@@ -1011,24 +1013,88 @@ export const useAppointment = createTRPCRouter({
       }
 
       try {
+        const workspace = await ctx.getWorkspace();
+        const clinicalActor = await resolveClinicalActor({
+          db: ctx.db,
+          userId: ctx.session.user.id,
+          role: ctx.session.user.role,
+          workspace,
+        });
+        if (!clinicalActor) {
+          return trpcFailure(
+            "CLINICAL_ACCESS_REQUIRED",
+            "Acceso clínico a un consultorio requerido",
+            403,
+          );
+        }
+
         const appointments = await ctx.db.appointment.findMany({
           where: {
             patientId: input.patientId,
-            doctor: { userId: actor.id },
+            clinicId: clinicalActor.clinicId,
+            doctorId: clinicalActor.doctorId,
           },
           include: {
             patient: {
               select: {
                 user: { select: { name: true, email: true } },
-                medicalHistory: true,
               },
             },
             service: true,
           },
           orderBy: [{ date: "desc" }, { time: "desc" }],
         });
+        if (appointments.length === 0) {
+          return trpcFailure(
+            "PATIENT_NOT_FOUND",
+            "No se encontró historial de este paciente en el consultorio.",
+            404,
+          );
+        }
 
-        return trpcSuccess(appointments, "Historial obtenido correctamente");
+        const consent = await ctx.db.medicalHistoryConsent.findUnique({
+          where: {
+            patientId_clinicId: {
+              patientId: input.patientId,
+              clinicId: clinicalActor.clinicId,
+            },
+          },
+          select: { status: true },
+        });
+        const medicalHistory =
+          consent?.status === "GRANTED"
+            ? await ctx.db.medicalHistory.findUnique({
+                where: { patientId: input.patientId },
+                select: {
+                  bloodType: true,
+                  allergies: true,
+                  medications: true,
+                  chronicDiseases: true,
+                  lastUpdated: true,
+                },
+              })
+            : null;
+        await recordClinicalRead(ctx.db, clinicalActor, {
+          resourceType: "PATIENT_APPOINTMENT_HISTORY",
+          resourceId: input.patientId,
+          patientId: input.patientId,
+        });
+        if (medicalHistory) {
+          await recordClinicalRead(ctx.db, clinicalActor, {
+            resourceType: "MEDICAL_HISTORY",
+            resourceId: input.patientId,
+            patientId: input.patientId,
+            action: "MEDICAL_HISTORY_READ",
+          });
+        }
+
+        return trpcSuccess(
+          appointments.map((appointment) => ({
+            ...appointment,
+            patient: { ...appointment.patient, medicalHistory },
+          })),
+          "Historial obtenido correctamente",
+        );
       } catch (error) {
         console.error("Unable to get patient history", error);
         return trpcFailure(

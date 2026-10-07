@@ -8,14 +8,17 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { uploadPresigned } from "@vercel/blob/client";
 import { toast } from "sonner";
 import {
   Activity,
   ArrowLeft,
   CalendarClock,
   Check,
+  Download,
   FilePlus2,
   FolderPlus,
+  Paperclip,
   PencilLine,
 } from "lucide-react";
 
@@ -76,6 +79,9 @@ export default function ClinicalPatientPage({ params }: Props) {
   const [score, setScore] = useState("");
   const [scoreMin, setScoreMin] = useState("");
   const [scoreMax, setScoreMax] = useState("");
+  const [fileCategory, setFileCategory] = useState("OTHER");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     const activeEpisode = timeline.data?.result?.episodes.find(
@@ -269,6 +275,55 @@ export default function ClinicalPatientPage({ params }: Props) {
     });
   };
 
+  const uploadClinicalFile = async (file: File) => {
+    if (!result) return;
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Adjunta un PDF, JPG, PNG o WebP.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("El archivo debe pesar 15 MB o menos.");
+      return;
+    }
+
+    setUploadingFile(true);
+    setUploadProgress(0);
+    try {
+      await uploadPresigned(
+        `clinical-files/${result.storageClinicId}/${patientId}/${crypto.randomUUID()}`,
+        file,
+        {
+          access: "private",
+          handleUploadUrl: "/api/clinical/files/upload",
+          clientPayload: JSON.stringify({
+            patientId,
+            episodeId: episodeId || undefined,
+            category: fileCategory,
+            originalFilename: file.name,
+          }),
+          onUploadProgress: ({ percentage }) =>
+            setUploadProgress(Math.round(percentage)),
+        },
+      );
+      toast.success("Documento agregado al expediente");
+      await invalidateTimeline();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar el documento.",
+      );
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const result = timeline.data?.result;
 
   return (
@@ -339,6 +394,93 @@ export default function ClinicalPatientPage({ params }: Props) {
                     </span>
                   </div>
                 </header>
+
+                <section className="rounded-lg border border-[#ebebeb] bg-white">
+                  <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Paperclip className="h-4 w-4 text-[#737373]" />
+                        <h2 className="text-sm font-semibold text-[#171717]">
+                          Documentos del expediente
+                        </h2>
+                      </div>
+                      <p className="mt-1 text-xs text-[#737373]">
+                        Archivos privados visibles sólo para el equipo clínico
+                        autorizado.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        aria-label="Categoría del documento"
+                        value={fileCategory}
+                        onChange={(event) =>
+                          setFileCategory(event.target.value)
+                        }
+                        className="h-9 rounded-md border border-[#ebebeb] bg-white px-3 text-xs text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                      >
+                        <option value="OTHER">Otro documento</option>
+                        <option value="LAB_RESULT">
+                          Resultado de laboratorio
+                        </option>
+                        <option value="IMAGING">Imagen médica</option>
+                        <option value="PRESCRIPTION">Receta</option>
+                        <option value="REFERRAL">Referencia</option>
+                        <option value="CONSENT">Consentimiento</option>
+                      </select>
+                      <label className="inline-flex h-9 cursor-pointer items-center rounded-md bg-[#171717] px-3 text-xs font-medium text-white transition-colors hover:bg-[#333] has-[:disabled]:cursor-wait has-[:disabled]:opacity-60">
+                        <input
+                          type="file"
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          disabled={uploadingFile}
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = "";
+                            if (file) void uploadClinicalFile(file);
+                          }}
+                        />
+                        {uploadingFile
+                          ? `${uploadProgress}%`
+                          : "Adjuntar archivo"}
+                      </label>
+                    </div>
+                  </div>
+                  {result.clinicalFiles.length ? (
+                    <ul className="divide-y divide-[#f0f0f0] px-5">
+                      {result.clinicalFiles.map((file) => (
+                        <li
+                          key={file.id}
+                          className="flex items-center justify-between gap-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-[#262626]">
+                              {file.originalFilename}
+                            </p>
+                            <p className="mt-1 text-[11px] text-[#888]">
+                              {clinicalFileCategoryLabel(file.category)}
+                              {" · "}
+                              {new Intl.DateTimeFormat("es-MX", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              }).format(new Date(file.createdAt))}
+                              {` · ${(file.sizeBytes / 1024 / 1024).toFixed(1)} MB · ${file.uploadedBy.name}`}
+                            </p>
+                          </div>
+                          <a
+                            href={`/api/clinical/files/${file.id}`}
+                            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#ebebeb] px-2.5 text-xs text-[#525252] transition-colors hover:bg-[#fafafa] hover:text-[#171717]"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Descargar
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-5 py-6 text-sm text-[#737373]">
+                      Todavía no hay documentos adjuntos.
+                    </p>
+                  )}
+                </section>
 
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
                   <div className="space-y-6">
@@ -942,13 +1084,17 @@ export default function ClinicalPatientPage({ params }: Props) {
                       </p>
                       <p className="mt-1 text-[11px] text-[#888]">
                         Esta ficha es independiente de las notas profesionales.
-                        Última actualización:{" "}
+                        {result.medicalHistoryAccess
+                          ? "Última actualización: "
+                          : "El paciente no ha autorizado compartir estos antecedentes con este consultorio."}
                         {result.patient.medicalHistory
                           ? formatDate(
                               result.patient.medicalHistory.lastUpdated,
                             )
-                          : "sin registro"}
-                        .
+                          : result.medicalHistoryAccess
+                            ? "sin registro"
+                            : ""}
+                        {result.medicalHistoryAccess ? "." : null}
                       </p>
                       {result.patient.medicalHistory ? (
                         <div className="mt-3 space-y-2 text-xs leading-5 text-[#525252]">
@@ -1240,4 +1386,16 @@ function formatAmendmentChanges(value: unknown): Array<[string, string]> {
           : (JSON.stringify(entry) ?? String(entry)),
       ] as [string, string],
   );
+}
+
+function clinicalFileCategoryLabel(category: string) {
+  const labels: Record<string, string> = {
+    LAB_RESULT: "Laboratorio",
+    IMAGING: "Imagen médica",
+    PRESCRIPTION: "Receta",
+    REFERRAL: "Referencia",
+    CONSENT: "Consentimiento",
+    OTHER: "Otro",
+  };
+  return labels[category] ?? "Documento";
 }

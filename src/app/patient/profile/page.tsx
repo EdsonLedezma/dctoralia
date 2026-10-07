@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { upload } from "@vercel/blob/client";
+import { uploadPresigned } from "@vercel/blob/client";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
 import { unwrapTrpcResult } from "~/types/trpc-response";
+import { avatarUrl } from "~/lib/avatar-url";
 
 type BloodType = NonNullable<
   RouterInputs["patients"]["upsertMedicalHistory"]["bloodType"]
@@ -212,7 +213,7 @@ export default function PatientProfilePage() {
       if (avatarFile) {
         setIsUploadingAvatar(true);
         setAvatarProgress(0);
-        const blob = await upload(
+        const blob = await uploadPresigned(
           `avatars/patients/${user.id}/profile`,
           avatarFile,
           {
@@ -231,7 +232,7 @@ export default function PatientProfilePage() {
         await updateAccount.mutateAsync({
           name: nextName,
           email: profileData.email.trim().toLowerCase(),
-          image: nextImageUrl || null,
+          ...(avatarFile ? { image: nextImageUrl || null } : {}),
           phone: profileData.phone,
           birthDate: profileData.birthDate
             ? new Date(`${profileData.birthDate}T12:00:00`)
@@ -383,9 +384,7 @@ export default function PatientProfilePage() {
                         <AvatarImage
                           src={
                             avatarPreview ??
-                            (profileData.imageUrl.startsWith("avatars/")
-                              ? "/api/patient-avatar"
-                              : profileData.imageUrl || undefined)
+                            avatarUrl(profileData.imageUrl, user.id)
                           }
                           alt=""
                         />

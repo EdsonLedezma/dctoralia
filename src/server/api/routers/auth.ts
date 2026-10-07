@@ -32,6 +32,18 @@ const signinSchema = z.object({
   password: z.string().min(1, "La contraseña es requerida"),
 });
 
+const isVercelBlobUrl = (image: string) => {
+  try {
+    const url = new URL(image);
+    return (
+      url.protocol === "https:" &&
+      /^[a-z0-9-]+\.(?:(?:public|private)\.)?blob\.vercel-storage\.com$/i.test(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const authRouter = createTRPCRouter({
   register: publicProcedure
     .input(registerSchema)
@@ -258,34 +270,26 @@ export const authRouter = createTRPCRouter({
       }
 
       if (userFields.image !== undefined && userFields.image !== null) {
-        const patientAvatarPath = `avatars/patients/${userId}/profile`;
-        const isPrivatePatientAvatar =
-          ctx.session.user.role === "PATIENT" &&
-          (userFields.image === patientAvatarPath ||
-            userFields.image.startsWith(`${patientAvatarPath}-`));
-        const isPublicDoctorAvatar =
+        const rolePrefix =
+          ctx.session.user.role === "PATIENT"
+            ? `avatars/patients/${userId}/profile`
+            : ctx.session.user.role === "DOCTOR"
+              ? `avatars/doctors/${userId}/profile`
+              : null;
+        const isPrivateAvatarPath = Boolean(
+          rolePrefix &&
+            (userFields.image === rolePrefix ||
+              userFields.image.startsWith(`${rolePrefix}-`)),
+        );
+        const isLegacyExternalDoctorImage =
           ctx.session.user.role === "DOCTOR" &&
-          z.string().url().safeParse(userFields.image).success;
+          z.string().url().safeParse(userFields.image).success &&
+          !isVercelBlobUrl(userFields.image);
 
-        // Keep an existing public URL during profile edits so older accounts
-        // remain usable until they upload a replacement private avatar.
-        let isUnchangedLegacyPatientAvatar = false;
-        if (ctx.session.user.role === "PATIENT" && !isPrivatePatientAvatar) {
-          const existing = await ctx.db.user.findUnique({
-            where: { id: userId },
-            select: { image: true },
-          });
-          isUnchangedLegacyPatientAvatar = existing?.image === userFields.image;
-        }
-
-        if (
-          !isPrivatePatientAvatar &&
-          !isPublicDoctorAvatar &&
-          !isUnchangedLegacyPatientAvatar
-        ) {
+        if (!isPrivateAvatarPath && !isLegacyExternalDoctorImage) {
           return trpcFailure(
             "INVALID_PROFILE_IMAGE",
-            "La foto de perfil no tiene un formato permitido",
+            "La foto de perfil debe cargarse desde el almacenamiento privado.",
             400,
           );
         }

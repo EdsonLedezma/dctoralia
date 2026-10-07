@@ -1,4 +1,8 @@
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { issueSignedToken } from "@vercel/blob";
+import {
+  handleUploadPresigned,
+  type HandleUploadPresignedBody,
+} from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 import { auth } from "~/server/auth";
 import { env } from "~/env";
@@ -17,29 +21,31 @@ const maxAvatarSize = 5 * 1024 * 1024;
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as HandleUploadBody;
-    const pathname =
-      body.type === "blob.generate-client-token"
-        ? body.payload.pathname
-        : body.payload.blob.pathname;
-    const isPatientAvatar = pathname.startsWith("avatars/patients/");
-    const token = isPatientAvatar
-      ? env.PATIENT_BLOB_READ_WRITE_TOKEN
-      : env.BLOB_READ_WRITE_TOKEN;
-
-    if (!token) {
+    const body = (await request.json()) as HandleUploadPresignedBody;
+    const canUseOidc = Boolean(env.VERCEL_OIDC_TOKEN && env.BLOB_STORE_ID);
+    const localToken =
+      env.NODE_ENV === "production"
+        ? undefined
+        : env.PROFILE_BLOB_READ_WRITE_TOKEN;
+    if (
+      !env.BLOB_WEBHOOK_PUBLIC_KEY ||
+      (!canUseOidc && !localToken)
+    ) {
       throw new Error(
-        isPatientAvatar
-          ? "Falta conectar el Blob privado de pacientes."
-          : "Falta configurar el Blob público de médicos.",
+        "Falta conectar el Blob de imágenes de perfil y su clave de webhook.",
       );
     }
 
-    const response = await handleUpload({
+    const pathname =
+      body.type === "blob.generate-presigned-url"
+        ? body.payload.pathname
+        : body.payload.blob.pathname;
+    const isPatientAvatar = pathname.startsWith("avatars/patients/");
+    const response = await handleUploadPresigned({
       body,
       request,
-      token,
-      onBeforeGenerateToken: async (pathname) => {
+      webhookPublicKey: env.BLOB_WEBHOOK_PUBLIC_KEY,
+      getSignedToken: async (pathname, clientPayload) => {
         const session = await auth();
         const user = session?.user;
 
@@ -55,11 +61,24 @@ export async function POST(request: Request) {
           );
         }
 
-        return {
+        const signedToken = await issueSignedToken({
+          pathname,
+          operations: ["put"],
           allowedContentTypes: avatarContentTypes,
           maximumSizeInBytes: maxAvatarSize,
-          addRandomSuffix: true,
-          tokenPayload: JSON.stringify({ userId: user.id, role: user.role }),
+          token: localToken,
+          oidcToken: env.VERCEL_OIDC_TOKEN,
+          storeId: env.BLOB_STORE_ID,
+        });
+
+        return {
+          token: signedToken,
+          urlOptions: {
+            allowedContentTypes: avatarContentTypes,
+            maximumSizeInBytes: maxAvatarSize,
+            addRandomSuffix: true,
+            tokenPayload: JSON.stringify({ userId: user.id, role: user.role }),
+          },
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {

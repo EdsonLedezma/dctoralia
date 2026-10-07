@@ -360,22 +360,31 @@ export const clinicalRouter = createTRPCRouter({
           birthDate: true,
           gender: true,
           user: { select: { name: true } },
-          medicalHistory: {
-            select: {
-              bloodType: true,
-              allergies: true,
-              medications: true,
-              chronicDiseases: true,
-              lastUpdated: true,
-            },
-          },
         },
       });
       if (!patient) {
         return trpcFailure("PATIENT_NOT_FOUND", "Paciente no encontrado", 404);
       }
 
-      const [episodes, encounters, tasks, assessments] = await Promise.all([
+      const historyConsent = await ctx.db.medicalHistoryConsent.findUnique({
+        where: {
+          patientId_clinicId: {
+            patientId: patient.id,
+            clinicId: actor.clinicId,
+          },
+        },
+        select: { status: true },
+      });
+      const hasMedicalHistoryAccess = historyConsent?.status === "GRANTED";
+
+      const [
+        episodes,
+        encounters,
+        tasks,
+        assessments,
+        clinicalFiles,
+        medicalHistory,
+      ] = await Promise.all([
         ctx.db.careEpisode.findMany({
           where: { ...careEpisodeScope(actor), patientId: patient.id },
           select: {
@@ -466,20 +475,67 @@ export const clinicalRouter = createTRPCRouter({
           orderBy: { measuredAt: "desc" },
           take: input.limit,
         }),
+        ctx.db.clinicalFile.findMany({
+          where: { clinicId: actor.clinicId, patientId: patient.id },
+          select: {
+            id: true,
+            originalFilename: true,
+            mediaType: true,
+            sizeBytes: true,
+            category: true,
+            createdAt: true,
+            uploadedBy: { select: { name: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: input.limit,
+        }),
+        hasMedicalHistoryAccess
+          ? ctx.db.medicalHistory.findUnique({
+              where: { patientId: patient.id },
+              select: {
+                bloodType: true,
+                allergies: true,
+                medications: true,
+                chronicDiseases: true,
+                lastUpdated: true,
+              },
+            })
+          : Promise.resolve(null),
       ]);
 
-      await recordClinicalRead(ctx.db, actor, {
-        resourceType: "PATIENT_TIMELINE",
-        resourceId: patient.id,
-        patientId: patient.id,
-      });
+      await Promise.all([
+        recordClinicalRead(ctx.db, actor, {
+          resourceType: "PATIENT_TIMELINE",
+          resourceId: patient.id,
+          patientId: patient.id,
+        }),
+        recordClinicalRead(ctx.db, actor, {
+          resourceType: "CLINICAL_FILE_LIST",
+          resourceId: patient.id,
+          patientId: patient.id,
+          action: "CLINICAL_FILE_LIST_READ",
+        }),
+        ...(hasMedicalHistoryAccess
+          ? [
+              recordClinicalRead(ctx.db, actor, {
+                resourceType: "MEDICAL_HISTORY",
+                resourceId: patient.id,
+                patientId: patient.id,
+                action: "MEDICAL_HISTORY_READ",
+              }),
+            ]
+          : []),
+      ]);
 
       return trpcSuccess(
         {
-          patient,
+          patient: { ...patient, medicalHistory },
+          medicalHistoryAccess: hasMedicalHistoryAccess,
+          storageClinicId: actor.clinicId,
           episodes,
           encounters,
           followUpTasks: tasks,
+          clinicalFiles,
           outcomeAssessments: assessments.map((assessment) => ({
             ...assessment,
             score: assessment.score?.toNumber() ?? null,

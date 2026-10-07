@@ -3,9 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "postgresql"
 }
 
 model Account {
@@ -63,6 +61,7 @@ model User {
   authoredClinicalAmendments ClinicalEncounterAmendment[] @relation("ClinicalAmendmentAuthor")
   appointmentLifecycleEvents AppointmentLifecycleEvent[]  @relation("AppointmentLifecycleActor")
   addedClinicPatients        ClinicPatient[]              @relation("ClinicPatientAdder")
+  uploadedClinicalFiles      ClinicalFile[]               @relation("ClinicalFileUploader")
 }
 
 /// Tenant boundary for a medical practice. Links on current operational
@@ -96,6 +95,8 @@ model Clinic {
   clinicalEncounterAmendments ClinicalEncounterAmendment[]
   appointmentLifecycleEvents  AppointmentLifecycleEvent[]
   patientMemberships          ClinicPatient[]
+  clinicalFiles               ClinicalFile[]
+  medicalHistoryConsents      MedicalHistoryConsent[]
 }
 
 model ClinicLocation {
@@ -257,6 +258,8 @@ model Patient {
   clinicalAuditEvents        ClinicalAuditEvent[]
   appointmentLifecycleEvents AppointmentLifecycleEvent[]
   clinicMemberships          ClinicPatient[]
+  clinicalFiles              ClinicalFile[]
+  medicalHistoryConsents     MedicalHistoryConsent[]
 
   @@index([clinicId])
 }
@@ -267,14 +270,15 @@ model ClinicPatient {
   id            String              @id @default(cuid())
   clinicId      String
   patientId     String
-  addedByUserId String
+  addedByUserId String?
+  source        ClinicPatientSource @default(MANUAL)
   status        ClinicPatientStatus @default(ACTIVE)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
   clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  addedBy User    @relation("ClinicPatientAdder", fields: [addedByUserId], references: [id], onDelete: Restrict)
+  addedBy User?   @relation("ClinicPatientAdder", fields: [addedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([clinicId, patientId])
   @@index([clinicId, status, updatedAt])
@@ -412,6 +416,11 @@ enum ClinicPatientStatus {
   ARCHIVED
 }
 
+enum ClinicPatientSource {
+  MANUAL
+  LEGACY_BACKFILL
+}
+
 enum CareEpisodeStatus {
   ACTIVE
   ON_HOLD
@@ -423,6 +432,20 @@ enum ClinicalEncounterStatus {
   DRAFT
   SIGNED
   CANCELLED
+}
+
+enum ClinicalFileCategory {
+  LAB_RESULT
+  IMAGING
+  PRESCRIPTION
+  REFERRAL
+  CONSENT
+  OTHER
+}
+
+enum MedicalHistoryConsentStatus {
+  GRANTED
+  REVOKED
 }
 
 enum FollowUpTaskType {
@@ -520,6 +543,7 @@ model CareEpisode {
   encounters    ClinicalEncounter[]
   followUpTasks FollowUpTask[]
   assessments   OutcomeAssessment[]
+  clinicalFiles ClinicalFile[]
 
   @@index([clinicId, patientId, status, updatedAt])
   @@index([clinicId, primaryDoctorId, status, updatedAt])
@@ -555,6 +579,7 @@ model ClinicalEncounter {
   amendments    ClinicalEncounterAmendment[]
   followUpTasks FollowUpTask[]
   assessments   OutcomeAssessment[]
+  clinicalFiles ClinicalFile[]
 
   @@index([clinicId, patientId, encounterAt(sort: Desc)])
   @@index([clinicId, doctorId, encounterAt(sort: Desc)])
@@ -660,6 +685,52 @@ model ClinicalAuditEvent {
   @@index([clinicId, patientId, createdAt(sort: Desc)])
   @@index([clinicId, resourceType, resourceId, createdAt])
   @@index([clinicId, actorUserId, createdAt(sort: Desc)])
+}
+
+/// Metadata for documents stored in a private Vercel Blob store. The opaque
+/// pathname is never returned to the browser or used as a public URL.
+model ClinicalFile {
+  id               String               @id @default(cuid())
+  clinicId         String
+  patientId        String
+  episodeId        String?
+  encounterId      String?
+  uploadedByUserId String
+  blobPathname     String               @unique
+  originalFilename String
+  mediaType        String
+  sizeBytes        Int
+  category         ClinicalFileCategory @default(OTHER)
+  createdAt        DateTime             @default(now())
+
+  clinic     Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient    Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  episode    CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  encounter  ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  uploadedBy User               @relation("ClinicalFileUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, patientId, createdAt(sort: Desc)])
+  @@index([clinicId, episodeId, createdAt(sort: Desc)])
+}
+
+/// Patient-controlled permission for one clinic to read their self-reported
+/// MedicalHistory. Consent changes are separately appended to ClinicalAuditEvent.
+model MedicalHistoryConsent {
+  id            String                      @id @default(cuid())
+  patientId     String
+  clinicId      String
+  status        MedicalHistoryConsentStatus @default(REVOKED)
+  policyVersion String
+  grantedAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@unique([patientId, clinicId])
+  @@index([clinicId, status, updatedAt])
 }
 
 /// Immutable operational events used to explain appointment analytics over time.

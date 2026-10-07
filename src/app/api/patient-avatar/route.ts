@@ -11,9 +11,14 @@ export async function GET() {
   if (!user || user.role !== "PATIENT") {
     return new NextResponse(null, { status: 401 });
   }
-  if (!env.PATIENT_BLOB_READ_WRITE_TOKEN) {
+  const canUseOidc = Boolean(env.VERCEL_OIDC_TOKEN && env.BLOB_STORE_ID);
+  const localToken =
+    env.NODE_ENV === "production"
+      ? undefined
+      : env.PROFILE_BLOB_READ_WRITE_TOKEN;
+  if (!canUseOidc && !localToken) {
     return NextResponse.json(
-      { error: "El almacenamiento privado de pacientes no está configurado." },
+      { error: "El almacenamiento de imágenes no está configurado." },
       { status: 503 },
     );
   }
@@ -35,7 +40,9 @@ export async function GET() {
   try {
     const blob = await get(pathname, {
       access: "private",
-      token: env.PATIENT_BLOB_READ_WRITE_TOKEN,
+      token: localToken,
+      oidcToken: env.VERCEL_OIDC_TOKEN,
+      storeId: env.BLOB_STORE_ID,
     });
 
     if (!blob || blob.statusCode !== 200) {

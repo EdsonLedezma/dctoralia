@@ -64,6 +64,21 @@ export default function MedicalHistoryPage() {
       { enabled: !!patient?.id },
     );
   const medicalHistory = historyRes?.result;
+  const sharing = api.patients.listMedicalHistorySharing.useQuery(undefined, {
+    enabled: !!patient?.id,
+  });
+  const utils = api.useUtils();
+  const updateSharing = api.patients.setMedicalHistorySharing.useMutation({
+    onSuccess: async (response) => {
+      if (response.error) {
+        toast.error(response.message);
+        return;
+      }
+      toast.success(response.message);
+      await utils.patients.listMedicalHistorySharing.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   // Obtener citas completadas (historial)
   const { data: appointmentsRes } = api.appointments.listMine.useQuery(
@@ -197,6 +212,70 @@ export default function MedicalHistoryPage() {
 
             {/* Medical History */}
             <TabsContent value="history" className="space-y-6">
+              <Card className="border-[#ebebeb] bg-white shadow-none">
+                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+                  <CardTitle>Permisos para compartir antecedentes</CardTitle>
+                  <p className="text-sm text-gray-600">
+                    Controlas qué consultorios pueden consultar tu tipo de
+                    sangre, alergias, medicamentos y padecimientos. El permiso
+                    es por consultorio y puedes revocarlo cuando quieras.
+                  </p>
+                </CardHeader>
+                <CardContent className="divide-y divide-[#ebebeb]">
+                  {sharing.isLoading ? (
+                    <p className="py-5 text-sm text-gray-500">
+                      Cargando consultorios…
+                    </p>
+                  ) : sharing.data?.result?.length ? (
+                    sharing.data.result.map((clinic) => (
+                      <div
+                        key={clinic.id}
+                        className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-[#171717]">
+                            {clinic.name}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {clinic.isGranted
+                              ? "Este consultorio tiene permiso para consultar tus antecedentes auto-reportados."
+                              : "Este consultorio no puede consultar tus antecedentes auto-reportados."}
+                          </p>
+                          {clinic.isGranted && clinic.grantedAt ? (
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              Permiso concedido el {formatDate(clinic.grantedAt)}
+                            </p>
+                          ) : clinic.revokedAt ? (
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              Acceso revocado el {formatDate(clinic.revokedAt)}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Button
+                          type="button"
+                          variant={clinic.isGranted ? "outline" : "default"}
+                          disabled={updateSharing.isPending}
+                          onClick={() =>
+                            updateSharing.mutate({
+                              clinicId: clinic.id,
+                              granted: !clinic.isGranted,
+                            })
+                          }
+                        >
+                          {clinic.isGranted
+                            ? "Revocar acceso"
+                            : "Permitir acceso"}
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="py-5 text-sm text-gray-500">
+                      No hay consultorios vinculados a tu cuenta.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card className="border-[#ebebeb] bg-white shadow-none">
                 <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
                   <div className="flex items-center justify-between">

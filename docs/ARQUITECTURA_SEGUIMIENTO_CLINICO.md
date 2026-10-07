@@ -1,6 +1,6 @@
 # Arquitectura de seguimiento clínico y operativo
 
-Estado: primera base implementada; acceso a datos reales pendiente de migración y controles finales  
+Estado: primera base implementada; migraciones generadas y pendientes de revisión del esquema real
 Actualizado: 6 de octubre de 2026
 
 ## Objetivo de producto
@@ -56,7 +56,7 @@ Los esquemas Zod viven en `src/server/domain/clinical/schemas.ts` y son la fuent
 
 ### Archivos clínicos
 
-Los archivos del expediente se guardan en el bucket privado ya previsto. PostgreSQL conserva metadatos y una clave opaca, nunca una URL pública permanente. Cada descarga verifica la membresía y el acceso al paciente en servidor y emite una URL temporal. Se registran carga, lectura, descarga y eliminación; se validan tamaño, MIME, extensión y permisos. El bucket privado no sustituye el control de acceso, la retención, el consentimiento, las copias de seguridad ni el proceso de incidentes.
+Los archivos del expediente se guardan en el store privado `dctoralia-clinical-private`. PostgreSQL conserva metadatos y una clave opaca, nunca una URL pública permanente. La carga usa URLs prefirmadas de un solo archivo; Vercel Functions firma operaciones con OIDC usando `CLINICAL_STORE_ID` y verifica callbacks con `CLINICAL_WEBHOOK_PUBLIC_KEY`. La descarga pasa por una ruta autenticada que valida la clínica y el acceso al paciente antes de transmitir el archivo. Se registran cargas y descargas; se valida el MIME y el límite de 15 MB. Las imágenes de perfil y evidencia no clínica también usan un store privado (`BLOB_STORE_ID`, `BLOB_WEBHOOK_PUBLIC_KEY`); sus imágenes se sirven a través de una ruta de aplicación. En producción ambos stores se seleccionan por su ID y OIDC, sin compartir `BLOB_READ_WRITE_TOKEN`. Los tokens locales son independientes (`PROFILE_BLOB_READ_WRITE_TOKEN` y `CLINICAL_READ_WRITE_TOKEN`).
 
 ## Secuencia de implementación
 
@@ -109,22 +109,36 @@ Los archivos del expediente se guardan en el bucket privado ya previsto. Postgre
 
 1. Revisar permisos de lectura y completar auditoría de acceso, descarga y exportación antes de activar expedientes reales.
 2. Preparar y revisar la migración aditiva, incluido el backfill de membresías de pacientes desde clínicas y citas existentes.
-3. Conectar archivos clínicos al Blob privado con metadatos, URLs temporales, permisos y auditoría.
+3. Validar carga/descarga de archivos privados en staging con el store clínico y verificar su auditoría.
 4. Validar el catálogo y las puntuaciones de instrumentos con médicos del segmento piloto.
 5. Probar los flujos de seguimiento, recordatorios consentidos y recuperación operativa con clínicas piloto.
 
 No ejecutar `db push`, migraciones de producción ni cambios destructivos desde este plan. Las migraciones deben revisarse y aplicarse en un entorno controlado según la estrategia del propietario del proyecto.
 
+## Migraciones preparadas
+
+- `prisma/migrations/20261006000000_baseline/migration.sql` representa el esquema previo al corte clínico (commit `6754e126`).
+- `prisma/migrations/20261006010000_clinical_follow_up/migration.sql` agrega la capa clínica, hace opcional el autor histórico de membresías y crea relaciones `ClinicPatient` a partir del `clinicId` legado y las citas. El backfill usa `LEGACY_BACKFILL`, actor nulo y `ON CONFLICT DO NOTHING`.
+- `prisma/migrations/20261006020000_clinical_files/migration.sql` agrega la tabla y enum para metadatos de documentos privados; es aditiva y no modifica archivos existentes.
+- `prisma/migrations/20261006030000_medical_history_consent/migration.sql` agrega el permiso revocable por paciente/consultorio; el estado inicial no concede acceso.
+- Base vacía: `pnpm exec prisma migrate deploy` ejecuta los cuatro archivos.
+- Base existente que coincide exactamente con el baseline: comparar primero el esquema real; sólo entonces marcar `20261006000000_baseline` como aplicado con `pnpm exec prisma migrate resolve --applied 20261006000000_baseline` y desplegar la migración clínica en staging.
+- Si `db push` ya dejó algunas tablas clínicas creadas o la estructura no coincide con el baseline, no ejecutar esos comandos sin reconciliar el estado; la migración no se compara ni se aplica automáticamente contra una base en este corte.
+
 ## Corte iniciado en esta entrega
 
 - Se añadieron al schema episodios, consultas, enmiendas, tareas de seguimiento, mediciones versionadas por código/versión, auditoría clínica y eventos de ciclo de vida de cita.
 - Se añadió `ClinicPatient` para permitir que una identidad participe en varias clínicas sin compartir expedientes. Crear un paciente desde el panel y abrirle un episodio activa la relación con el consultorio en la misma transacción, sin modificar el `clinicId` legado de la ficha global.
+- Se preparó un baseline a partir del esquema inmediatamente anterior al corte clínico y una migración aditiva que crea los nuevos dominios, añade datos complementarios a `MedicalHistory` y hace backfill idempotente de membresías desde `Patient.clinicId` y citas; el actor histórico queda como desconocido, no se inventa.
+- Se añadió `ClinicalFile` con metadatos aislados por clínica, ruta opaca de Blob privado, categoría y relaciones opcionales con episodio/consulta. La carga y descarga se autorizan en servidor y generan eventos de auditoría; no se entrega una URL pública.
+- La ficha clínica lista y adjunta PDF/JPG/PNG/WebP (máximo 15 MB) y descarga mediante endpoint autenticado. Para producción, conecta `dctoralia-clinical-private` al proyecto con prefijo `CLINICAL`; Vercel provee `CLINICAL_STORE_ID`, `CLINICAL_WEBHOOK_PUBLIC_KEY` y credenciales OIDC a Functions. `CLINICAL_READ_WRITE_TOKEN` queda como alternativa local opcional.
+- Se añadió consentimiento revocable por clínica para que el paciente controle el acceso a sus antecedentes auto-reportados. Las lecturas sólo ocurren después del permiso y se registran por separado; las pantallas de paciente permiten otorgarlo o revocarlo.
 - Se implementaron en tRPC apertura de episodios, borradores, firma, enmiendas, tareas, línea de tiempo del paciente, registro de puntuación y tendencia por instrumento/versión.
 - La ficha del doctor permite guardar/editar borradores, firmar, enmendar, abrir episodios, crear seguimientos y ver una gráfica de puntuación inicial/actual/cambio. La vista de seguimiento muestra pendientes y actividad operativa.
 - La puntuación inicial es capturada por el doctor y sólo se compara por código y versión. Aún no hay un catálogo de instrumentos ni cálculo automático validado; tampoco se etiqueta un cambio como favorable o desfavorable.
 - Los eventos de cita se guardan junto con reservas, cancelaciones, cambios de estado y reagendados. No se inventa el historial de transiciones anterior a esta función; el estado actual de citas existentes sigue disponible como fotografía.
 - El borrador firmado no admite edición directa. Las enmiendas quedan como entradas separadas con motivo, autor y fecha. Las notas antiguas de la cita quedan como dato legado y se bloquean después de firmar un encuentro asociado.
-- El listado de pacientes ya no carga antecedentes completos; la consulta del historial limita las citas al consultorio seleccionado. Aún se debe auditar toda lectura de datos clínicos en esos endpoints.
-- La auditoría en código cubre las escrituras y lecturas habilitadas de historial, línea de tiempo, tendencias, tareas y analítica; aún debe cerrarse la cobertura de cualquier ruta clínica heredada, además de descargas y exportaciones. La revisión de consentimiento, retención y privacidad también bloquea activar datos clínicos reales.
-- Los antecedentes de `MedicalHistory` se mantienen como autorreporte global heredado. Antes de compartirlos entre consultorios se debe añadir permiso revocable por paciente y clínica, con estado y fecha auditables.
-- No se aplicaron migraciones ni se modificó una base de datos. Antes de desplegar estas rutas, el propietario debe revisar una migración aditiva y ejecutarla en un entorno controlado. El bucket privado no se conectó en este corte; el diseño de archivos queda como fase posterior.
+- El listado de pacientes de doctor quedó limitado a su consultorio; las rutas heredadas que devuelven antecedentes exigen consentimiento explícito y auditan su lectura. Queda pendiente auditar las demás lecturas heredadas antes de abrir expedientes reales.
+- La auditoría en código cubre la línea de tiempo, lecturas permitidas de antecedentes, carga/descarga de archivos, tendencias, tareas y analítica. Falta auditar exportaciones y hacer una revisión completa de rutas heredadas.
+- La migración de consentimiento no otorga permisos históricos automáticamente: el estado inicial es sin permiso y el paciente debe habilitar cada consultorio. El texto de privacidad/consentimiento y la retención requieren revisión especializada antes de comercializar el flujo con datos reales.
+- No se aplicaron migraciones ni se modificó una base de datos. Aunque `.env` contiene variables de conexión, no se comparó el esquema instalado. En una base existente, sólo marcar el baseline como aplicado después de verificar que coincide con el esquema previo; después revisar todas las migraciones contra un respaldo y ejecutarlas primero en staging. Una instalación vacía puede aplicar baseline y migraciones desde cero. El Blob clínico usa `CLINICAL_STORE_ID` y `CLINICAL_WEBHOOK_PUBLIC_KEY` separados del store privado de perfiles; no se reutiliza el bucket de perfiles para documentos médicos.
