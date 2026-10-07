@@ -1,10 +1,13 @@
 "use client";
 
 import type React from "react";
-
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Eye, EyeOff, Loader2, Stethoscope } from "lucide-react";
+
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -15,18 +18,6 @@ import {
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Alert, AlertDescription } from "~/components/ui/alert";
-import { Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
-import Link from "next/link";
-import {
-  validateEmail,
-  validatePassword,
-  type ValidationError,
-} from "../../utils/validation";
-import {
-  ValidationErrors,
-  FieldValidation,
-} from "../../components/ui/validation-errors";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -34,254 +25,164 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
-    [],
-  );
-  const [touched, setTouched] = useState({ email: false, password: false });
   const router = useRouter();
 
-  // Real-time validation
-  useEffect(() => {
-    if (!touched.email && !touched.password) return;
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email.trim() || !password || isLoading) return;
 
-    const errors: ValidationError[] = [];
-
-    if (touched.email) {
-      const emailValidation = validateEmail(email);
-      errors.push(...emailValidation.errors);
-    }
-
-    if (touched.password) {
-      const passwordValidation = validatePassword(password);
-      errors.push(...passwordValidation.errors);
-    }
-
-    setValidationErrors(errors);
-  }, [email, password, touched]);
-
-  const handleEmailBlur = () => {
-    setTouched((prev) => ({ ...prev, email: true }));
-  };
-
-  const handlePasswordBlur = () => {
-    setTouched((prev) => ({ ...prev, password: true }));
-  };
-
-  const getLoginErrorCode = (errorMessage: string): string => {
-    if (
-      errorMessage.includes("Credenciales inválidas") ||
-      errorMessage.includes("credentials")
-    ) {
-      return "INVALID_CREDENTIALS";
-    }
-    if (
-      errorMessage.includes("usuario no encontrado") ||
-      errorMessage.includes("user not found")
-    ) {
-      return "USER_NOT_FOUND";
-    }
-    if (
-      errorMessage.includes("contraseña incorrecta") ||
-      errorMessage.includes("incorrect password")
-    ) {
-      return "INCORRECT_PASSWORD";
-    }
-    if (
-      errorMessage.includes("cuenta desactivada") ||
-      errorMessage.includes("account disabled")
-    ) {
-      return "ACCOUNT_DISABLED";
-    }
-    if (errorMessage.includes("red") || errorMessage.includes("network")) {
-      return "NETWORK_ERROR";
-    }
-    return "LOGIN_FAILED";
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     setIsLoading(true);
     setError("");
-    setValidationErrors([]);
-
-    // Mark all fields as touched for validation
-    setTouched({ email: true, password: true });
-
-    // Validate form
-    const emailValidation = validateEmail(email);
-    const passwordValidation = validatePassword(password);
-    const allErrors = [...emailValidation.errors, ...passwordValidation.errors];
-
-    if (allErrors.length > 0) {
-      setValidationErrors(allErrors);
-      setIsLoading(false);
-      return;
-    }
 
     try {
       const result = await signIn("credentials", {
-        email,
+        email: email.trim().toLowerCase(),
         password,
         redirect: false,
       });
 
       if (result?.error) {
-        const errorCode = getLoginErrorCode(result.error);
-        setError(`Error: ${result.error} (Código: ${errorCode})`);
-
-        // Add specific validation error for login failure
-        setValidationErrors([
-          {
-            code: errorCode,
-            field: "login",
-            message: result.error,
-          },
-        ]);
+        setError(
+          result.error.toLowerCase().includes("network")
+            ? "No pudimos conectar. Revisa tu conexión e inténtalo de nuevo."
+            : "El correo o la contraseña no son correctos.",
+        );
         return;
       }
 
-      // Clear validation errors on success
-      setValidationErrors([]);
-
-      // Obtener la sesión para verificar el rol
       const session = await getSession();
-
-      if (session?.user?.role === "DOCTOR") {
-        router.push("/dashboard");
-      } else {
-        router.push("/patient/dashboard");
-      }
+      router.replace(
+        session?.user?.role === "DOCTOR" ? "/dashboard" : "/patient/dashboard",
+      );
     } catch {
-      const errorCode = "UNEXPECTED_ERROR";
-      const errorMessage = "Error inesperado al iniciar sesión";
-      setError(`${errorMessage} (Código: ${errorCode})`);
-
-      setValidationErrors([
-        {
-          code: errorCode,
-          field: "login",
-          message: errorMessage,
-        },
-      ]);
+      setError("No pudimos iniciar sesión. Inténtalo de nuevo.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isFormValid =
-    validationErrors.length === 0 && email.length > 0 && password.length > 0;
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#fafafa] p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mb-4 flex items-center justify-center space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#171717]">
-              <Calendar className="h-5 w-5 text-white" />
+    <main className="flex min-h-screen items-center justify-center bg-[#fafafa] px-4 py-10">
+      <div className="w-full max-w-[420px]">
+        <Card className="border-[#e5e5e5] bg-white shadow-[0_24px_80px_rgba(0,0,0,0.06)]">
+          <CardHeader className="space-y-6 px-6 pt-8 text-center sm:px-9 sm:pt-10">
+            <div className="mx-auto flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#171717] text-white">
+                <Stethoscope aria-hidden="true" className="h-[18px] w-[18px]" />
+              </div>
+              <span className="text-lg font-semibold tracking-[-0.04em] text-[#171717]">
+                Dctoralia
+              </span>
             </div>
-            <span className="text-xl font-bold">Dctoralia</span>
-          </div>
-          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
-          <CardDescription>
-            Accede a tu cuenta para gestionar tu consulta
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive" role="alert" aria-live="polite">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+            <div className="space-y-2">
+              <CardTitle className="text-[26px] font-semibold tracking-[-0.04em] text-[#171717]">
+                Bienvenido de nuevo
+              </CardTitle>
+              <CardDescription className="text-sm leading-6 text-[#6b6b6b]">
+                Inicia sesión para continuar con tu consulta.
+              </CardDescription>
+            </div>
+          </CardHeader>
 
-          {/* Validation Errors */}
-          <ValidationErrors errors={validationErrors} />
+          <CardContent className="space-y-6 px-6 pb-8 pt-7 sm:px-9 sm:pb-9">
+            {error && (
+              <Alert
+                variant="destructive"
+                role="alert"
+                aria-live="polite"
+                className="rounded-lg border-[#f3c6c6] bg-[#fff7f7] text-[#b42318]"
+              >
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <FieldValidation field="email" errors={validationErrors}>
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-sm font-medium text-[#262626]">
+                  Correo electrónico
+                </Label>
                 <Input
                   id="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="doctor@ejemplo.com"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="nombre@ejemplo.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={handleEmailBlur}
+                  onChange={(event) => setEmail(event.target.value)}
                   required
                   disabled={isLoading}
-                  className={
-                    touched.email &&
-                    validationErrors.some((e) => e.field === "email")
-                      ? "border-red-500 focus:border-red-500"
-                      : ""
-                  }
+                  className="h-11 rounded-lg border-[#dedede] bg-white px-3.5 text-sm shadow-none placeholder:text-[#a3a3a3] focus-visible:border-[#171717] focus-visible:ring-[#171717]/15"
                 />
               </div>
-            </FieldValidation>
 
-            <FieldValidation field="password" errors={validationErrors}>
               <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-sm font-medium text-[#262626]">
+                    Contraseña
+                  </Label>
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
-                    placeholder="••••••••"
+                    placeholder="Tu contraseña"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onBlur={handlePasswordBlur}
+                    onChange={(event) => setPassword(event.target.value)}
                     required
                     disabled={isLoading}
-                    className={
-                      touched.password &&
-                      validationErrors.some((e) => e.field === "password")
-                        ? "border-red-500 focus:border-red-500"
-                        : ""
-                    }
+                    className="h-11 rounded-lg border-[#dedede] bg-white px-3.5 pr-11 text-sm shadow-none placeholder:text-[#a3a3a3] focus-visible:border-[#171717] focus-visible:ring-[#171717]/15"
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() => setShowPassword((visible) => !visible)}
                     disabled={isLoading}
-                    aria-label={
-                      showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-                    }
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    aria-pressed={showPassword}
+                    className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-[#737373] transition-colors hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#171717]/30 disabled:opacity-50"
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
+                      <EyeOff aria-hidden="true" className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <Eye aria-hidden="true" className="h-4 w-4" />
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
-            </FieldValidation>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading || !isFormValid}
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Iniciar Sesión
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                className="h-11 w-full rounded-lg bg-[#171717] text-sm font-medium text-white shadow-none transition-colors hover:bg-[#333]"
+                disabled={isLoading || !email.trim() || !password}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+                    Iniciando sesión…
+                  </>
+                ) : (
+                  "Iniciar sesión"
+                )}
+              </Button>
+            </form>
 
-          <div className="text-center text-sm">
-            <Link
-              href="/register"
-              className="text-[#171717] underline-offset-4 hover:underline"
-            >
-              ¿No tienes cuenta? Regístrate aquí
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            <div className="border-t border-[#ebebeb] pt-5 text-center text-sm text-[#737373]">
+              ¿Aún no tienes cuenta?{" "}
+              <Link
+                href="/register"
+                className="font-medium text-[#171717] underline-offset-4 transition-colors hover:text-[#525252] hover:underline"
+              >
+                Crear cuenta
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        <p className="mt-5 text-center text-xs text-[#8c8c8c]">
+          Tu información clínica está protegida.
+        </p>
+      </div>
+    </main>
   );
 }
