@@ -6,6 +6,12 @@ import {
   patientScopeForActor,
   patientSelfScopeForActor,
 } from "~/server/domain/authorization/access-policy";
+import {
+  patientClinicalScope,
+  resolveClinicalActor,
+} from "~/server/domain/clinical/access";
+
+const medicalHistorySharingPolicyVersion = "medical-history-sharing-v1";
 
 function actorFromSession(sessionUser: {
   id: string;
@@ -37,6 +43,14 @@ export const usePatients = createTRPCRouter({
           403,
         );
       }
+      const workspace = await ctx.getWorkspace();
+      if (ctx.session.user.role === "DOCTOR" && !workspace) {
+        return trpcFailure(
+          "WORKSPACE_REQUIRED",
+          "Selecciona o configura un consultorio para agregar pacientes al seguimiento.",
+          400,
+        );
+      }
       try {
         const user = await ctx.db.user.findUnique({
           where: { id: input.userId },
@@ -57,14 +71,26 @@ export const usePatients = createTRPCRouter({
           );
         }
 
-        const newPatient = await ctx.db.patient.create({
-          data: {
-            userId: input.userId,
-            phone: input.phone,
-            birthDate: input.birthDate,
-            gender: input.gender,
-            address: input.address,
-          },
+        const newPatient = await ctx.db.$transaction(async (tx) => {
+          const patient = await tx.patient.create({
+            data: {
+              userId: input.userId,
+              phone: input.phone,
+              birthDate: input.birthDate,
+              gender: input.gender,
+              address: input.address,
+            },
+          });
+          if (workspace) {
+            await tx.clinicPatient.create({
+              data: {
+                clinicId: workspace.clinicId,
+                patientId: patient.id,
+                addedByUserId: ctx.session.user.id,
+              },
+            });
+          }
+          return patient;
         });
         return trpcSuccess(newPatient, "Paciente creado correctamente", 201);
       } catch {
@@ -184,10 +210,20 @@ export const usePatients = createTRPCRouter({
   getMedicalHistory: protectedProcedure
     .input(z.object({ patientId: z.string() }))
     .query(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "PATIENT") {
+        return trpcFailure(
+          "FORBIDDEN",
+          "El historial completo sólo está disponible para el paciente.",
+          403,
+        );
+      }
       const actor = actorFromSession(ctx.session.user);
       try {
         const patient = await ctx.db.patient.findFirst({
-          where: { id: input.patientId, ...patientScopeForActor(actor) },
+          where: {
+            id: input.patientId,
+            ...patientScopeForActor(actor),
+          },
           select: { id: true },
         });
         if (!patient) {
@@ -211,14 +247,201 @@ export const usePatients = createTRPCRouter({
       }
     }),
 
+  listMedicalHistorySharing: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "PATIENT") {
+      return trpcFailure(
+        "FORBIDDEN",
+        "Sólo el paciente puede administrar este permiso.",
+        403,
+      );
+    }
+    const patient = await ctx.db.patient.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+    if (!patient)
+      return trpcFailure("PATIENT_NOT_FOUND", "Perfil no encontrado", 404);
+
+    const [clinics, consents] = await Promise.all([
+      ctx.db.clinic.findMany({
+        where: {
+          OR: [
+            {
+              patientMemberships: {
+                some: { patientId: patient.id, status: "ACTIVE" },
+              },
+            },
+            { patients: { some: { id: patient.id } } },
+            { appointments: { some: { patientId: patient.id } } },
+          ],
+        },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      ctx.db.medicalHistoryConsent.findMany({
+        where: { patientId: patient.id },
+        select: {
+          clinicId: true,
+          status: true,
+          grantedAt: true,
+          revokedAt: true,
+        },
+      }),
+    ]);
+    const consentByClinic = new Map(
+      consents.map((consent) => [consent.clinicId, consent]),
+    );
+    return trpcSuccess(
+      clinics.map((clinic) => {
+        const consent = consentByClinic.get(clinic.id);
+        return {
+          ...clinic,
+          isGranted: consent?.status === "GRANTED",
+          grantedAt: consent?.grantedAt ?? null,
+          revokedAt: consent?.revokedAt ?? null,
+        };
+      }),
+      "Permisos para compartir antecedentes",
+    );
+  }),
+
+  setMedicalHistorySharing: protectedProcedure
+    .input(z.object({ clinicId: z.string().cuid(), granted: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "PATIENT") {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo el paciente puede administrar este permiso.",
+          403,
+        );
+      }
+      const patient = await ctx.db.patient.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!patient)
+        return trpcFailure("PATIENT_NOT_FOUND", "Perfil no encontrado", 404);
+
+      try {
+        const consent = await ctx.db.$transaction(async (tx) => {
+          const clinicAccess = await tx.clinic.findFirst({
+            where: {
+              id: input.clinicId,
+              OR: [
+                {
+                  patientMemberships: {
+                    some: { patientId: patient.id, status: "ACTIVE" },
+                  },
+                },
+                { patients: { some: { id: patient.id } } },
+                { appointments: { some: { patientId: patient.id } } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (!clinicAccess) throw new Error("CLINIC_ACCESS_REQUIRED");
+
+          const existing = await tx.medicalHistoryConsent.findUnique({
+            where: {
+              patientId_clinicId: {
+                patientId: patient.id,
+                clinicId: input.clinicId,
+              },
+            },
+          });
+          const desiredStatus = input.granted ? "GRANTED" : "REVOKED";
+          if (existing?.status === desiredStatus) return existing;
+
+          const now = new Date();
+          const updated = await tx.medicalHistoryConsent.upsert({
+            where: {
+              patientId_clinicId: {
+                patientId: patient.id,
+                clinicId: input.clinicId,
+              },
+            },
+            create: {
+              patientId: patient.id,
+              clinicId: input.clinicId,
+              status: desiredStatus,
+              policyVersion: medicalHistorySharingPolicyVersion,
+              grantedAt: input.granted ? now : null,
+              revokedAt: input.granted ? null : now,
+            },
+            update: {
+              status: desiredStatus,
+              policyVersion: medicalHistorySharingPolicyVersion,
+              grantedAt: input.granted ? now : existing?.grantedAt,
+              revokedAt: input.granted ? null : now,
+            },
+          });
+          await tx.clinicalAuditEvent.create({
+            data: {
+              clinicId: input.clinicId,
+              patientId: patient.id,
+              actorUserId: ctx.session.user.id,
+              resourceType: "MEDICAL_HISTORY_CONSENT",
+              resourceId: updated.id,
+              action: input.granted
+                ? "MEDICAL_HISTORY_SHARING_GRANTED"
+                : "MEDICAL_HISTORY_SHARING_REVOKED",
+              metadata: { policyVersion: medicalHistorySharingPolicyVersion },
+            },
+          });
+          return updated;
+        });
+        return trpcSuccess(
+          { clinicId: consent.clinicId, granted: consent.status === "GRANTED" },
+          input.granted ? "Permiso otorgado" : "Permiso revocado",
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "CLINIC_ACCESS_REQUIRED"
+        ) {
+          return trpcFailure(
+            "CLINIC_ACCESS_REQUIRED",
+            "No existe una relación activa con este consultorio.",
+            403,
+          );
+        }
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No se pudo actualizar el permiso.",
+          500,
+        );
+      }
+    }),
+
   // Obtener paciente por ID
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
       const actor = actorFromSession(ctx.session.user);
       try {
+        const clinicalActor =
+          actor.role === "DOCTOR"
+            ? await resolveClinicalActor({
+                db: ctx.db,
+                userId: ctx.session.user.id,
+                role: ctx.session.user.role,
+                workspace: await ctx.getWorkspace(),
+              })
+            : null;
+        if (actor.role === "DOCTOR" && !clinicalActor) {
+          return trpcFailure(
+            "CLINICAL_ACCESS_REQUIRED",
+            "Acceso al consultorio requerido",
+            403,
+          );
+        }
         const patient = await ctx.db.patient.findFirst({
-          where: { id: input.id, ...patientScopeForActor(actor) },
+          where: {
+            id: input.id,
+            ...(clinicalActor
+              ? patientClinicalScope(clinicalActor)
+              : patientScopeForActor(actor)),
+          },
         });
         if (!patient) {
           return trpcFailure(
@@ -411,18 +634,20 @@ export const usePatients = createTRPCRouter({
       if (ctx.session.user.role === "PATIENT") {
         where = { userId: ctx.session.user.id };
       } else if (ctx.session.user.role === "DOCTOR") {
-        const doctor = await ctx.db.doctor.findUnique({
-          where: { userId: ctx.session.user.id },
-          select: { id: true },
+        const clinicalActor = await resolveClinicalActor({
+          db: ctx.db,
+          userId: ctx.session.user.id,
+          role: ctx.session.user.role,
+          workspace: await ctx.getWorkspace(),
         });
-        if (!doctor) {
+        if (!clinicalActor) {
           return trpcFailure(
-            "DOCTOR_PROFILE_NOT_FOUND",
-            "No se encontró el perfil del doctor",
-            404,
+            "CLINICAL_ACCESS_REQUIRED",
+            "Acceso al consultorio requerido",
+            403,
           );
         }
-        where = { appointments: { some: { doctorId: doctor.id } } };
+        where = patientClinicalScope(clinicalActor);
       } else if (ctx.session.user.role === "ADMIN") {
         where = {};
       } else {

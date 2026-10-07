@@ -32,6 +32,18 @@ const signinSchema = z.object({
   password: z.string().min(1, "La contraseña es requerida"),
 });
 
+const isVercelBlobUrl = (image: string) => {
+  try {
+    const url = new URL(image);
+    return (
+      url.protocol === "https:" &&
+      /^[a-z0-9-]+\.(?:(?:public|private)\.)?blob\.vercel-storage\.com$/i.test(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const authRouter = createTRPCRouter({
   register: publicProcedure
     .input(registerSchema)
@@ -232,7 +244,7 @@ export const authRouter = createTRPCRouter({
         name: z.string().min(2).optional(),
         email: z.string().email().optional(),
         phone: z.string().min(10).optional(),
-        image: z.string().url().nullable().optional(),
+        image: z.string().min(1).max(2048).nullable().optional(),
         specialty: z.string().optional(),
         about: z.string().optional(),
         experience: z.number().min(0).optional(),
@@ -255,6 +267,32 @@ export const authRouter = createTRPCRouter({
 
       if (typeof userFields.email === "string") {
         userFields.email = userFields.email.toLowerCase().trim();
+      }
+
+      if (userFields.image !== undefined && userFields.image !== null) {
+        const rolePrefix =
+          ctx.session.user.role === "PATIENT"
+            ? `avatars/patients/${userId}/profile`
+            : ctx.session.user.role === "DOCTOR"
+              ? `avatars/doctors/${userId}/profile`
+              : null;
+        const isPrivateAvatarPath = Boolean(
+          rolePrefix &&
+            (userFields.image === rolePrefix ||
+              userFields.image.startsWith(`${rolePrefix}-`)),
+        );
+        const isLegacyExternalDoctorImage =
+          ctx.session.user.role === "DOCTOR" &&
+          z.string().url().safeParse(userFields.image).success &&
+          !isVercelBlobUrl(userFields.image);
+
+        if (!isPrivateAvatarPath && !isLegacyExternalDoctorImage) {
+          return trpcFailure(
+            "INVALID_PROFILE_IMAGE",
+            "La foto de perfil debe cargarse desde el almacenamiento privado.",
+            400,
+          );
+        }
       }
 
       try {

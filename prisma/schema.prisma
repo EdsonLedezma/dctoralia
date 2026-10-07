@@ -3,9 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "postgresql"
 }
 
 model Account {
@@ -47,12 +45,23 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts          Account[]
-  sessions          Session[]
-  doctor            Doctor?
-  patient           Patient?
-  clinicMemberships ClinicMember[]
-  clinicInvitations ClinicInvitation[] @relation("ClinicInvitations")
+  accounts                   Account[]
+  sessions                   Session[]
+  doctor                     Doctor?
+  patient                    Patient?
+  clinicMemberships          ClinicMember[]
+  clinicInvitations          ClinicInvitation[]           @relation("ClinicInvitations")
+  createdCareEpisodes        CareEpisode[]                @relation("CareEpisodeCreator")
+  authoredEncounters         ClinicalEncounter[]          @relation("ClinicalEncounterAuthor")
+  assignedFollowUpTasks      FollowUpTask[]               @relation("FollowUpAssignee")
+  createdFollowUpTasks       FollowUpTask[]               @relation("FollowUpCreator")
+  completedFollowUpTasks     FollowUpTask[]               @relation("FollowUpCompleter")
+  recordedOutcomeAssessments OutcomeAssessment[]          @relation("OutcomeRecorder")
+  clinicalAuditEvents        ClinicalAuditEvent[]         @relation("ClinicalAuditActor")
+  authoredClinicalAmendments ClinicalEncounterAmendment[] @relation("ClinicalAmendmentAuthor")
+  appointmentLifecycleEvents AppointmentLifecycleEvent[]  @relation("AppointmentLifecycleActor")
+  addedClinicPatients        ClinicPatient[]              @relation("ClinicPatientAdder")
+  uploadedClinicalFiles      ClinicalFile[]               @relation("ClinicalFileUploader")
 }
 
 /// Tenant boundary for a medical practice. Links on current operational
@@ -65,19 +74,29 @@ model Clinic {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  locations     ClinicLocation[]
-  members       ClinicMember[]
-  invitations   ClinicInvitation[]
-  subscription  ClinicSubscription?
-  doctors       Doctor[]            @relation("ClinicDoctors")
-  patients      Patient[]           @relation("ClinicPatients")
-  services      Service[]           @relation("ClinicServices")
-  appointments  Appointment[]       @relation("ClinicAppointments")
-  schedules     Schedule[]          @relation("ClinicSchedules")
-  reviews       Review[]            @relation("ClinicReviews")
-  notifications Notification[]      @relation("ClinicNotifications")
-  messageOutbox MessageOutbox[]
-  messageInbox  MessageInbox[]
+  locations                   ClinicLocation[]
+  members                     ClinicMember[]
+  invitations                 ClinicInvitation[]
+  subscription                ClinicSubscription?
+  doctors                     Doctor[]                     @relation("ClinicDoctors")
+  patients                    Patient[]                    @relation("ClinicPatients")
+  services                    Service[]                    @relation("ClinicServices")
+  appointments                Appointment[]                @relation("ClinicAppointments")
+  schedules                   Schedule[]                   @relation("ClinicSchedules")
+  reviews                     Review[]                     @relation("ClinicReviews")
+  notifications               Notification[]               @relation("ClinicNotifications")
+  messageOutbox               MessageOutbox[]
+  messageInbox                MessageInbox[]
+  careEpisodes                CareEpisode[]
+  encounters                  ClinicalEncounter[]
+  followUpTasks               FollowUpTask[]
+  outcomeAssessments          OutcomeAssessment[]
+  clinicalAuditEvents         ClinicalAuditEvent[]
+  clinicalEncounterAmendments ClinicalEncounterAmendment[]
+  appointmentLifecycleEvents  AppointmentLifecycleEvent[]
+  patientMemberships          ClinicPatient[]
+  clinicalFiles               ClinicalFile[]
+  medicalHistoryConsents      MedicalHistoryConsent[]
 }
 
 model ClinicLocation {
@@ -201,13 +220,16 @@ model Doctor {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clinic        Clinic?        @relation("ClinicDoctors", fields: [clinicId], references: [id], onDelete: SetNull)
-  appointments  Appointment[]  @relation("DoctorAppointments")
-  services      Service[]      @relation("DoctorServices")
-  schedules     Schedule[]
-  reviews       Review[]       @relation("DoctorReviews")
-  notifications Notification[] @relation("DoctorNotifications")
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic                     Clinic?                     @relation("ClinicDoctors", fields: [clinicId], references: [id], onDelete: SetNull)
+  appointments               Appointment[]               @relation("DoctorAppointments")
+  services                   Service[]                   @relation("DoctorServices")
+  schedules                  Schedule[]
+  reviews                    Review[]                    @relation("DoctorReviews")
+  notifications              Notification[]              @relation("DoctorNotifications")
+  careEpisodes               CareEpisode[]
+  encounters                 ClinicalEncounter[]
+  appointmentLifecycleEvents AppointmentLifecycleEvent[]
 
   @@index([clinicId])
 }
@@ -223,14 +245,44 @@ model Patient {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clinic         Clinic?         @relation("ClinicPatients", fields: [clinicId], references: [id], onDelete: SetNull)
-  appointments   Appointment[]   @relation("PatientAppointments")
-  reviews        Review[]        @relation("PatientReviews")
-  medicalHistory MedicalHistory?
-  notifications  Notification[]  @relation("PatientNotifications")
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic                     Clinic?                     @relation("ClinicPatients", fields: [clinicId], references: [id], onDelete: SetNull)
+  appointments               Appointment[]               @relation("PatientAppointments")
+  reviews                    Review[]                    @relation("PatientReviews")
+  medicalHistory             MedicalHistory?
+  notifications              Notification[]              @relation("PatientNotifications")
+  careEpisodes               CareEpisode[]
+  encounters                 ClinicalEncounter[]
+  followUpTasks              FollowUpTask[]
+  outcomeAssessments         OutcomeAssessment[]
+  clinicalAuditEvents        ClinicalAuditEvent[]
+  appointmentLifecycleEvents AppointmentLifecycleEvent[]
+  clinicMemberships          ClinicPatient[]
+  clinicalFiles              ClinicalFile[]
+  medicalHistoryConsents     MedicalHistoryConsent[]
 
   @@index([clinicId])
+}
+
+/// Explicit membership of a patient identity in a practice. A patient can
+/// receive care at multiple clinics without sharing one clinic's chart.
+model ClinicPatient {
+  id            String              @id @default(cuid())
+  clinicId      String
+  patientId     String
+  addedByUserId String?
+  source        ClinicPatientSource @default(MANUAL)
+  status        ClinicPatientStatus @default(ACTIVE)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  addedBy User?   @relation("ClinicPatientAdder", fields: [addedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([clinicId, patientId])
+  @@index([clinicId, status, updatedAt])
+  @@index([patientId, status])
 }
 
 model Service {
@@ -270,11 +322,13 @@ model Appointment {
   clinicId   String?
   locationId String?
 
-  doctor   Doctor          @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
-  patient  Patient         @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
-  service  Service         @relation("ServiceAppointments", fields: [serviceId], references: [id], onDelete: Cascade)
-  clinic   Clinic?         @relation("ClinicAppointments", fields: [clinicId], references: [id], onDelete: SetNull)
-  location ClinicLocation? @relation("LocationAppointments", fields: [locationId], references: [id], onDelete: SetNull)
+  doctor            Doctor                      @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  patient           Patient                     @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  service           Service                     @relation("ServiceAppointments", fields: [serviceId], references: [id], onDelete: Cascade)
+  clinic            Clinic?                     @relation("ClinicAppointments", fields: [clinicId], references: [id], onDelete: SetNull)
+  location          ClinicLocation?             @relation("LocationAppointments", fields: [locationId], references: [id], onDelete: SetNull)
+  clinicalEncounter ClinicalEncounter?
+  lifecycleEvents   AppointmentLifecycleEvent[]
 
   @@index([clinicId, date, status])
   @@index([locationId, date])
@@ -351,6 +405,71 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum AppointmentLifecycleEventType {
+  CREATED
+  STATUS_CHANGED
+  RESCHEDULED
+}
+
+enum ClinicPatientStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ClinicPatientSource {
+  MANUAL
+  LEGACY_BACKFILL
+}
+
+enum CareEpisodeStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ClinicalEncounterStatus {
+  DRAFT
+  SIGNED
+  CANCELLED
+}
+
+enum ClinicalFileCategory {
+  LAB_RESULT
+  IMAGING
+  PRESCRIPTION
+  REFERRAL
+  CONSENT
+  OTHER
+}
+
+enum MedicalHistoryConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+enum FollowUpTaskType {
+  FOLLOW_UP_APPOINTMENT
+  REVIEW_RESULT
+  PATIENT_CHECK_IN
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum FollowUpTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum FollowUpTaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 // Severidad declarada/estimada de la cita
 enum AppointmentSeverity {
   LOW
@@ -401,6 +520,244 @@ model MedicalHistory {
   lastUpdated       DateTime     @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+/// Longitudinal clinical pathway for a patient within one clinic.
+model CareEpisode {
+  id              String            @id @default(cuid())
+  clinicId        String
+  patientId       String
+  primaryDoctorId String
+  createdByUserId String
+  title           String
+  status          CareEpisodeStatus @default(ACTIVE)
+  openedAt        DateTime          @default(now())
+  closedAt        DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  clinic        Clinic              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  primaryDoctor Doctor              @relation(fields: [primaryDoctorId], references: [id], onDelete: Restrict)
+  createdBy     User                @relation("CareEpisodeCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  encounters    ClinicalEncounter[]
+  followUpTasks FollowUpTask[]
+  assessments   OutcomeAssessment[]
+  clinicalFiles ClinicalFile[]
+
+  @@index([clinicId, patientId, status, updatedAt])
+  @@index([clinicId, primaryDoctorId, status, updatedAt])
+}
+
+/// A provider-authored record for one clinical interaction. Signed encounters
+/// are immutable through application use cases; corrections use amendments.
+model ClinicalEncounter {
+  id               String                  @id @default(cuid())
+  clinicId         String
+  patientId        String
+  doctorId         String
+  appointmentId    String?                 @unique
+  episodeId        String?
+  authoredByUserId String
+  status           ClinicalEncounterStatus @default(DRAFT)
+  encounterAt      DateTime                @default(now())
+  chiefComplaint   String?                 @db.Text
+  subjective       String?                 @db.Text
+  objective        String?                 @db.Text
+  assessment       String?                 @db.Text
+  plan             String?                 @db.Text
+  signedAt         DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  clinic        Clinic                       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient       Patient                      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor        Doctor                       @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  appointment   Appointment?                 @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  episode       CareEpisode?                 @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  authoredBy    User                         @relation("ClinicalEncounterAuthor", fields: [authoredByUserId], references: [id], onDelete: Restrict)
+  amendments    ClinicalEncounterAmendment[]
+  followUpTasks FollowUpTask[]
+  assessments   OutcomeAssessment[]
+  clinicalFiles ClinicalFile[]
+
+  @@index([clinicId, patientId, encounterAt(sort: Desc)])
+  @@index([clinicId, doctorId, encounterAt(sort: Desc)])
+  @@index([clinicId, episodeId, encounterAt(sort: Desc)])
+}
+
+/// Append-only correction attached to a signed encounter.
+model ClinicalEncounterAmendment {
+  id               String   @id @default(cuid())
+  clinicId         String
+  encounterId      String
+  authoredByUserId String
+  reason           String   @db.Text
+  changes          Json
+  createdAt        DateTime @default(now())
+
+  encounter  ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  clinic     Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  authoredBy User              @relation("ClinicalAmendmentAuthor", fields: [authoredByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, encounterId, createdAt])
+}
+
+/// Operational work that keeps a care plan moving between consultations.
+model FollowUpTask {
+  id                String               @id @default(cuid())
+  clinicId          String
+  patientId         String
+  episodeId         String?
+  encounterId       String?
+  assignedToUserId  String?
+  createdByUserId   String
+  completedByUserId String?
+  title             String
+  details           String?              @db.Text
+  type              FollowUpTaskType     @default(OTHER)
+  priority          FollowUpTaskPriority @default(NORMAL)
+  status            FollowUpTaskStatus   @default(OPEN)
+  dueAt             DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  clinic      Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  episode     CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  encounter   ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  assignedTo  User?              @relation("FollowUpAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdBy   User               @relation("FollowUpCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  completedBy User?              @relation("FollowUpCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, status, dueAt])
+  @@index([clinicId, assignedToUserId, status, dueAt])
+  @@index([clinicId, patientId, createdAt(sort: Desc)])
+}
+
+/// Versioned instrument result. Raw answers and numeric score are retained so
+/// analytics can state which instrument and version produced each comparison.
+model OutcomeAssessment {
+  id                 String   @id @default(cuid())
+  clinicId           String
+  patientId          String
+  episodeId          String?
+  encounterId        String?
+  recordedByUserId   String
+  instrumentCode     String
+  instrumentVersion  String
+  score              Decimal? @db.Decimal(10, 3)
+  scoreMin           Decimal? @db.Decimal(10, 3)
+  scoreMax           Decimal? @db.Decimal(10, 3)
+  responses          Json
+  completedItemCount Int?
+  totalItemCount     Int?
+  measuredAt         DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  clinic     Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient    Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  episode    CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  encounter  ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  recordedBy User               @relation("OutcomeRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, patientId, instrumentCode, instrumentVersion, measuredAt])
+  @@index([clinicId, episodeId, measuredAt])
+}
+
+/// Audit metadata only: never duplicate free-text clinical notes here.
+model ClinicalAuditEvent {
+  id           String   @id @default(cuid())
+  clinicId     String
+  patientId    String?
+  actorUserId  String?
+  resourceType String
+  resourceId   String
+  action       String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  clinic  Clinic   @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  actor   User?    @relation("ClinicalAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, patientId, createdAt(sort: Desc)])
+  @@index([clinicId, resourceType, resourceId, createdAt])
+  @@index([clinicId, actorUserId, createdAt(sort: Desc)])
+}
+
+/// Metadata for documents stored in a private Vercel Blob store. The opaque
+/// pathname is never returned to the browser or used as a public URL.
+model ClinicalFile {
+  id               String               @id @default(cuid())
+  clinicId         String
+  patientId        String
+  episodeId        String?
+  encounterId      String?
+  uploadedByUserId String
+  blobPathname     String               @unique
+  originalFilename String
+  mediaType        String
+  sizeBytes        Int
+  category         ClinicalFileCategory @default(OTHER)
+  createdAt        DateTime             @default(now())
+
+  clinic     Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient    Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  episode    CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  encounter  ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  uploadedBy User               @relation("ClinicalFileUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, patientId, createdAt(sort: Desc)])
+  @@index([clinicId, episodeId, createdAt(sort: Desc)])
+}
+
+/// Patient-controlled permission for one clinic to read their self-reported
+/// MedicalHistory. Consent changes are separately appended to ClinicalAuditEvent.
+model MedicalHistoryConsent {
+  id            String                      @id @default(cuid())
+  patientId     String
+  clinicId      String
+  status        MedicalHistoryConsentStatus @default(REVOKED)
+  policyVersion String
+  grantedAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@unique([patientId, clinicId])
+  @@index([clinicId, status, updatedAt])
+}
+
+/// Immutable operational events used to explain appointment analytics over time.
+model AppointmentLifecycleEvent {
+  id            String                        @id @default(cuid())
+  clinicId      String?
+  appointmentId String?
+  patientId     String?
+  doctorId      String?
+  actorUserId   String?
+  eventType     AppointmentLifecycleEventType
+  fromStatus    AppointmentStatus?
+  toStatus      AppointmentStatus
+  scheduledAt   DateTime?
+  scheduledTime String?
+  metadata      Json?
+  occurredAt    DateTime                      @default(now())
+
+  clinic      Clinic?      @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patient     Patient?     @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  doctor      Doctor?      @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  actor       User?        @relation("AppointmentLifecycleActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, occurredAt, eventType])
+  @@index([clinicId, doctorId, occurredAt])
+  @@index([appointmentId, occurredAt])
 }
 
 // Notificaciones para eventos de citas

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Sun, Sunset, Moon, Clock } from "lucide-react";
 import { cn } from "~/lib/utils";
 
@@ -26,6 +27,7 @@ export function TimeSlotPicker({
   className,
   emptyMessage = "No hay horarios disponibles para esta fecha.",
 }: TimeSlotPickerProps) {
+  const shouldReduceMotion = useReducedMotion();
   const groups = React.useMemo<SlotGroup[]>(() => {
     const morning: string[] = [];
     const afternoon: string[] = [];
@@ -83,41 +85,69 @@ export function TimeSlotPicker({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {groups.map((group) => {
-        const Icon = group.icon;
-        return (
-          <div key={group.id} className="space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#737373]">
-              <Icon className="h-3.5 w-3.5 text-[#171717]" />
-              <span>{group.title}</span>
-              <span className="ml-auto rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[10px] font-mono font-medium text-[#525252]">
-                {group.slots.length}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-3">
-              {group.slots.map((time) => {
-                const isSelected = selectedTime === time;
-                return (
-                  <button
-                    key={time}
-                    type="button"
-                    onClick={() => onSelectTime(time)}
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "flex items-center justify-center rounded-md border px-3 py-2 text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#171717]",
-                      isSelected
-                        ? "border-[#171717] bg-[#171717] text-white shadow-xs"
-                        : "border-[#ebebeb] bg-white text-[#171717] hover:border-[#171717] hover:bg-[#fafafa]"
-                    )}
-                  >
-                    {time}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+      <AnimatePresence initial={false} mode="popLayout">
+        {groups.map((group) => {
+          const Icon = group.icon;
+          return (
+            <motion.div
+              key={group.id}
+              layout={!shouldReduceMotion}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={shouldReduceMotion ? undefined : { opacity: 0, y: -2 }}
+              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-2"
+            >
+              <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-[#737373] uppercase">
+                <Icon className="h-3.5 w-3.5 text-[#171717]" />
+                <span>{group.title}</span>
+                <span className="ml-auto rounded-full bg-[#f5f5f5] px-2 py-0.5 font-mono text-[10px] font-medium text-[#525252]">
+                  {group.slots.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-3">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {group.slots.map((time) => {
+                    const isSelected = selectedTime === time;
+                    return (
+                      <motion.button
+                        key={time}
+                        type="button"
+                        layout={!shouldReduceMotion}
+                        initial={
+                          shouldReduceMotion
+                            ? false
+                            : { opacity: 0, scale: 0.98 }
+                        }
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={
+                          shouldReduceMotion
+                            ? undefined
+                            : { opacity: 0, scale: 0.98 }
+                        }
+                        whileTap={
+                          shouldReduceMotion ? undefined : { scale: 0.97 }
+                        }
+                        transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+                        onClick={() => onSelectTime(time)}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "flex min-h-10 items-center justify-center rounded-md border px-3 py-2 text-xs font-medium focus-visible:ring-2 focus-visible:ring-[#171717]/30 focus-visible:outline-none",
+                          isSelected
+                            ? "border-[#171717] bg-[#171717] text-white shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
+                            : "border-[#ebebeb] bg-white text-[#171717] transition-[background-color,border-color] duration-150 hover:border-[#a1a1a1] hover:bg-[#fafafa]",
+                        )}
+                      >
+                        {time}
+                      </motion.button>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }

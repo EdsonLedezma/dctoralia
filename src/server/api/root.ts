@@ -11,6 +11,7 @@ import { reviewRouter } from "~/server/api/routers/review";
 import { workspaceRouter } from "~/server/api/routers/workspace";
 import { billingRouter } from "~/server/api/routers/billing";
 import { messagingRouter } from "~/server/api/routers/messaging";
+import { clinicalRouter } from "~/server/api/routers/clinical";
 
 /**
  * This is the primary router for your server.
@@ -30,6 +31,7 @@ export const appRouter = createTRPCRouter({
   workspace: workspaceRouter,
   billing: billingRouter,
   messaging: messagingRouter,
+  clinical: clinicalRouter,
 });
 
 // export type definition of API

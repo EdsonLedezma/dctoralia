@@ -6,6 +6,32 @@ import {
 import { z } from "zod";
 import type { PrismaClient, Role } from "@prisma/client";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
+import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import {
+  patientClinicalScope,
+  resolveClinicalActor,
+} from "~/server/domain/clinical/access";
+
+function hideLegacyVercelBlobImages<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(hideLegacyVercelBlobImages) as T;
+  }
+  if (!value || typeof value !== "object" || value instanceof Date) return value;
+
+  const sanitized = Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (
+        key === "image" &&
+        typeof entry === "string" &&
+        /\.(?:public|private)\.blob\.vercel-storage\.com(?:\/|$)/i.test(entry)
+      ) {
+        return [key, null];
+      }
+      return [key, hideLegacyVercelBlobImages(entry)];
+    }),
+  );
+  return sanitized as T;
+}
 
 async function getManagedDoctorId(
   ctx: { db: PrismaClient; session: { user: { id: string; role: Role } } },
@@ -40,7 +66,10 @@ export const useDoctor = createTRPCRouter({
         },
         orderBy: { createdAt: "desc" },
       });
-      return trpcSuccess(doctors, "Doctores obtenidos correctamente");
+      return trpcSuccess(
+        hideLegacyVercelBlobImages(doctors),
+        "Doctores obtenidos correctamente",
+      );
     } catch {
       return trpcFailure("INTERNAL_ERROR", "Error al obtener doctores", 500);
     }
@@ -62,7 +91,10 @@ export const useDoctor = createTRPCRouter({
         },
         orderBy: { createdAt: "desc" },
       });
-      return trpcSuccess(doctors, "Doctores disponibles");
+      return trpcSuccess(
+        hideLegacyVercelBlobImages(doctors),
+        "Doctores disponibles",
+      );
     } catch {
       return trpcFailure(
         "INTERNAL_ERROR",
@@ -102,7 +134,10 @@ export const useDoctor = createTRPCRouter({
           },
           orderBy: { createdAt: "desc" },
         });
-        return trpcSuccess(doctors, "Resultados de búsqueda de doctores");
+        return trpcSuccess(
+          hideLegacyVercelBlobImages(doctors),
+          "Resultados de búsqueda de doctores",
+        );
       } catch {
         return trpcFailure("INTERNAL_ERROR", "Error al buscar doctores", 500);
       }
@@ -135,7 +170,10 @@ export const useDoctor = createTRPCRouter({
         if (!doctor) {
           return trpcFailure("DOCTOR_NOT_FOUND", "Doctor no encontrado", 404);
         }
-        return trpcSuccess(doctor, "Doctor encontrado");
+        return trpcSuccess(
+          hideLegacyVercelBlobImages(doctor),
+          "Doctor encontrado",
+        );
       } catch {
         return trpcFailure("INTERNAL_ERROR", "Error al buscar doctor", 500);
       }
@@ -159,7 +197,10 @@ export const useDoctor = createTRPCRouter({
           404,
         );
       }
-      return trpcSuccess(doctor, "Perfil de doctor encontrado");
+      return trpcSuccess(
+        hideLegacyVercelBlobImages(doctor),
+        "Perfil de doctor encontrado",
+      );
     } catch {
       return trpcFailure(
         "INTERNAL_ERROR",
@@ -364,7 +405,10 @@ export const useDoctor = createTRPCRouter({
         );
       }
 
-      return trpcSuccess(doctor, "Perfil del doctor");
+      return trpcSuccess(
+        hideLegacyVercelBlobImages(doctor),
+        "Perfil del doctor",
+      );
     } catch {
       return trpcFailure("INTERNAL_ERROR", "Error al obtener perfil", 500);
     }
@@ -379,22 +423,25 @@ export const useDoctor = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       try {
-        const doctor = await ctx.db.doctor.findFirst({
-          where: { userId: ctx.session.user.id },
+        const workspace = await ctx.getWorkspace();
+        const actor = await resolveClinicalActor({
+          db: ctx.db,
+          userId: ctx.session.user.id,
+          role: ctx.session.user.role,
+          workspace,
         });
-
-        if (!doctor) {
-          return trpcFailure("DOCTOR_NOT_FOUND", "Doctor no encontrado", 404);
+        if (!actor) {
+          return trpcFailure(
+            "CLINICAL_ACCESS_REQUIRED",
+            "Acceso clínico al consultorio requerido",
+            403,
+          );
         }
 
         const patients = await ctx.db.patient.findMany({
           where: {
             AND: [
-              {
-                appointments: {
-                  some: { doctorId: doctor.id },
-                },
-              },
+              patientClinicalScope(actor),
               input.search
                 ? {
                     user: {
@@ -407,12 +454,14 @@ export const useDoctor = createTRPCRouter({
           include: {
             user: { select: { name: true, email: true, image: true } },
             appointments: {
-              where: { doctorId: doctor.id },
+              where: {
+                doctorId: actor.doctorId,
+                clinicId: actor.clinicId,
+              },
               include: { service: true },
               orderBy: { date: "desc" },
               take: 5,
             },
-            medicalHistory: true,
           },
           orderBy: { createdAt: "desc" },
         });
@@ -428,32 +477,41 @@ export const useDoctor = createTRPCRouter({
     .input(z.object({ patientId: z.string() }))
     .query(async ({ input, ctx }) => {
       try {
-        const doctor = await ctx.db.doctor.findFirst({
-          where: { userId: ctx.session.user.id },
+        const workspace = await ctx.getWorkspace();
+        const actor = await resolveClinicalActor({
+          db: ctx.db,
+          userId: ctx.session.user.id,
+          role: ctx.session.user.role,
+          workspace,
         });
-
-        if (!doctor) {
-          return trpcFailure("DOCTOR_PROFILE_NOT_FOUND", "No eres doctor", 404);
+        if (!actor) {
+          return trpcFailure(
+            "CLINICAL_ACCESS_REQUIRED",
+            "Acceso clínico al consultorio requerido",
+            403,
+          );
         }
 
         const patient = await ctx.db.patient.findFirst({
           where: {
             id: input.patientId,
-            appointments: { some: { doctorId: doctor.id } },
+            ...patientClinicalScope(actor),
           },
           include: {
             user: {
               select: { name: true, email: true, phone: true, image: true },
             },
             appointments: {
-              where: { doctorId: doctor.id },
+              where: {
+                doctorId: actor.doctorId,
+                clinicId: actor.clinicId,
+              },
               include: {
                 service: true,
                 doctor: { select: { user: { select: { name: true } } } },
               },
               orderBy: { date: "desc" },
             },
-            medicalHistory: true,
           },
         });
 
@@ -465,7 +523,46 @@ export const useDoctor = createTRPCRouter({
           );
         }
 
-        return trpcSuccess(patient, "Historial del paciente");
+        const consent = await ctx.db.medicalHistoryConsent.findUnique({
+          where: {
+            patientId_clinicId: {
+              patientId: patient.id,
+              clinicId: actor.clinicId,
+            },
+          },
+          select: { status: true },
+        });
+        const medicalHistory =
+          consent?.status === "GRANTED"
+            ? await ctx.db.medicalHistory.findUnique({
+                where: { patientId: patient.id },
+                select: {
+                  bloodType: true,
+                  allergies: true,
+                  medications: true,
+                  chronicDiseases: true,
+                  lastUpdated: true,
+                },
+              })
+            : null;
+        await recordClinicalRead(ctx.db, actor, {
+          resourceType: "PATIENT_HISTORY",
+          resourceId: patient.id,
+          patientId: patient.id,
+        });
+        if (medicalHistory) {
+          await recordClinicalRead(ctx.db, actor, {
+            resourceType: "MEDICAL_HISTORY",
+            resourceId: patient.id,
+            patientId: patient.id,
+            action: "MEDICAL_HISTORY_READ",
+          });
+        }
+
+        return trpcSuccess(
+          { ...patient, medicalHistory },
+          "Historial del paciente",
+        );
       } catch {
         return trpcFailure("INTERNAL_ERROR", "Error al obtener historial", 500);
       }

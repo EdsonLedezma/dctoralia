@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { api, type RouterOutputs } from "src/trpc/react";
 import { ProductShell } from "~/components/shell/product-shell";
+import { avatarUrl } from "~/lib/avatar-url";
 
 type Doctor = Exclude<
   RouterOutputs["doctor"]["getAll"]["result"],
@@ -51,6 +52,7 @@ export default function DoctorsDirectoryPage() {
     const reviewsCount = d.totalReviews ?? d.reviews?.length ?? 0;
     return {
       id: d.id,
+      userId: d.user?.id ?? "",
       name: d.user?.name ?? "Sin nombre",
       specialty: d.specialty,
       rating: Number(averageRating?.toFixed?.(1) ?? 0),
@@ -232,7 +234,7 @@ export default function DoctorsDirectoryPage() {
                           <Avatar className="h-16 w-16 shrink-0 sm:h-20 sm:w-20">
                             {doctor.image && (
                               <AvatarImage
-                                src={doctor.image}
+                                src={avatarUrl(doctor.image, doctor.userId)}
                                 alt={doctor.name}
                               />
                             )}

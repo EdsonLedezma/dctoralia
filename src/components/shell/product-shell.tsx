@@ -53,6 +53,11 @@ const doctorNav: NavItem[] = [
   { label: "Resumen", href: "/dashboard", icon: LayoutDashboard },
   { label: "Agenda", href: "/dashboard/appointments", icon: CalendarDays },
   { label: "Pacientes", href: "/dashboard/patients", icon: Users },
+  {
+    label: "Seguimiento",
+    href: "/dashboard/follow-ups",
+    icon: Activity,
+  },
   { label: "Workspace", href: "/dashboard/workspace", icon: Building2 },
   { label: "Servicios", href: "/dashboard/services", icon: WalletCards },
   { label: "Horarios", href: "/dashboard/schedule", icon: Clock3 },

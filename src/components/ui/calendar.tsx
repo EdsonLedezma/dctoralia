@@ -12,12 +12,15 @@ import {
   getDefaultClassNames,
   type DayButton,
 } from "react-day-picker";
+import { es } from "date-fns/locale";
 
 import { Button, buttonVariants } from "~/components/ui/button";
 
 function Calendar({
   className,
   classNames,
+  animate = true,
+  locale = es,
   showOutsideDays = true,
   captionLayout = "label",
   buttonVariant = "ghost",
@@ -32,6 +35,8 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      animate={animate}
+      locale={locale}
       className={cn(
         "group/calendar bg-background p-3 [--cell-size:--spacing(8)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
@@ -41,7 +46,7 @@ function Calendar({
       captionLayout={captionLayout}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString("default", { month: "short" }),
+          date.toLocaleString("es-MX", { month: "short" }),
         ...formatters,
       }}
       classNames={{
@@ -129,6 +134,14 @@ function Calendar({
           defaultClassNames.disabled,
         ),
         hidden: cn("invisible", defaultClassNames.hidden),
+        weeks_after_enter: "rdp-weeks_after_enter",
+        weeks_before_enter: "rdp-weeks_before_enter",
+        weeks_after_exit: "rdp-weeks_after_exit",
+        weeks_before_exit: "rdp-weeks_before_exit",
+        caption_after_enter: "rdp-caption_after_enter",
+        caption_before_enter: "rdp-caption_before_enter",
+        caption_after_exit: "rdp-caption_after_exit",
+        caption_before_exit: "rdp-caption_before_exit",
         ...classNames,
       }}
       components={{
@@ -208,7 +221,7 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground dark:hover:text-accent-foreground flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 leading-none font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] data-[range-end=true]:rounded-md data-[range-end=true]:rounded-r-md data-[range-middle=true]:rounded-none data-[range-start=true]:rounded-md data-[range-start=true]:rounded-l-md [&>span]:text-xs [&>span]:opacity-70",
+        "flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 rounded-md leading-none font-normal transition-[background-color,color,transform] duration-150 group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-[#171717] group-data-[focused=true]/day:ring-2 group-data-[focused=true]/day:ring-[#171717]/20 hover:bg-[#f5f5f5] focus-visible:ring-2 focus-visible:ring-[#171717]/25 focus-visible:outline-none active:scale-[0.94] data-[range-end=true]:rounded-md data-[range-end=true]:bg-[#171717] data-[range-end=true]:text-white data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-[#f5f5f5] data-[range-middle=true]:text-[#171717] data-[range-start=true]:rounded-md data-[range-start=true]:bg-[#171717] data-[range-start=true]:text-white data-[selected-single=true]:bg-[#171717] data-[selected-single=true]:text-white [&>span]:text-xs [&>span]:opacity-70",
         defaultClassNames.day,
         className,
       )}
