@@ -384,7 +384,9 @@ export default function PatientProfilePage() {
                         <AvatarImage
                           src={
                             avatarPreview ??
-                            avatarUrl(profileData.imageUrl, user.id)
+                            (user
+                              ? avatarUrl(profileData.imageUrl, user.id)
+                              : undefined)
                           }
                           alt=""
                         />

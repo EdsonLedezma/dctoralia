@@ -540,7 +540,7 @@ export async function getOutcomeTrend(
 ) {
   const episode = await db.careEpisode.findFirst({
     where: { id: input.episodeId, ...careEpisodeScope(actor) },
-    select: { id: true },
+    select: { id: true, patientId: true },
   });
   if (!episode) {
     throw new ClinicalWorkflowError(

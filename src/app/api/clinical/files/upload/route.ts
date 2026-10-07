@@ -1,4 +1,4 @@
-import { issueSignedToken } from "@vercel/blob";
+import { head, issueSignedToken } from "@vercel/blob";
 import {
   handleUploadPresigned,
   type HandleUploadPresignedBody,
@@ -181,9 +181,14 @@ export async function POST(request: Request) {
           throw new Error("No se pudo validar el acceso al archivo clínico.");
         }
 
+        const storedBlob = await head(blob.pathname, {
+          token: localToken,
+          oidcToken: env.VERCEL_OIDC_TOKEN,
+          storeId: env.CLINICAL_STORE_ID,
+        });
         if (
-          !allowedContentTypes.includes(blob.contentType) ||
-          blob.size > maxFileSize
+          !allowedContentTypes.includes(storedBlob.contentType) ||
+          storedBlob.size > maxFileSize
         ) {
           throw new Error("El tipo o tamaño del archivo no está permitido.");
         }
@@ -225,8 +230,8 @@ export async function POST(request: Request) {
               uploadedByUserId: metadata.userId,
               blobPathname: blob.pathname,
               originalFilename: metadata.originalFilename,
-              mediaType: blob.contentType,
-              sizeBytes: blob.size,
+              mediaType: storedBlob.contentType,
+              sizeBytes: storedBlob.size,
               category: metadata.category,
             },
           });
@@ -238,7 +243,10 @@ export async function POST(request: Request) {
               resourceType: "CLINICAL_FILE",
               resourceId: file.id,
               action: "CLINICAL_FILE_UPLOADED",
-              metadata: { category: metadata.category, sizeBytes: blob.size },
+              metadata: {
+                category: metadata.category,
+                sizeBytes: storedBlob.size,
+              },
             },
           });
         });
