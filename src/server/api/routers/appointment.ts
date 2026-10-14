@@ -9,13 +9,19 @@ import {
 } from "~/server/domain/authorization/access-policy";
 import {
   getUtcDayBounds,
+  getAvailableAppointmentSlots,
   hasTimeConflict,
+  isAppointmentTimeInFuture,
   isSlotInsideSchedule,
   isTodayOrFuture,
 } from "~/server/domain/appointments/appointment-time";
 import { recordAppointmentLifecycleEvent } from "~/server/domain/appointments/lifecycle";
 import { recordClinicalRead } from "~/server/domain/clinical/audit";
 import { resolveClinicalActor } from "~/server/domain/clinical/access";
+import {
+  cancelPendingAppointmentReminders,
+  scheduleAppointmentReminders,
+} from "~/server/domain/messaging/appointment-reminders";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 
 const timeSchema = z
@@ -38,6 +44,12 @@ const appointmentInclude = {
     },
   },
   service: true,
+  location: true,
+  lifecycleEvents: {
+    where: { eventType: { in: ["CHECKED_IN", "CONSULTATION_STARTED"] } },
+    select: { id: true, eventType: true, occurredAt: true },
+    orderBy: { occurredAt: "asc" },
+  },
 } satisfies Prisma.AppointmentInclude;
 
 const activeAppointmentStatuses = ["PENDING", "CONFIRMED"] as const;
@@ -74,7 +86,7 @@ export const useAppointment = createTRPCRouter({
 
       return trpcSuccess(appointments, "Citas obtenidas correctamente");
     } catch (error) {
-      console.error("Unable to list appointments", error);
+      console.error("Unable to list appointments");
       return trpcFailure(
         "INTERNAL_ERROR",
         "No fue posible obtener las citas",
@@ -95,7 +107,7 @@ export const useAppointment = createTRPCRouter({
 
       return trpcSuccess(appointments, "Citas obtenidas correctamente");
     } catch (error) {
-      console.error("Unable to list actor appointments", error);
+      console.error("Unable to list actor appointments");
       return trpcFailure(
         "INTERNAL_ERROR",
         "No fue posible obtener tus citas",
@@ -135,7 +147,7 @@ export const useAppointment = createTRPCRouter({
           "Próximas citas obtenidas correctamente",
         );
       } catch (error) {
-        console.error("Unable to list upcoming appointments", error);
+        console.error("Unable to list upcoming appointments");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible obtener las próximas citas",
@@ -167,10 +179,184 @@ export const useAppointment = createTRPCRouter({
 
         return trpcSuccess(appointment, "Cita obtenida correctamente");
       } catch (error) {
-        console.error("Unable to get appointment", error);
+        console.error("Unable to get appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible obtener la cita",
+          500,
+        );
+      }
+    }),
+
+  availableSlots: protectedProcedure
+    .input(
+      z.object({
+        appointmentId: z.string().cuid(),
+        date: z.date(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const actor = getActor(ctx.session.user);
+
+      try {
+        const current = await ctx.db.appointment.findFirst({
+          where: {
+            AND: [{ id: input.appointmentId }, appointmentScopeForActor(actor)],
+          },
+          select: { id: true, doctorId: true, duration: true, status: true },
+        });
+
+        if (!current) {
+          return trpcFailure(
+            "APPOINTMENT_NOT_FOUND",
+            "Cita no encontrada",
+            404,
+          );
+        }
+
+        if (finalAppointmentStatuses.has(current.status)) {
+          return trpcFailure(
+            "INVALID_STATE",
+            "Esta cita ya no se puede reagendar",
+            409,
+          );
+        }
+
+        if (!isTodayOrFuture(input.date)) {
+          return trpcFailure(
+            "INVALID_DATE",
+            "Consulta horarios para hoy o una fecha futura",
+            400,
+          );
+        }
+
+        const { start, end } = getUtcDayBounds(input.date);
+        const schedule = await ctx.db.schedule.findFirst({
+          where: {
+            doctorId: current.doctorId,
+            dayOfWeek: start.getUTCDay(),
+            isActive: true,
+          },
+          select: { startTime: true, endTime: true },
+        });
+
+        if (!schedule) return trpcSuccess([], "No hay jornada para esta fecha");
+
+        const existingAppointments = await ctx.db.appointment.findMany({
+          where: {
+            id: { not: current.id },
+            doctorId: current.doctorId,
+            date: { gte: start, lt: end },
+            status: { in: [...activeAppointmentStatuses] },
+          },
+          select: { time: true, duration: true },
+        });
+
+        const slots = getAvailableAppointmentSlots(
+          input.date,
+          current.duration,
+          schedule.startTime,
+          schedule.endTime,
+          existingAppointments,
+        );
+
+        return trpcSuccess(slots, "Horarios disponibles obtenidos");
+      } catch (error) {
+        console.error("Unable to list appointment slots");
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible obtener los horarios disponibles",
+          500,
+        );
+      }
+    }),
+
+  bookingSlots: protectedProcedure
+    .input(
+      z.object({
+        serviceId: z.string().min(1),
+        date: z.date(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "DOCTOR") {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo el doctor puede consultar su agenda",
+          403,
+        );
+      }
+
+      if (!isTodayOrFuture(input.date)) {
+        return trpcFailure(
+          "INVALID_DATE",
+          "Consulta horarios para hoy o una fecha futura",
+          400,
+        );
+      }
+
+      try {
+        const doctor = await ctx.db.doctor.findUnique({
+          where: { userId: ctx.session.user.id },
+          select: { id: true },
+        });
+        if (!doctor) {
+          return trpcFailure(
+            "DOCTOR_NOT_FOUND",
+            "No encontramos tu perfil de médico",
+            404,
+          );
+        }
+
+        const service = await ctx.db.service.findFirst({
+          where: {
+            id: input.serviceId,
+            doctorId: doctor.id,
+            isActive: true,
+          },
+          select: { id: true, duration: true },
+        });
+        if (!service) {
+          return trpcFailure(
+            "SERVICE_REQUIRED",
+            "Selecciona un servicio activo para consultar horarios",
+            404,
+          );
+        }
+
+        const { start, end } = getUtcDayBounds(input.date);
+        const schedule = await ctx.db.schedule.findFirst({
+          where: {
+            doctorId: doctor.id,
+            dayOfWeek: start.getUTCDay(),
+            isActive: true,
+          },
+          select: { startTime: true, endTime: true },
+        });
+        if (!schedule) return trpcSuccess([], "No hay jornada para esta fecha");
+
+        const existingAppointments = await ctx.db.appointment.findMany({
+          where: {
+            doctorId: doctor.id,
+            date: { gte: start, lt: end },
+            status: { in: [...activeAppointmentStatuses] },
+          },
+          select: { time: true, duration: true },
+        });
+        const slots = getAvailableAppointmentSlots(
+          input.date,
+          service.duration,
+          schedule.startTime,
+          schedule.endTime,
+          existingAppointments,
+        );
+
+        return trpcSuccess(slots, "Horarios disponibles obtenidos");
+      } catch (error) {
+        console.error("Unable to list booking slots");
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No fue posible obtener los horarios disponibles",
           500,
         );
       }
@@ -182,12 +368,21 @@ export const useAppointment = createTRPCRouter({
         patientId: z.string().min(1),
         doctorId: z.string().min(1).optional(),
         serviceId: z.string().min(1).optional(),
+        locationId: z.string().cuid().optional(),
         date: z.date(),
         time: timeSchema,
         duration: z.number().int().positive().max(480).optional(),
         reason: z.string().trim().min(1).max(500),
         severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
         notes: z.string().trim().max(2000).optional(),
+        intake: z
+          .object({
+            symptoms: z.string().trim().min(3).max(2000),
+            allergies: z.string().trim().max(1000),
+            medications: z.string().trim().max(1000),
+            context: z.string().trim().max(2000),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -197,6 +392,14 @@ export const useAppointment = createTRPCRouter({
         return trpcFailure(
           "INVALID_DATE",
           "La cita debe programarse para hoy o una fecha futura",
+          400,
+        );
+      }
+
+      if (!isAppointmentTimeInFuture(input.date, input.time)) {
+        return trpcFailure(
+          "INVALID_TIME",
+          "El horario debe ser posterior a la hora actual",
           400,
         );
       }
@@ -261,6 +464,33 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
+        let locationId: string | null = null;
+        if (input.locationId) {
+          if (!doctor.clinicId) {
+            return trpcFailure(
+              "LOCATION_NOT_AVAILABLE",
+              "Tu perfil no tiene una clínica configurada para asignar ubicaciones",
+              400,
+            );
+          }
+          const location = await ctx.db.clinicLocation.findFirst({
+            where: {
+              id: input.locationId,
+              clinicId: doctor.clinicId,
+              isActive: true,
+            },
+            select: { id: true },
+          });
+          if (!location) {
+            return trpcFailure(
+              "LOCATION_NOT_FOUND",
+              "Selecciona una ubicación activa de tu clínica",
+              400,
+            );
+          }
+          locationId = location.id;
+        }
+
         const { start: appointmentDate, end: nextDay } = getUtcDayBounds(
           input.date,
         );
@@ -311,16 +541,23 @@ export const useAppointment = createTRPCRouter({
                 doctorId: doctor.id,
                 serviceId: service.id,
                 clinicId: doctor.clinicId,
+                locationId,
                 date: appointmentDate,
                 time: input.time,
                 duration: service.duration,
                 reason: input.reason,
                 notes: input.notes ?? null,
+                intakeSymptoms: input.intake?.symptoms ?? null,
+                intakeAllergies: input.intake?.allergies ?? null,
+                intakeMedications: input.intake?.medications ?? null,
+                intakeContext: input.intake?.context ?? null,
                 severity: input.severity,
                 status: "PENDING",
               },
               include: appointmentInclude,
             });
+
+            await scheduleAppointmentReminders(tx, created);
 
             await recordAppointmentLifecycleEvent(tx, {
               clinicId: created.clinicId,
@@ -334,16 +571,29 @@ export const useAppointment = createTRPCRouter({
               scheduledTime: created.time,
             });
 
-            await tx.notification.create({
-              data: {
-                doctorId: doctor.id,
-                patientId: patient.id,
-                type: "APPOINTMENT_BOOKED",
-                clinicId: doctor.clinicId,
-                title: "Nueva cita agendada",
-                message: `Se agendó una cita para ${appointmentDate.toISOString().slice(0, 10)} a las ${input.time}.`,
-                appointmentId: created.id,
-              },
+            await tx.notification.createMany({
+              data: [
+                {
+                  recipientUserId: created.doctor.user.id,
+                  doctorId: doctor.id,
+                  patientId: patient.id,
+                  type: "APPOINTMENT_BOOKED",
+                  clinicId: doctor.clinicId,
+                  title: "Nueva solicitud de cita",
+                  message: `Hay una solicitud para el ${appointmentDate.toISOString().slice(0, 10)} a las ${input.time}.`,
+                  appointmentId: created.id,
+                },
+                {
+                  recipientUserId: created.patient.user.id,
+                  doctorId: doctor.id,
+                  patientId: patient.id,
+                  type: "APPOINTMENT_BOOKED",
+                  clinicId: doctor.clinicId,
+                  title: "Solicitud enviada",
+                  message: `Tu solicitud para el ${appointmentDate.toISOString().slice(0, 10)} a las ${input.time} fue enviada al consultorio.`,
+                  appointmentId: created.id,
+                },
+              ],
             });
 
             return created;
@@ -377,7 +627,7 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        console.error("Unable to create appointment", error);
+        console.error("Unable to create appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible crear la cita",
@@ -401,6 +651,14 @@ export const useAppointment = createTRPCRouter({
         return trpcFailure(
           "INVALID_DATE",
           "La cita debe programarse para hoy o una fecha futura",
+          400,
+        );
+      }
+
+      if (!isAppointmentTimeInFuture(input.newDate, input.newTime)) {
+        return trpcFailure(
+          "INVALID_TIME",
+          "El horario debe ser posterior a la hora actual",
           400,
         );
       }
@@ -433,6 +691,16 @@ export const useAppointment = createTRPCRouter({
         );
         const appointment = await ctx.db.$transaction(
           async (tx) => {
+            const attendanceEvent =
+              await tx.appointmentLifecycleEvent.findFirst({
+                where: {
+                  appointmentId: current.id,
+                  eventType: { in: ["CHECKED_IN", "CONSULTATION_STARTED"] },
+                },
+                select: { id: true },
+              });
+            if (attendanceEvent) return "attendance_recorded" as const;
+
             const schedule = await tx.schedule.findFirst({
               where: {
                 doctorId: current.doctorId,
@@ -483,6 +751,9 @@ export const useAppointment = createTRPCRouter({
               include: appointmentInclude,
             });
 
+            await cancelPendingAppointmentReminders(tx, updated.id);
+            await scheduleAppointmentReminders(tx, updated);
+
             await recordAppointmentLifecycleEvent(tx, {
               clinicId: updated.clinicId,
               appointmentId: updated.id,
@@ -500,15 +771,29 @@ export const useAppointment = createTRPCRouter({
               },
             });
 
-            await tx.notification.create({
-              data: {
-                doctorId: current.doctorId,
-                patientId: current.patientId,
-                type: "APPOINTMENT_RESCHEDULED",
-                title: "Cita reagendada",
-                message: `La cita fue reagendada para ${appointmentDate.toISOString().slice(0, 10)} a las ${input.newTime}.`,
-                appointmentId: current.id,
-              },
+            await tx.notification.createMany({
+              data: [
+                {
+                  recipientUserId: updated.doctor.user.id,
+                  doctorId: current.doctorId,
+                  patientId: current.patientId,
+                  type: "APPOINTMENT_RESCHEDULED",
+                  clinicId: updated.clinicId,
+                  title: "Cita reagendada",
+                  message: `La cita fue reagendada para ${appointmentDate.toISOString().slice(0, 10)} a las ${input.newTime}.`,
+                  appointmentId: current.id,
+                },
+                {
+                  recipientUserId: updated.patient.user.id,
+                  doctorId: current.doctorId,
+                  patientId: current.patientId,
+                  type: "APPOINTMENT_RESCHEDULED",
+                  clinicId: updated.clinicId,
+                  title: "Tu cita fue reagendada",
+                  message: `Tu cita fue reagendada para el ${appointmentDate.toISOString().slice(0, 10)} a las ${input.newTime}.`,
+                  appointmentId: current.id,
+                },
+              ],
             });
 
             return updated;
@@ -532,6 +817,14 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
+        if (appointment === "attendance_recorded") {
+          return trpcFailure(
+            "ATTENDANCE_ALREADY_STARTED",
+            "No se puede reagendar una cita después de registrar la llegada.",
+            409,
+          );
+        }
+
         return trpcSuccess(appointment, "Cita reagendada correctamente");
       } catch (error) {
         if (isSerializationConflict(error)) {
@@ -542,7 +835,7 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        console.error("Unable to reschedule appointment", error);
+        console.error("Unable to reschedule appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible reagendar la cita",
@@ -594,6 +887,7 @@ export const useAppointment = createTRPCRouter({
             where: { id: current.id },
             include: appointmentInclude,
           });
+          await cancelPendingAppointmentReminders(tx, updated.id);
 
           await recordAppointmentLifecycleEvent(tx, {
             clinicId: updated.clinicId,
@@ -610,15 +904,29 @@ export const useAppointment = createTRPCRouter({
           });
 
           const reasonSuffix = input.reason ? ` Motivo: ${input.reason}` : "";
-          await tx.notification.create({
-            data: {
-              doctorId: current.doctorId,
-              patientId: current.patientId,
-              type: "APPOINTMENT_CANCELLED",
-              title: "Cita cancelada",
-              message: `La cita del ${current.date.toISOString().slice(0, 10)} a las ${current.time} fue cancelada.${reasonSuffix}`,
-              appointmentId: current.id,
-            },
+          await tx.notification.createMany({
+            data: [
+              {
+                recipientUserId: updated.doctor.user.id,
+                doctorId: current.doctorId,
+                patientId: current.patientId,
+                type: "APPOINTMENT_CANCELLED",
+                clinicId: updated.clinicId,
+                title: "Cita cancelada",
+                message: `La cita del ${current.date.toISOString().slice(0, 10)} a las ${current.time} fue cancelada.${reasonSuffix}`,
+                appointmentId: current.id,
+              },
+              {
+                recipientUserId: updated.patient.user.id,
+                doctorId: current.doctorId,
+                patientId: current.patientId,
+                type: "APPOINTMENT_CANCELLED",
+                clinicId: updated.clinicId,
+                title: "Tu cita fue cancelada",
+                message: `Tu cita del ${current.date.toISOString().slice(0, 10)} a las ${current.time} fue cancelada.`,
+                appointmentId: current.id,
+              },
+            ],
           });
 
           return updated;
@@ -634,7 +942,7 @@ export const useAppointment = createTRPCRouter({
 
         return trpcSuccess(appointment, "Cita cancelada correctamente");
       } catch (error) {
-        console.error("Unable to cancel appointment", error);
+        console.error("Unable to cancel appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible cancelar la cita",
@@ -691,6 +999,7 @@ export const useAppointment = createTRPCRouter({
           if (changed.count !== 1) return null;
           const updated = await tx.appointment.findUniqueOrThrow({
             where: { id: current.id },
+            include: appointmentInclude,
           });
           await recordAppointmentLifecycleEvent(tx, {
             clinicId: updated.clinicId,
@@ -704,6 +1013,48 @@ export const useAppointment = createTRPCRouter({
             scheduledAt: updated.date,
             scheduledTime: updated.time,
           });
+          if (["CANCELLED", "COMPLETED", "NO_SHOW"].includes(updated.status)) {
+            await cancelPendingAppointmentReminders(tx, updated.id);
+          } else {
+            await scheduleAppointmentReminders(tx, updated);
+          }
+
+          const patientStatusNotice =
+            updated.status === "CONFIRMED"
+              ? {
+                  type: "APPOINTMENT_CONFIRMED" as const,
+                  title: "Tu cita está confirmada",
+                  message: `Tu cita del ${updated.date.toISOString().slice(0, 10)} a las ${updated.time} quedó confirmada.`,
+                }
+              : updated.status === "COMPLETED"
+                ? {
+                    type: "APPOINTMENT_COMPLETED" as const,
+                    title: "Tu consulta finalizó",
+                    message:
+                      "La consulta quedó registrada como completada. Revisa los detalles disponibles en tu cuenta.",
+                  }
+                : updated.status === "CANCELLED"
+                  ? {
+                      type: "APPOINTMENT_CANCELLED" as const,
+                      title: "Tu cita fue cancelada",
+                      message: `Tu cita del ${updated.date.toISOString().slice(0, 10)} a las ${updated.time} fue cancelada.`,
+                    }
+                  : null;
+
+          if (patientStatusNotice) {
+            await tx.notification.create({
+              data: {
+                recipientUserId: updated.patient.user.id,
+                doctorId: updated.doctorId,
+                patientId: updated.patientId,
+                clinicId: updated.clinicId,
+                appointmentId: updated.id,
+                type: patientStatusNotice.type,
+                title: patientStatusNotice.title,
+                message: patientStatusNotice.message,
+              },
+            });
+          }
           return updated;
         });
 
@@ -720,10 +1071,195 @@ export const useAppointment = createTRPCRouter({
           "Estado de la cita actualizado correctamente",
         );
       } catch (error) {
-        console.error("Unable to update appointment status", error);
+        console.error("Unable to update appointment status");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible actualizar el estado de la cita",
+          500,
+        );
+      }
+    }),
+
+  recordAttendance: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().cuid(),
+        action: z.enum(["CHECK_IN", "START_CONSULTATION"]),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const actor = getActor(ctx.session.user);
+      if (!canManageAllAppointments(actor)) {
+        return trpcFailure(
+          "FORBIDDEN",
+          "No tienes permisos para registrar la atención de esta cita.",
+          403,
+        );
+      }
+
+      try {
+        const current = await ctx.db.appointment.findFirst({
+          where: { AND: [{ id: input.id }, appointmentScopeForActor(actor)] },
+          select: { id: true, clinicId: true, date: true },
+        });
+        if (!current) {
+          return trpcFailure(
+            "APPOINTMENT_NOT_FOUND",
+            "Cita no encontrada",
+            404,
+          );
+        }
+
+        const clinic = current.clinicId
+          ? await ctx.db.clinic.findUnique({
+              where: { id: current.clinicId },
+              select: { timezone: true },
+            })
+          : null;
+        const timeZone = clinic?.timezone ?? "America/Mexico_City";
+        const appointmentDay = current.date.toISOString().slice(0, 10);
+        let localToday: string;
+        try {
+          localToday = new Intl.DateTimeFormat("en-CA", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(new Date());
+        } catch {
+          localToday = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Mexico_City",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(new Date());
+        }
+        if (appointmentDay !== localToday) {
+          return trpcFailure(
+            "ATTENDANCE_DATE_MISMATCH",
+            "La atención sólo puede registrarse el día local de la cita.",
+            400,
+          );
+        }
+
+        const eventType =
+          input.action === "CHECK_IN" ? "CHECKED_IN" : "CONSULTATION_STARTED";
+        const result = await ctx.db.$transaction(
+          async (tx) => {
+            const appointment = await tx.appointment.findFirst({
+              where: {
+                AND: [{ id: input.id }, appointmentScopeForActor(actor)],
+              },
+              select: {
+                id: true,
+                clinicId: true,
+                patientId: true,
+                doctorId: true,
+                date: true,
+                time: true,
+                status: true,
+              },
+            });
+            if (!appointment) return { kind: "missing" as const };
+            if (
+              !activeAppointmentStatuses.some(
+                (status) => status === appointment.status,
+              )
+            ) {
+              return { kind: "inactive" as const };
+            }
+            if (appointment.date.toISOString().slice(0, 10) !== localToday) {
+              return { kind: "date_mismatch" as const };
+            }
+
+            const existing = await tx.appointmentLifecycleEvent.findFirst({
+              where: { appointmentId: appointment.id, eventType },
+              select: { id: true, occurredAt: true },
+            });
+            if (existing) return { kind: "recorded" as const, ...existing };
+
+            if (input.action === "START_CONSULTATION") {
+              const checkIn = await tx.appointmentLifecycleEvent.findFirst({
+                where: {
+                  appointmentId: appointment.id,
+                  eventType: "CHECKED_IN",
+                },
+                select: { id: true },
+              });
+              if (!checkIn) return { kind: "check_in_required" as const };
+            }
+
+            const event = await recordAppointmentLifecycleEvent(tx, {
+              clinicId: appointment.clinicId,
+              appointmentId: appointment.id,
+              patientId: appointment.patientId,
+              doctorId: appointment.doctorId,
+              actorUserId: ctx.session.user.id,
+              eventType,
+              fromStatus: appointment.status,
+              toStatus: appointment.status,
+              scheduledAt: appointment.date,
+              scheduledTime: appointment.time,
+              idempotencyKey: `appointment-attendance:${appointment.id}:${eventType}`,
+            });
+            if (input.action === "CHECK_IN") {
+              await cancelPendingAppointmentReminders(tx, appointment.id);
+            }
+            return {
+              kind: "recorded" as const,
+              id: event.id,
+              occurredAt: event.occurredAt,
+            };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+
+        if (result.kind === "missing") {
+          return trpcFailure(
+            "APPOINTMENT_NOT_FOUND",
+            "Cita no encontrada",
+            404,
+          );
+        }
+        if (result.kind === "inactive") {
+          return trpcFailure(
+            "INVALID_STATE",
+            "Sólo puedes registrar la atención de una cita activa.",
+            409,
+          );
+        }
+        if (result.kind === "date_mismatch") {
+          return trpcFailure(
+            "ATTENDANCE_DATE_MISMATCH",
+            "La fecha de la cita cambió. Actualiza e inténtalo de nuevo.",
+            409,
+          );
+        }
+        if (result.kind === "check_in_required") {
+          return trpcFailure(
+            "CHECK_IN_REQUIRED",
+            "Registra la llegada del paciente antes de iniciar la consulta.",
+            409,
+          );
+        }
+        return trpcSuccess(
+          { action: input.action, occurredAt: result.occurredAt },
+          input.action === "CHECK_IN"
+            ? "Llegada registrada"
+            : "Inicio de consulta registrado",
+        );
+      } catch (error) {
+        if (isSerializationConflict(error)) {
+          return trpcFailure(
+            "ATTENDANCE_CONFLICT",
+            "La cita cambió durante el registro. Actualiza e inténtalo de nuevo.",
+            409,
+          );
+        }
+        console.error("Unable to record appointment attendance");
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No se pudo registrar la atención.",
           500,
         );
       }
@@ -783,7 +1319,7 @@ export const useAppointment = createTRPCRouter({
           "Notas actualizadas correctamente",
         );
       } catch (error) {
-        console.error("Unable to update appointment notes", error);
+        console.error("Unable to update appointment notes");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible actualizar las notas",
@@ -833,7 +1369,7 @@ export const useAppointment = createTRPCRouter({
           "Motivo actualizado correctamente",
         );
       } catch (error) {
-        console.error("Unable to update appointment reason", error);
+        console.error("Unable to update appointment reason");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible actualizar el motivo",
@@ -953,7 +1489,7 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        console.error("Unable to update appointment duration", error);
+        console.error("Unable to update appointment duration");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible actualizar la duración",
@@ -991,7 +1527,7 @@ export const useAppointment = createTRPCRouter({
         });
         return trpcSuccess(deleted, "Cita eliminada correctamente");
       } catch (error) {
-        console.error("Unable to delete appointment", error);
+        console.error("Unable to delete appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible eliminar la cita",
@@ -1096,7 +1632,7 @@ export const useAppointment = createTRPCRouter({
           "Historial obtenido correctamente",
         );
       } catch (error) {
-        console.error("Unable to get patient history", error);
+        console.error("Unable to get patient history");
         return trpcFailure(
           "INTERNAL_ERROR",
           "No fue posible obtener el historial",

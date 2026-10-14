@@ -38,9 +38,11 @@ Referencias: [Checkout](https://docs.stripe.com/api/checkout/sessions/create), [
 1. Mientras se aprueba la plantilla, conserva `SENT_ENABLED=false` y `SENT_SANDBOX=true`.
 2. Configura `SENT_API_KEY`. Con una clave de organización configura además `SENT_PROFILE_ID`; con una clave de perfil puede omitirse.
 3. Configura `SENT_TEST_TEMPLATE` con el nombre exacto de una plantilla que reciba el parámetro `name`. No se inventa ni aprueba una plantilla desde Dopilot.
-4. Registra `https://TU_DOMINIO/api/integrations/sent/webhook` para los eventos de estado de mensaje. Configura `SENT_WEBHOOK_SECRET`. Se comprueba HMAC sobre el body original y tolerancia de cinco minutos.
-5. Genera un `CRON_SECRET` aleatorio de al menos 32 caracteres y configura un scheduler para `GET /api/cron/messages` con `Authorization: Bearer <CRON_SECRET>`. No hay cron instalado automáticamente. En Vercel, una frecuencia por minuto requiere un plan que la admita; no agregues esa frecuencia en Hobby.
-6. Activa `SENT_ENABLED=true` **manteniendo sandbox**. Guarda tu teléfono propio con prefijo de país y prueba desde Workspace. El dispatcher procesa hasta cuatro mensajes por ejecución. Consulta «Actualizar» para ver estados e intentos.
+4. Para citas, configura `SENT_APPOINTMENT_REMINDER_TEMPLATE` con el nombre exacto de la plantilla aprobada que acepte `patient_name`, `doctor_name`, `appointment_date` y `appointment_time`. Altas/reagendados crean hasta dos avisos (24 h y 2 h antes). Para fechas límite de seguimiento, configura por separado `SENT_FOLLOW_UP_REMINDER_TEMPLATE` con una plantilla aprobada que acepte `patient_name`, `clinic_name` y `due_date`; crea un aviso hasta 24 h antes (o al activar el consentimiento si falta menos tiempo). Cada propósito requiere consentimiento explícito independiente por canal. Los recordatorios de seguimiento nunca envían título, tipo ni detalles clínicos de la tarea. Ambos flujos validan teléfono mexicano o E.164 y horario local 09:00–19:00, caducan al llegar primero su fecha límite, el cierre de horario o 30 minutos tras programarse y se descartan si el scheduler corre tarde. Citas y tareas completadas/canceladas invalidan sus avisos pendientes; la baja sólo afecta el propósito y canal revocados. Si una plantilla queda vacía, su flujo no encola mensajes.
+5. Registra `https://TU_DOMINIO/api/integrations/sent/webhook` para los eventos de estado de mensaje. Configura `SENT_WEBHOOK_SECRET`. Se comprueba HMAC sobre el body original y tolerancia de cinco minutos.
+6. Genera un `CRON_SECRET` aleatorio de al menos 32 caracteres y configura un scheduler para `GET /api/cron/messages` con `Authorization: Bearer <CRON_SECRET>`. No hay cron instalado automáticamente. En Vercel, una frecuencia por minuto requiere un plan que la admita; no agregues esa frecuencia en Hobby.
+
+El endpoint independiente `GET /api/cron/notifications` usa el mismo `CRON_SECRET` para crear avisos internos idempotentes de seguimientos vencidos. No invoca Sent y puede programarse con una frecuencia compatible con el plan de Vercel; sin scheduler, la bandeja sigue funcionando para citas y asignaciones, pero los avisos de vencimiento no se materializan automáticamente. 7. Activa `SENT_ENABLED=true` **manteniendo sandbox**. Guarda tu teléfono propio con prefijo de país y prueba desde Workspace. El dispatcher procesa hasta cuatro mensajes por ejecución. Consulta «Actualizar» para ver estados e intentos.
 
 Los registros de prueba siguen siendo sandbox aunque después cambies la variable global. Una aceptación por la API no significa entrega: la tabla lo etiqueta como «Aceptado». Los callbacks actualizan entregado/leído y no retroceden esos estados por eventos tardíos. Rechazos `FAILED`, `FILTERED` o `BLOCKED` son terminales. La clave enviada se normaliza a SHA-256, compatible con la restricción de Sent.
 
@@ -52,8 +54,8 @@ Referencias: [SDK](https://docs.sent.dm/sdks/typescript), [firma de webhooks](ht
 
 ## Pendiente antes de habilitar automatizaciones a pacientes
 
-- Consentimiento explícito por canal, opt-out persistente y quiet hours por zona horaria.
-- Cinco recetas (reserva, recordatorios, recuperación, reseña), cancelación de mensajes obsoletos y comandos entrantes auditados.
+- Completar recepción/validación de ambas plantillas con Sent sandbox y verificar el scheduler; consentimientos independientes por propósito/canal, baja persistente, horario local de silencio, cancelación de avisos obsoletos e idempotencia ya están implementados para citas y seguimientos.
+- Avisos de reserva, recuperación de pacientes y solicitud de reseña; comandos entrantes de confirmación/cancelación auditados.
 - Perfil/plantillas por workspace y autorización comercial de mensajería.
 - Contabilidad/reconciliación de costos reales, crédito incluido y cobro idempotente de excedentes.
 - Prueba de integración con Stripe test y Sent sandbox después de configurar variables y aplicar el esquema.

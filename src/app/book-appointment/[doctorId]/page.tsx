@@ -1,751 +1,507 @@
 "use client";
 
-import type React from "react";
-
-import { useState } from "react";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Textarea } from "~/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { Checkbox } from "~/components/ui/checkbox";
-import {
-  Calendar as CalendarIcon,
-  User,
-  CheckCircle,
-  ArrowLeft,
-  Heart,
-} from "lucide-react";
-import { Calendar as DateCalendar } from "~/components/ui/calendar";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { api } from "~/trpc/react";
-import { toast } from "sonner";
-import { unwrapTrpcResult } from "~/types/trpc-response";
 import { motion, useReducedMotion } from "motion/react";
-import { TimeSlotPicker } from "~/components/ui/time-slot-picker";
-import { format, parseISO } from "date-fns";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Check,
+  Clock3,
+  ShieldCheck,
+} from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { toast } from "sonner";
+import { Avatar, AvatarFallback } from "~/components/ui/avatar";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { ProductShell } from "~/components/shell/product-shell";
+import { api } from "~/trpc/react";
+import { unwrapTrpcResult } from "~/types/trpc-response";
+
+const steps = ["Consulta", "Disponibilidad", "Tu brief"] as const;
+const mexicoDate = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+const dateLabel = (value: string) =>
+  format(new Date(`${value}T12:00:00`), "EEEE d 'de' MMMM", { locale: es });
 
 export default function BookAppointmentPage() {
-  const [step, setStep] = useState(1);
-  const [selectedService, setSelectedService] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const { doctorId } = useParams<{ doctorId: string }>();
+  const { status } = useSession();
   const reduceMotion = useReducedMotion();
-  const params = useParams<{ doctorId: string }>();
-  const doctorId = params.doctorId;
-  const { status: sessionStatus } = useSession();
-
-  const { data: doctorRes } = api.doctor.getById.useQuery(
+  const [step, setStep] = useState(0);
+  const [serviceId, setServiceId] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [symptoms, setSymptoms] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const [medications, setMedications] = useState("");
+  const [context, setContext] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [bookedId, setBookedId] = useState<string | null>(null);
+  const [today] = useState(mexicoDate);
+  const lastDay = useMemo(() => {
+    const end = new Date(`${today}T12:00:00.000Z`);
+    end.setUTCDate(end.getUTCDate() + 30);
+    return end.toISOString().slice(0, 10);
+  }, [today]);
+  const doctorQuery = api.doctor.getById.useQuery(
     { id: doctorId },
-    { enabled: !!doctorId },
+    { enabled: Boolean(doctorId) },
   );
-  const doctor = doctorRes?.result;
-  const { data: servicesRes } = api.services.publicGetByDoctor.useQuery(
+  const servicesQuery = api.services.publicGetByDoctor.useQuery(
     { doctorId },
-    { enabled: !!doctorId },
+    { enabled: Boolean(doctorId) },
   );
-  const services = (servicesRes?.result ?? []).map((s) => ({
-    id: s.id,
-    name: s.name,
-    price: `$${s.price}`,
-    duration: s.duration,
-  }));
-  const { data: profileRes } = api.auth.getProfile.useQuery(undefined, {
-    enabled: sessionStatus === "authenticated",
+  const profileQuery = api.auth.getProfile.useQuery(undefined, {
+    enabled: status === "authenticated",
     retry: false,
   });
-  const profile = profileRes?.result ?? null;
-  const patientId = profile?.patient?.id;
-
-  // Calcular rango de fechas (próximos 30 días)
-  const today = new Date();
-  const endDate = new Date(today);
-  endDate.setDate(endDate.getDate() + 30);
-
-  const { data: slotsRes } = api.schedule.getAvailableSlots.useQuery(
+  const slotsQuery = api.schedule.getAvailableSlots.useQuery(
     {
       doctorId,
-      serviceId: selectedService || undefined,
-      startDate: today.toISOString().slice(0, 10),
-      endDate: endDate.toISOString().slice(0, 10),
+      serviceId: serviceId || undefined,
+      startDate: today,
+      endDate: lastDay,
     },
-    { enabled: !!doctorId && !!selectedService },
+    { enabled: Boolean(doctorId && serviceId) },
   );
+  const create = api.appointments.create.useMutation();
+  const doctor = doctorQuery.data?.result;
+  const services = servicesQuery.data?.result ?? [];
+  const service = services.find((item) => item.id === serviceId);
+  const dates = [
+    ...new Set((slotsQuery.data?.result ?? []).map((slot) => slot.date)),
+  ].sort();
+  const times = (slotsQuery.data?.result ?? [])
+    .filter((slot) => slot.date === date)
+    .map((slot) => slot.time);
+  const canAdvance =
+    step === 0
+      ? Boolean(serviceId)
+      : step === 1
+        ? Boolean(date && time)
+        : symptoms.trim().length >= 3;
 
-  const availableSlots = slotsRes?.result ?? [];
-
-  // Agrupar slots por fecha
-  const slotsByDate = availableSlots.reduce<Record<string, string[]>>(
-    (acc, slot) => {
-      (acc[slot.date] ??= []).push(slot.time);
-      return acc;
-    },
-    {},
-  );
-
-  const availableDates = Object.keys(slotsByDate).sort();
-  const timeSlots = selectedDate ? (slotsByDate[selectedDate] ?? []) : [];
-
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    birthDate: "",
-    gender: "",
-    reason: "",
-    insurance: "",
-    emergencyContact: "",
-    emergencyPhone: "",
-    terms: false,
-  });
-
-  const createAppointment = api.appointments.create.useMutation();
-
-  const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitError(null);
-    if (step < 4) {
+  async function submit() {
+    setError(null);
+    if (step < 2) {
       setStep(step + 1);
-    } else {
-      // Procesar la cita
-      if (
-        !doctorId ||
-        !selectedService ||
-        !selectedDate ||
-        !selectedTime ||
-        !patientId
-      )
-        return setSubmitError(
-          "Selecciona un servicio, fecha y horario antes de continuar.",
-        );
-      try {
-        unwrapTrpcResult(
-          await createAppointment.mutateAsync({
-            patientId: patientId,
-            doctorId,
-            serviceId: selectedService,
-            date: new Date(`${selectedDate}T${selectedTime}:00`),
-            time: selectedTime,
-            duration:
-              services.find((s) => s.id === selectedService)?.duration ?? 30,
-            reason: formData.reason.trim() ? formData.reason : "Consulta",
-            notes: "",
-          }),
-        );
-        toast.success("Cita agendada");
-        setStep(5);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "No se pudo agendar la cita";
-        setSubmitError(message);
-        toast.error(message);
-      }
+      return;
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-ES", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  const downloadICS = () => {
-    if (!selectedDate || !selectedTime || !doctor) return;
-
-    const appointmentDate = new Date(`${selectedDate}T${selectedTime}:00`);
-    const duration = selectedServiceData?.duration ?? 30;
-    const endDate = new Date(appointmentDate.getTime() + duration * 60000);
-
-    const formatICSDate = (date: Date) => {
-      return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-    };
-
-    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Dctoralia//Appointment//ES
-BEGIN:VEVENT
-UID:${Date.now()}@dctoralia.app
-DTSTAMP:${formatICSDate(new Date())}
-DTSTART:${formatICSDate(appointmentDate)}
-DTEND:${formatICSDate(endDate)}
-SUMMARY:Cita Médica - ${selectedServiceData?.name}
-DESCRIPTION:Cita con ${doctor.user?.name || "Doctor"}\\nServicio: ${selectedServiceData?.name}\\nMotivo: ${formData.reason || "Consulta"}
-LOCATION:Consultorio
-STATUS:CONFIRMED
-END:VEVENT
-END:VCALENDAR`;
-
-    const blob = new Blob([icsContent], {
-      type: "text/calendar;charset=utf-8",
-    });
-    const link = document.createElement("a");
-    link.href = window.URL.createObjectURL(blob);
-    link.download = `cita-${selectedDate}.ics`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const selectedServiceData = services.find((s) => s.id === selectedService);
+    const patientId = profileQuery.data?.result?.patient?.id;
+    if (status !== "authenticated" || !patientId) {
+      setError("Inicia sesión como paciente para enviar tu solicitud.");
+      return;
+    }
+    try {
+      const appointment = unwrapTrpcResult(
+        await create.mutateAsync({
+          patientId,
+          doctorId,
+          serviceId,
+          date: new Date(`${date}T12:00:00.000Z`),
+          time,
+          reason: symptoms.trim().slice(0, 500),
+          intake: {
+            symptoms: symptoms.trim(),
+            allergies: allergies.trim(),
+            medications: medications.trim(),
+            context: context.trim(),
+          },
+        }),
+      );
+      setBookedId(appointment.id);
+      toast.success("Solicitud enviada al consultorio");
+    } catch (cause) {
+      const message =
+        cause instanceof Error
+          ? cause.message
+          : "No pudimos reservar ese horario.";
+      setError(message);
+      if (message.toLowerCase().includes("horario")) void slotsQuery.refetch();
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
-      {/* Header */}
-      <header className="border-b border-[#ebebeb] bg-white">
-        <div className="container mx-auto flex flex-wrap items-center gap-2 px-4 py-3 sm:flex-nowrap sm:gap-4 sm:py-4">
-          <Link href={`/doctor/${doctorId}`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver al Perfil
-            </Button>
+    <ProductShell role="PATIENT">
+      <main className="min-h-screen bg-[#f7f8f6] px-4 py-7 text-[#18332c] sm:px-8 sm:py-10">
+        <div className="mx-auto max-w-6xl">
+          <Link
+            href="/patient/doctors"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[#557067] hover:text-[#18332c]"
+          >
+            <ArrowLeft className="size-4" /> Volver a doctores
           </Link>
-          <div className="flex items-center space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#171717]">
-              <CalendarIcon className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-xl font-bold">Dctoralia</span>
-          </div>
-          <div className="hidden text-[#a3a3a3] sm:block">|</div>
-          <h1 className="text-base font-semibold sm:text-xl">Agendar Cita</h1>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-2xl">
-          {/* Progress Steps */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              {[1, 2, 3, 4].map((stepNumber) => (
-                <div key={stepNumber} className="flex items-center">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-                      step >= stepNumber
-                        ? "bg-[#171717] text-white"
-                        : "bg-[#ebebeb] text-[#6b6b6b]"
-                    }`}
+          <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.18em] text-[#5e8b7c] uppercase">
+                Tu próxima consulta
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
+                Agenda con tranquilidad.
+              </h1>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-[#62736d]">
+                Elige un horario y cuéntale al médico lo esencial antes de
+                llegar.
+              </p>
+              {bookedId ? (
+                <motion.section
+                  initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8 rounded-3xl border border-[#dce9e2] bg-white p-7 shadow-[0_14px_40px_-30px_#254d3d] sm:p-9"
+                >
+                  <div className="flex size-12 items-center justify-center rounded-2xl bg-[#e5f3ea] text-[#268062]">
+                    <Check className="size-6" />
+                  </div>
+                  <h2 className="mt-5 text-2xl font-semibold tracking-tight">
+                    Solicitud enviada
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[#62736d]">
+                    El consultorio recibió tu cita y el brief médico. Te
+                    avisaremos cuando confirme el horario.
+                  </p>
+                  <div className="mt-6 rounded-2xl bg-[#f4f8f5] p-4 text-sm">
+                    <strong>{service?.name}</strong>
+                    <p className="mt-1 text-[#62736d] capitalize">
+                      {dateLabel(date)} · {time}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/patient/appointments/${bookedId}`}
+                    className="mt-6 inline-flex"
                   >
-                    {step > stepNumber ? (
-                      <CheckCircle className="h-5 w-5" />
-                    ) : (
-                      stepNumber
-                    )}
-                  </div>
-                  {stepNumber < 4 && (
-                    <div
-                      className={`mx-1 h-px w-8 sm:mx-2 sm:w-16 ${step > stepNumber ? "bg-[#171717]" : "bg-[#ebebeb]"}`}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex justify-between text-xs text-[#6b6b6b] sm:text-sm">
-              <span>Servicio</span>
-              <span>Fecha y Hora</span>
-              <span>Información</span>
-              <span>Confirmación</span>
-            </div>
-          </div>
-
-          {step === 5 ? (
-            // Confirmation Page
-            <Card className="border-[#ebebeb] bg-white text-center shadow-none">
-              <CardContent className="p-8">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#f0fdf4]">
-                  <CheckCircle className="h-8 w-8 text-emerald-600" />
-                </div>
-                <h2 className="mb-4 text-2xl font-bold">
-                  ¡Cita Agendada Exitosamente!
-                </h2>
-                <p className="mb-6 text-[#6b6b6b]">
-                  Hemos enviado los detalles de tu cita a tu correo electrónico.
-                </p>
-                <div className="mb-6 rounded-md border border-[#ebebeb] bg-[#fafafa] p-4">
-                  <h3 className="mb-2 font-semibold">Detalles de tu cita:</h3>
-                  <div className="space-y-1 text-sm">
-                    <p>
-                      <strong>Servicio:</strong> {selectedServiceData?.name}
-                    </p>
-                    <p>
-                      <strong>Fecha:</strong> {formatDate(selectedDate)}
-                    </p>
-                    <p>
-                      <strong>Hora:</strong> {selectedTime}
-                    </p>
-                    <p>
-                      <strong>Doctor:</strong> {doctor?.user?.name ?? "Doctor"}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <Button className="w-full" onClick={downloadICS}>
-                    Agregar al Calendario
-                  </Button>
-                  <Link href={`/doctor/${doctorId}`}>
-                    <Button variant="outline" className="w-full">
-                      Volver al Perfil
+                    <Button>
+                      Ver mi solicitud <ArrowRight className="ml-2 size-4" />
                     </Button>
                   </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <motion.div
-                key={step}
-                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                {/* Step 1: Select Service */}
-                {step === 1 && (
-                  <Card className="border-[#ebebeb] bg-white shadow-none">
-                    <CardHeader className="border-b border-[#ebebeb]">
-                      <CardTitle className="flex items-center space-x-2">
-                        <Heart className="h-5 w-5" />
-                        <span>Selecciona un Servicio</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <RadioGroup
-                        value={selectedService}
-                        onValueChange={setSelectedService}
-                      >
-                        <div className="space-y-4">
-                          {services.map((service) => (
-                            <div
-                              key={service.id}
-                              className="flex items-center space-x-3 rounded-md border border-[#ebebeb] p-4 transition-colors hover:bg-[#fafafa]"
+                </motion.section>
+              ) : (
+                <section className="mt-8 overflow-hidden rounded-3xl border border-[#e1e9e3] bg-white shadow-[0_18px_55px_-42px_#254d3d]">
+                  <div
+                    className="grid grid-cols-3 gap-2 border-b border-[#edf1ed] px-6 py-5 sm:px-8"
+                    aria-label="Progreso de la reserva"
+                  >
+                    {steps.map((label, index) => (
+                      <div key={label}>
+                        <div
+                          className={`h-1 rounded-full ${index <= step ? "bg-[#238a69]" : "bg-[#e8eee9]"}`}
+                        />
+                        <p
+                          className={`mt-2 text-xs font-medium ${index === step ? "text-[#18332c]" : "text-[#8b9a92]"}`}
+                        >
+                          {String(index + 1).padStart(2, "0")} · {label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <motion.div
+                    key={step}
+                    initial={reduceMotion ? false : { opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="px-6 py-7 sm:px-8 sm:py-9"
+                  >
+                    {step === 0 && (
+                      <>
+                        <h2 className="text-xl font-semibold">
+                          ¿Qué consulta necesitas?
+                        </h2>
+                        <p className="mt-1 text-sm text-[#708078]">
+                          El precio y duración se muestran antes de reservar.
+                        </p>
+                        <div className="mt-6 space-y-3">
+                          {doctorQuery.isLoading || servicesQuery.isLoading ? (
+                            <p className="text-sm text-[#708078]">
+                              Cargando servicios…
+                            </p>
+                          ) : !doctor ||
+                            doctorQuery.error ||
+                            doctorQuery.data?.error ? (
+                            <p
+                              className="rounded-xl bg-[#f7f8f6] p-5 text-sm"
+                              role="alert"
                             >
-                              <RadioGroupItem
-                                value={service.id}
-                                id={service.id}
-                              />
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor={service.id}
-                                  className="cursor-pointer font-medium"
-                                >
-                                  {service.name}
-                                </Label>
-                                <div className="mt-1 flex items-center space-x-4">
-                                  <span className="text-sm text-[#6b6b6b]">
-                                    {service.duration} min
-                                  </span>
-                                  <span className="text-lg font-semibold text-[#171717]">
-                                    {service.price}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </RadioGroup>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Step 2: Select Date and Time */}
-                {step === 2 && (
-                  <Card className="border-[#ebebeb] bg-white shadow-none">
-                    <CardHeader className="border-b border-[#ebebeb]">
-                      <CardTitle className="flex items-center space-x-2">
-                        <CalendarIcon className="h-5 w-5" />
-                        <span>Fecha y Hora</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6 pt-6">
-                      {availableDates.length === 0 ? (
-                        <div className="rounded-md border border-dashed border-[#d4d4d4] bg-[#fafafa] p-6 text-center text-sm text-[#6b6b6b]">
-                          El doctor aún no ha configurado horarios de atención.
-                        </div>
-                      ) : (
-                        <div className="grid gap-6 md:grid-cols-[1fr_300px]">
-                          <div>
-                            <div className="mb-3 flex items-center justify-between">
-                              <Label className="text-sm font-medium text-[#171717]">
-                                Selecciona una fecha
-                              </Label>
-                              <span className="rounded-full bg-[#f5f5f5] px-2.5 py-0.5 text-xs font-medium text-[#525252]">
-                                {availableDates.length} días disponibles
-                              </span>
-                            </div>
-                            <div className="rounded-lg border border-[#ebebeb] bg-white p-2 sm:p-3 shadow-xs">
-                              <DateCalendar
-                                mode="single"
-                                selected={
-                                  selectedDate
-                                    ? parseISO(selectedDate)
-                                    : undefined
-                                }
-                                onSelect={(date) => {
-                                  const nextDate = date
-                                    ? format(date, "yyyy-MM-dd")
-                                    : "";
-                                  setSelectedDate(nextDate);
-                                  setSelectedTime("");
+                              No encontramos a este doctor. Vuelve al directorio
+                              para elegir otro.
+                            </p>
+                          ) : services.length === 0 ? (
+                            <p className="rounded-xl bg-[#f7f8f6] p-5 text-sm">
+                              Este doctor todavía no tiene consultas
+                              disponibles.
+                            </p>
+                          ) : (
+                            services.map((item) => (
+                              <button
+                                type="button"
+                                key={item.id}
+                                onClick={() => {
+                                  setServiceId(item.id);
+                                  setDate("");
+                                  setTime("");
                                 }}
-                                disabled={(date) =>
-                                  !availableDates.includes(
-                                    format(date, "yyyy-MM-dd"),
-                                  )
-                                }
-                                className="mx-auto w-full [--cell-size:2.25rem] sm:[--cell-size:2.5rem]"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="border-t border-[#ebebeb] pt-5 md:border-t-0 md:border-l md:pt-0 md:pl-6">
-                            <div className="mb-4 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm font-semibold text-[#171717]">
-                                  Horarios disponibles
-                                </Label>
-                                {selectedTime && (
-                                  <span className="rounded bg-[#171717] px-2 py-0.5 text-xs font-mono font-medium text-white">
-                                    {selectedTime}
+                                aria-pressed={serviceId === item.id}
+                                className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition-[border-color,background-color,transform] duration-150 active:scale-[0.99] ${serviceId === item.id ? "border-[#56a98b] bg-[#f0f9f3]" : "border-[#e5ebe5] hover:border-[#b8d1c1]"}`}
+                              >
+                                <span>
+                                  <strong className="block text-sm">
+                                    {item.name}
+                                  </strong>
+                                  <span className="mt-1 flex items-center gap-1 text-xs text-[#708078]">
+                                    <Clock3 className="size-3.5" />{" "}
+                                    {item.duration} min
                                   </span>
-                                )}
-                              </div>
-                              {selectedDate && (
-                                <p className="text-xs text-[#737373] capitalize">
-                                  {formatDate(selectedDate)}
-                                </p>
-                              )}
+                                </span>
+                                <span className="text-sm font-semibold">
+                                  ${Number(item.price).toLocaleString("es-MX")}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {step === 1 && (
+                      <>
+                        <h2 className="text-xl font-semibold">
+                          Elige fecha y hora
+                        </h2>
+                        <p className="mt-1 text-sm text-[#708078]">
+                          Horarios del consultorio durante los próximos 30 días.
+                        </p>
+                        {slotsQuery.isLoading ? (
+                          <p className="mt-6 text-sm">
+                            Consultando disponibilidad…
+                          </p>
+                        ) : slotsQuery.error || slotsQuery.data?.error ? (
+                          <p className="mt-6 text-sm text-red-700" role="alert">
+                            No pudimos consultar los horarios. Vuelve a
+                            intentarlo.
+                          </p>
+                        ) : dates.length === 0 ? (
+                          <p className="mt-6 rounded-xl bg-[#f7f8f6] p-5 text-sm">
+                            No hay horarios libres en los próximos 30 días.
+                            Puedes elegir otro doctor.
+                          </p>
+                        ) : (
+                          <>
+                            <div
+                              className="mt-6 flex gap-2 overflow-x-auto pb-2"
+                              aria-label="Fechas disponibles"
+                            >
+                              {dates.map((item) => (
+                                <button
+                                  type="button"
+                                  key={item}
+                                  onClick={() => {
+                                    setDate(item);
+                                    setTime("");
+                                  }}
+                                  aria-pressed={date === item}
+                                  className={`min-w-28 rounded-2xl border px-4 py-3 text-left text-sm capitalize transition-colors ${date === item ? "border-[#238a69] bg-[#eaf6ee]" : "border-[#e5ebe5] hover:bg-[#f7faf7]"}`}
+                                >
+                                  {dateLabel(item)}
+                                </button>
+                              ))}
                             </div>
-
-                            {!selectedDate ? (
-                              <p className="rounded-md border border-dashed border-[#ebebeb] bg-[#fafafa] p-4 text-center text-xs text-[#737373]">
-                                Selecciona una fecha en el calendario para consultar los horarios de atención.
-                              </p>
-                            ) : (
-                              <TimeSlotPicker
-                                slots={timeSlots}
-                                selectedTime={selectedTime}
-                                onSelectTime={setSelectedTime}
-                                emptyMessage="No hay horarios disponibles para este día."
-                              />
+                            {date && (
+                              <>
+                                <p className="mt-6 text-sm font-semibold">
+                                  Horarios disponibles
+                                </p>
+                                <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                  {times.map((item) => (
+                                    <button
+                                      type="button"
+                                      key={item}
+                                      onClick={() => setTime(item)}
+                                      aria-pressed={time === item}
+                                      className={`min-h-11 rounded-xl border text-sm font-medium transition-colors ${time === item ? "border-[#238a69] bg-[#238a69] text-white" : "border-[#e5ebe5] hover:border-[#a7cab5]"}`}
+                                    >
+                                      {item}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
                             )}
+                          </>
+                        )}
+                      </>
+                    )}
+                    {step === 2 && (
+                      <>
+                        <h2 className="text-xl font-semibold">
+                          Prepara tu consulta
+                        </h2>
+                        <p className="mt-1 text-sm leading-6 text-[#708078]">
+                          Tu médico verá estas respuestas en tu expediente.
+                          Escribe “Ninguna” si no tienes alergias o medicamentos
+                          que reportar.
+                        </p>
+                        <div className="mt-6 space-y-5">
+                          <div className="space-y-2">
+                            <Label htmlFor="symptoms">
+                              ¿Qué síntomas o motivo te traen? *
+                            </Label>
+                            <Textarea
+                              id="symptoms"
+                              value={symptoms}
+                              onChange={(event) =>
+                                setSymptoms(event.target.value)
+                              }
+                              maxLength={2000}
+                              placeholder="Ej. Dolor de cabeza desde hace tres días"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="allergies">
+                              ¿Tienes alergias conocidas?
+                            </Label>
+                            <Input
+                              id="allergies"
+                              value={allergies}
+                              onChange={(event) =>
+                                setAllergies(event.target.value)
+                              }
+                              maxLength={1000}
+                              placeholder="Medicamentos, alimentos u otras"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="medications">
+                              ¿Qué medicamentos tomas actualmente?
+                            </Label>
+                            <Input
+                              id="medications"
+                              value={medications}
+                              onChange={(event) =>
+                                setMedications(event.target.value)
+                              }
+                              maxLength={1000}
+                              placeholder="Nombre y dosis, si la conoces"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="context">
+                              ¿Algo más que debamos saber?
+                            </Label>
+                            <Textarea
+                              id="context"
+                              value={context}
+                              onChange={(event) =>
+                                setContext(event.target.value)
+                              }
+                              maxLength={2000}
+                              placeholder="Padecimientos, estudios previos o dudas"
+                            />
                           </div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Step 3: Personal Information */}
-                {step === 3 && (
-                  <Card className="border-[#ebebeb] bg-white shadow-none">
-                    <CardHeader className="border-b border-[#ebebeb]">
-                      <CardTitle className="flex items-center space-x-2">
-                        <User className="h-5 w-5" />
-                        <span>Información Personal</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label htmlFor="firstName">Nombre</Label>
-                          <Input
-                            id="firstName"
-                            value={formData.firstName}
-                            onChange={(e) =>
-                              handleInputChange("firstName", e.target.value)
-                            }
-                            required
-                          />
+                        <div className="mt-6 flex items-start gap-2 rounded-2xl bg-[#f3f8f4] p-4 text-xs leading-5 text-[#526e60]">
+                          <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+                          Este brief se comparte con el médico de esta cita. Tu
+                          historial médico general tiene permisos
+                          independientes.
                         </div>
-                        <div>
-                          <Label htmlFor="lastName">Apellido</Label>
-                          <Input
-                            id="lastName"
-                            value={formData.lastName}
-                            onChange={(e) =>
-                              handleInputChange("lastName", e.target.value)
-                            }
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label htmlFor="email">Email</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) =>
-                              handleInputChange("email", e.target.value)
-                            }
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="phone">Teléfono</Label>
-                          <Input
-                            id="phone"
-                            value={formData.phone}
-                            onChange={(e) =>
-                              handleInputChange("phone", e.target.value)
-                            }
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label htmlFor="birthDate">Fecha de Nacimiento</Label>
-                          <Input
-                            id="birthDate"
-                            type="date"
-                            value={formData.birthDate}
-                            onChange={(e) =>
-                              handleInputChange("birthDate", e.target.value)
-                            }
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="gender">Género</Label>
-                          <Select
-                            onValueChange={(value) =>
-                              handleInputChange("gender", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="masculino">
-                                Masculino
-                              </SelectItem>
-                              <SelectItem value="femenino">Femenino</SelectItem>
-                              <SelectItem value="otro">Otro</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="reason">Motivo de la consulta</Label>
-                        <Textarea
-                          id="reason"
-                          placeholder="Describe brevemente el motivo de tu consulta..."
-                          value={formData.reason}
-                          onChange={(e) =>
-                            handleInputChange("reason", e.target.value)
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="insurance">
-                          Seguro Médico (opcional)
-                        </Label>
-                        <Input
-                          id="insurance"
-                          placeholder="Nombre de tu seguro médico"
-                          value={formData.insurance}
-                          onChange={(e) =>
-                            handleInputChange("insurance", e.target.value)
-                          }
-                        />
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label htmlFor="emergencyContact">
-                            Contacto de Emergencia
-                          </Label>
-                          <Input
-                            id="emergencyContact"
-                            placeholder="Nombre completo"
-                            value={formData.emergencyContact}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "emergencyContact",
-                                e.target.value,
-                              )
-                            }
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="emergencyPhone">
-                            Teléfono de Emergencia
-                          </Label>
-                          <Input
-                            id="emergencyPhone"
-                            placeholder="Número de teléfono"
-                            value={formData.emergencyPhone}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "emergencyPhone",
-                                e.target.value,
-                              )
-                            }
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Step 4: Confirmation */}
-                {step === 4 && (
-                  <Card className="border-[#ebebeb] bg-white shadow-none">
-                    <CardHeader className="border-b border-[#ebebeb]">
-                      <CardTitle className="flex items-center space-x-2">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>Confirmar Cita</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] p-4">
-                        <h3 className="mb-3 font-semibold">
-                          Resumen de la Cita
-                        </h3>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span>Servicio:</span>
-                            <span className="font-medium">
-                              {selectedServiceData?.name}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Fecha:</span>
-                            <span className="font-medium">
-                              {formatDate(selectedDate)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Hora:</span>
-                            <span className="font-medium">{selectedTime}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Duración:</span>
-                            <span className="font-medium">
-                              {selectedServiceData?.duration}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Precio:</span>
-                            <span className="font-medium text-[#171717]">
-                              {selectedServiceData?.price}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] p-4">
-                        <h3 className="mb-3 font-semibold">
-                          Información del Paciente
-                        </h3>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span>Nombre:</span>
-                            <span className="font-medium">
-                              {formData.firstName} {formData.lastName}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Email:</span>
-                            <span className="font-medium">
-                              {formData.email}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Teléfono:</span>
-                            <span className="font-medium">
-                              {formData.phone}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="terms"
-                          checked={formData.terms}
-                          onCheckedChange={(checked) =>
-                            handleInputChange("terms", checked as boolean)
-                          }
-                        />
-                        <Label htmlFor="terms" className="text-sm">
-                          Acepto los términos y condiciones y la política de
-                          privacidad
-                        </Label>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </motion.div>
-
-              {submitError && (
-                <p
-                  className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-                  role="alert"
-                >
-                  {submitError}
+                      </>
+                    )}
+                  </motion.div>
+                  {error && (
+                    <p
+                      className="mx-6 mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"
+                      role="alert"
+                    >
+                      {error}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between border-t border-[#edf1ed] px-6 py-5 sm:px-8">
+                    {step > 0 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setError(null);
+                          setStep(step - 1);
+                        }}
+                      >
+                        Atrás
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-[#8b9a92]">
+                        Sin cargos por explorar horarios
+                      </span>
+                    )}
+                    <Button
+                      type="button"
+                      onClick={() => void submit()}
+                      disabled={!canAdvance || create.isPending}
+                    >
+                      {create.isPending
+                        ? "Enviando…"
+                        : step === 2
+                          ? "Solicitar cita"
+                          : "Continuar"}
+                      <ArrowRight className="ml-2 size-4" />
+                    </Button>
+                  </div>
+                </section>
+              )}
+            </div>
+            <aside className="rounded-3xl border border-[#e1e9e3] bg-white p-6 lg:sticky lg:top-6">
+              <p className="text-xs font-semibold tracking-[0.13em] text-[#7d9588] uppercase">
+                Tu especialista
+              </p>
+              {doctor ? (
+                <div className="mt-5 flex items-center gap-3">
+                  <Avatar className="size-12">
+                    <AvatarFallback>
+                      {doctor.user?.name?.charAt(0) ?? "D"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-semibold">{doctor.user?.name}</p>
+                    <p className="text-xs text-[#708078]">{doctor.specialty}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-5 text-sm text-[#708078]">
+                  {doctorQuery.isLoading
+                    ? "Cargando doctor…"
+                    : "Doctor no disponible"}
                 </p>
               )}
-
-              {/* Navigation Buttons */}
-              <div className="mt-6 flex justify-between">
-                {step > 1 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setStep(step - 1)}
-                  >
-                    Anterior
-                  </Button>
+              <div className="mt-6 border-t border-[#edf1ed] pt-5 text-sm">
+                {service && (
+                  <p className="font-medium">
+                    {service.name} · {service.duration} min
+                  </p>
                 )}
-                <Button
-                  type="submit"
-                  className="ml-auto"
-                  disabled={
-                    createAppointment.isPending ||
-                    (step === 1 && !selectedService) ||
-                    (step === 2 && (!selectedDate || !selectedTime)) ||
-                    (step === 3 &&
-                      (!formData.firstName ||
-                        !formData.lastName ||
-                        !formData.email ||
-                        !formData.phone)) ||
-                    (step === 4 && !formData.terms)
-                  }
-                >
-                  {createAppointment.isPending
-                    ? "Confirmando…"
-                    : step === 4
-                      ? "Confirmar Cita"
-                      : "Siguiente"}
-                </Button>
+                {date && (
+                  <p className="mt-2 flex items-center gap-2 text-[#62736d] capitalize">
+                    <CalendarDays className="size-4" /> {dateLabel(date)}{" "}
+                    {time && `· ${time}`}
+                  </p>
+                )}
               </div>
-            </form>
-          )}
+              <p className="mt-6 text-xs leading-5 text-[#87958d]">
+                La solicitud queda pendiente hasta que el consultorio la
+                confirme.
+              </p>
+            </aside>
+          </div>
         </div>
-      </div>
-    </div>
+      </main>
+    </ProductShell>
   );
 }

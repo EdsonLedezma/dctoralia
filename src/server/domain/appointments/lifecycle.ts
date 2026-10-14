@@ -16,6 +16,7 @@ type LifecycleEventInput = {
   scheduledAt: Date;
   scheduledTime: string;
   metadata?: Prisma.InputJsonValue;
+  idempotencyKey?: string;
 };
 
 export function recordAppointmentLifecycleEvent(

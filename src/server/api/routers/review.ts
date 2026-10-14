@@ -175,19 +175,14 @@ export const reviewRouter = createTRPCRouter({
 
   // Obtener todas las reseñas de un doctor (público)
   getByDoctor: publicProcedure
-    .input(z.object({ doctorId: z.string() }))
+    .input(z.object({ doctorId: z.string().cuid() }))
     .query(async ({ input, ctx }) => {
       try {
         const reviews = await ctx.db.review.findMany({
           where: { doctorId: input.doctorId },
-          include: {
-            patient: {
-              select: {
-                user: { select: { name: true, image: true } },
-              },
-            },
-          },
+          select: { id: true, rating: true, comment: true, createdAt: true },
           orderBy: { createdAt: "desc" },
+          take: 100,
         });
 
         return trpcSuccess(reviews, "Reseñas del doctor");

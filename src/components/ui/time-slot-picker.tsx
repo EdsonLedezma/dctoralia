@@ -92,9 +92,17 @@ export function TimeSlotPicker({
             <motion.div
               key={group.id}
               layout={!shouldReduceMotion}
-              initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={shouldReduceMotion ? undefined : { opacity: 0, y: -2 }}
+              initial={
+                shouldReduceMotion
+                  ? false
+                  : { opacity: 0, transform: "translateY(4px)" }
+              }
+              animate={{ opacity: 1, transform: "translateY(0px)" }}
+              exit={
+                shouldReduceMotion
+                  ? undefined
+                  : { opacity: 0, transform: "translateY(-2px)" }
+              }
               transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
               className="space-y-2"
             >
@@ -117,22 +125,24 @@ export function TimeSlotPicker({
                         initial={
                           shouldReduceMotion
                             ? false
-                            : { opacity: 0, scale: 0.98 }
+                            : { opacity: 0, transform: "scale(0.98)" }
                         }
-                        animate={{ opacity: 1, scale: 1 }}
+                        animate={{ opacity: 1, transform: "scale(1)" }}
                         exit={
                           shouldReduceMotion
                             ? undefined
                             : { opacity: 0, scale: 0.98 }
                         }
                         whileTap={
-                          shouldReduceMotion ? undefined : { scale: 0.97 }
+                          shouldReduceMotion
+                            ? undefined
+                            : { transform: "scale(0.97)" }
                         }
                         transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
                         onClick={() => onSelectTime(time)}
                         aria-pressed={isSelected}
                         className={cn(
-                          "flex min-h-10 items-center justify-center rounded-md border px-3 py-2 text-xs font-medium focus-visible:ring-2 focus-visible:ring-[#171717]/30 focus-visible:outline-none",
+                          "flex min-h-11 items-center justify-center rounded-md border px-3 py-2 text-xs font-medium focus-visible:ring-2 focus-visible:ring-[#171717]/30 focus-visible:outline-none",
                           isSelected
                             ? "border-[#171717] bg-[#171717] text-white shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
                             : "border-[#ebebeb] bg-white text-[#171717] transition-[background-color,border-color] duration-150 hover:border-[#a1a1a1] hover:bg-[#fafafa]",

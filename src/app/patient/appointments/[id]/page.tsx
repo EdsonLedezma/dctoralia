@@ -153,6 +153,39 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
         )}
       </InfoSection>
 
+      {appointment.intakeSymptoms && (
+        <InfoSection title="Información que compartiste antes de la consulta">
+          <dl className="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="font-medium">Síntomas</dt>
+              <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+                {appointment.intakeSymptoms}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">Alergias</dt>
+              <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+                {appointment.intakeAllergies || "No reportadas"}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">Medicamentos</dt>
+              <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+                {appointment.intakeMedications || "No reportados"}
+              </dd>
+            </div>
+            {appointment.intakeContext && (
+              <div>
+                <dt className="font-medium">Contexto adicional</dt>
+                <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+                  {appointment.intakeContext}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </InfoSection>
+      )}
+
       <InfoSection title="Contacto del consultorio">
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#525252]">
           {doctorPhone && (

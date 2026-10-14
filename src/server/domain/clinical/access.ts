@@ -47,6 +47,20 @@ export function careEpisodeScope(
   };
 }
 
+/** Files are visible to their uploader or the clinician owning their linked care record. */
+export function clinicalFileScope(
+  actor: ClinicalActor,
+): Prisma.ClinicalFileWhereInput {
+  return {
+    clinicId: actor.clinicId,
+    OR: [
+      { uploadedByUserId: actor.userId },
+      { episode: { primaryDoctorId: actor.doctorId } },
+      { encounter: { doctorId: actor.doctorId } },
+    ],
+  };
+}
+
 /** A doctor sees records they authored or encounters scheduled in their own agenda. */
 export function patientClinicalScope(
   actor: ClinicalActor,

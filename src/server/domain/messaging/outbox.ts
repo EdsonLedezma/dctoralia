@@ -21,6 +21,7 @@ export type EnqueueMessageInput = {
   idempotencyKey: string;
   correlationId?: string;
   sandbox?: boolean;
+  expiresAt?: Date;
 };
 
 export function buildMessageIdempotencyKey(
@@ -46,6 +47,7 @@ export async function enqueueMessage(
       idempotencyKey: input.idempotencyKey,
       correlationId: input.correlationId,
       sandbox: input.sandbox ?? true,
+      expiresAt: input.expiresAt,
     },
   });
 }
@@ -77,6 +79,18 @@ export async function dispatchMessageOutbox(
     where: {
       provider: provider.name,
       status: { in: ["PENDING", "FAILED"] },
+      expiresAt: { lte: now },
+    },
+    data: {
+      status: "CANCELLED",
+      failedAt: now,
+      lastErrorCode: "MESSAGE_WINDOW_EXPIRED",
+    },
+  });
+  await db.messageOutbox.updateMany({
+    where: {
+      provider: provider.name,
+      status: { in: ["PENDING", "FAILED"] },
       OR: [
         { attempts: { gte: maxAttempts } },
         {
@@ -96,6 +110,7 @@ export async function dispatchMessageOutbox(
       provider: provider.name,
       status: { in: ["PENDING", "FAILED"] },
       nextAttemptAt: { lte: now },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     },
     orderBy: { createdAt: "asc" },
     take: limit,
@@ -106,6 +121,7 @@ export async function dispatchMessageOutbox(
   let deadLettered = 0;
 
   for (const candidate of candidates) {
+    const claimNow = options.now ?? new Date();
     const leaseToken = randomUUID();
     const claim = await db.messageOutbox.updateMany({
       where: {
@@ -113,13 +129,14 @@ export async function dispatchMessageOutbox(
         attempts: candidate.attempts,
         nextAttemptAt: { lte: now },
         status: { in: ["PENDING", "FAILED"] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: claimNow } }],
       },
       data: {
         status: "PROCESSING",
         attempts: { increment: 1 },
-        lastAttemptAt: now,
+        lastAttemptAt: claimNow,
         leaseToken,
-        leaseUntil: new Date(Date.now() + 120_000),
+        leaseUntil: new Date(claimNow.getTime() + 120_000),
       },
     });
     if (claim.count !== 1) continue;

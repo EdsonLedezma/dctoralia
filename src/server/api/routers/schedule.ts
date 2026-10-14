@@ -9,6 +9,7 @@ import {
 import {
   getUtcDayBounds,
   hasTimeConflict,
+  isAppointmentTimeInFuture,
   timeToMinutes,
 } from "~/server/domain/appointments/appointment-time";
 import { doctorOwnedScheduleScope } from "~/server/domain/authorization/access-policy";
@@ -457,7 +458,13 @@ export const useSchedule = createTRPCRouter({
             const minutes = (currentMinutes % 60).toString().padStart(2, "0");
             const time = `${hours}:${minutes}`;
 
-            if (!hasTimeConflict(time, slotDuration, appointmentsForDay)) {
+            if (
+              isAppointmentTimeInFuture(
+                new Date(`${dateKey}T12:00:00.000Z`),
+                time,
+              ) &&
+              !hasTimeConflict(time, slotDuration, appointmentsForDay)
+            ) {
               availableSlots.push({ date: dateKey, time });
             }
           }

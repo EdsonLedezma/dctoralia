@@ -58,6 +58,50 @@ export function hasTimeConflict(
   });
 }
 
+export function getAvailableAppointmentSlots(
+  date: Date,
+  duration: number,
+  scheduleStart: string,
+  scheduleEnd: string,
+  existingAppointments: ExistingAppointmentSlot[],
+  now = new Date(),
+): string[] {
+  const startMinutes = timeToMinutes(scheduleStart);
+  const endMinutes = timeToMinutes(scheduleEnd);
+  if (startMinutes === null || endMinutes === null || duration <= 0) return [];
+
+  const calendarDate = (value: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Mexico_City",
+    }).format(value);
+  const isToday = calendarDate(date) === calendarDate(now);
+  const localClock = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Mexico_City",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  const nowMinutes = timeToMinutes(localClock) ?? 0;
+  const slots: string[] = [];
+
+  for (
+    let minute = startMinutes;
+    minute + duration <= endMinutes;
+    minute += 15
+  ) {
+    const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+    if (
+      (!isToday || minute > nowMinutes) &&
+      isSlotInsideSchedule(time, duration, scheduleStart, scheduleEnd) &&
+      !hasTimeConflict(time, duration, existingAppointments)
+    ) {
+      slots.push(time);
+    }
+  }
+
+  return slots;
+}
+
 export function getUtcDayBounds(date: Date): { start: Date; end: Date } {
   const start = new Date(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
@@ -69,5 +113,40 @@ export function getUtcDayBounds(date: Date): { start: Date; end: Date } {
 }
 
 export function isTodayOrFuture(date: Date, now = new Date()): boolean {
-  return getUtcDayBounds(date).start >= getUtcDayBounds(now).start;
+  const calendarDate = (value: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Mexico_City",
+    }).format(value);
+
+  return calendarDate(date) >= calendarDate(now);
+}
+
+export function isAppointmentTimeInFuture(
+  date: Date,
+  time: string,
+  now = new Date(),
+): boolean {
+  const calendarDate = (value: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Mexico_City",
+    }).format(value);
+  const appointmentDay = calendarDate(date);
+  const today = calendarDate(now);
+
+  if (appointmentDay !== today) return appointmentDay > today;
+
+  const localClock = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Mexico_City",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  const nowMinutes = timeToMinutes(localClock);
+  const appointmentMinutes = timeToMinutes(time);
+
+  return (
+    appointmentMinutes !== null &&
+    nowMinutes !== null &&
+    appointmentMinutes > nowMinutes
+  );
 }

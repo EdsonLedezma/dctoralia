@@ -23,6 +23,11 @@ import {
 } from "lucide-react";
 
 import DashboardWrapper from "~/components/auth/DashboardWrapper";
+import { ObservationPanel } from "~/components/clinical/observation-panel";
+import {
+  clinicalObservationCatalog,
+  type ClinicalObservationCode,
+} from "~/lib/clinical-observations";
 import { ProductShell } from "~/components/shell/product-shell";
 import {
   AlertDialog,
@@ -47,6 +52,23 @@ type ClinicalTimeline = NonNullable<
 >;
 type OutcomePoint = ClinicalTimeline["outcomeAssessments"][number];
 
+const followUpTypes = [
+  { value: "FOLLOW_UP_APPOINTMENT", label: "Agendar consulta de seguimiento" },
+  { value: "REVIEW_RESULT", label: "Revisar resultado" },
+  { value: "PATIENT_CHECK_IN", label: "Contactar paciente" },
+  { value: "ADMINISTRATIVE", label: "Gestión administrativa" },
+  { value: "OTHER", label: "Otro" },
+] as const;
+type FollowUpTaskType = (typeof followUpTypes)[number]["value"];
+
+const followUpPriorities = [
+  { value: "LOW", label: "Baja" },
+  { value: "NORMAL", label: "Normal" },
+  { value: "HIGH", label: "Alta" },
+  { value: "URGENT", label: "Urgente" },
+] as const;
+type FollowUpTaskPriority = (typeof followUpPriorities)[number]["value"];
+
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
@@ -54,10 +76,28 @@ function formatDate(value: Date) {
   }).format(new Date(value));
 }
 
+function followUpTaskTypeLabel(type: string) {
+  return followUpTypes.find((item) => item.value === type)?.label ?? "Otro";
+}
+
+function followUpPriorityLabel(priority: string) {
+  return (
+    followUpPriorities.find((item) => item.value === priority)?.label ??
+    "Normal"
+  );
+}
+
+function followUpPriorityClass(priority: string) {
+  if (priority === "URGENT") return "border-red-200 bg-red-50 text-red-700";
+  if (priority === "HIGH") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-[#ebebeb] bg-white text-[#525252]";
+}
+
 export default function ClinicalPatientPage({ params }: Props) {
   const { patientId } = use(params);
   const utils = api.useUtils();
   const timeline = api.clinical.patientTimeline.useQuery({ patientId });
+  const membersQuery = api.workspace.members.list.useQuery();
   const [episodeId, setEpisodeId] = useState("");
   const [episodeTitle, setEpisodeTitle] = useState("");
   const [encounterId, setEncounterId] = useState("");
@@ -74,6 +114,12 @@ export default function ClinicalPatientPage({ params }: Props) {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDetails, setTaskDetails] = useState("");
   const [taskDueAt, setTaskDueAt] = useState("");
+  const [taskType, setTaskType] = useState<FollowUpTaskType>(
+    "FOLLOW_UP_APPOINTMENT",
+  );
+  const [taskPriority, setTaskPriority] =
+    useState<FollowUpTaskPriority>("NORMAL");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
   const [instrumentCode, setInstrumentCode] = useState("");
   const [instrumentVersion, setInstrumentVersion] = useState("");
   const [score, setScore] = useState("");
@@ -82,6 +128,8 @@ export default function ClinicalPatientPage({ params }: Props) {
   const [fileCategory, setFileCategory] = useState("OTHER");
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
+  const [exportingRecord, setExportingRecord] = useState(false);
 
   useEffect(() => {
     const activeEpisode = timeline.data?.result?.episodes.find(
@@ -157,6 +205,9 @@ export default function ClinicalPatientPage({ params }: Props) {
       setTaskTitle("");
       setTaskDetails("");
       setTaskDueAt("");
+      setTaskType("FOLLOW_UP_APPOINTMENT");
+      setTaskPriority("NORMAL");
+      setTaskAssigneeId("");
       toast.success("Seguimiento agregado");
       await invalidateTimeline();
     },
@@ -243,8 +294,9 @@ export default function ClinicalPatientPage({ params }: Props) {
       episodeId,
       title: taskTitle.trim(),
       details: taskDetails.trim() || undefined,
-      type: "OTHER",
-      priority: "NORMAL",
+      type: taskType,
+      priority: taskPriority,
+      assignedToUserId: taskAssigneeId || undefined,
       dueAt: taskDueAt ? new Date(taskDueAt) : undefined,
     });
   };
@@ -324,7 +376,45 @@ export default function ClinicalPatientPage({ params }: Props) {
     }
   };
 
+  const exportClinicalRecord = async () => {
+    setExportingRecord(true);
+    try {
+      const response = await fetch(
+        `/api/clinical/patients/${patientId}/export`,
+        { method: "POST", credentials: "same-origin" },
+      );
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(
+          errorBody?.error ?? "No se pudo preparar el expediente.",
+        );
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `expediente-clinico-${patientId}.json`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      toast.success("Expediente preparado para descargar");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo exportar el expediente.",
+      );
+    } finally {
+      setExportingRecord(false);
+    }
+  };
+
   const result = timeline.data?.result;
+  const teamDoctors = (membersQuery.data?.result ?? []).filter(
+    (member) => member.user.role === "DOCTOR",
+  );
 
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
@@ -374,6 +464,17 @@ export default function ClinicalPatientPage({ params }: Props) {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 sm:min-h-9"
+                      disabled={exportingRecord}
+                      onClick={() => setExportConfirmOpen(true)}
+                    >
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                      {exportingRecord ? "Preparando…" : "Exportar expediente"}
+                    </Button>
                     <span className="rounded border border-[#ebebeb] bg-white px-2.5 py-1.5 text-[#525252]">
                       {
                         result.episodes.filter(
@@ -673,6 +774,52 @@ export default function ClinicalPatientPage({ params }: Props) {
                         </p>
                       </div>
                       <div className="divide-y divide-[#ebebeb]">
+                        {result.appointmentIntakes.map((intake) => (
+                          <article
+                            key={intake.id}
+                            className="bg-[#f6f8f7] px-5 py-4"
+                          >
+                            <p className="text-sm font-semibold text-[#173b34]">
+                              Brief previo a la consulta
+                            </p>
+                            <p className="mt-1 text-xs text-[#60736d]">
+                              {formatDate(intake.date)} · {intake.time} ·{" "}
+                              {intake.status === "PENDING"
+                                ? "Por confirmar"
+                                : "Cita registrada"}
+                            </p>
+                            <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                              <div>
+                                <dt className="font-medium">Síntomas</dt>
+                                <dd className="whitespace-pre-wrap text-[#525252]">
+                                  {intake.intakeSymptoms}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="font-medium">Alergias</dt>
+                                <dd className="whitespace-pre-wrap text-[#525252]">
+                                  {intake.intakeAllergies || "No reportadas"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="font-medium">Medicamentos</dt>
+                                <dd className="whitespace-pre-wrap text-[#525252]">
+                                  {intake.intakeMedications || "No reportados"}
+                                </dd>
+                              </div>
+                              {intake.intakeContext && (
+                                <div>
+                                  <dt className="font-medium">
+                                    Contexto adicional
+                                  </dt>
+                                  <dd className="whitespace-pre-wrap text-[#525252]">
+                                    {intake.intakeContext}
+                                  </dd>
+                                </div>
+                              )}
+                            </dl>
+                          </article>
+                        ))}
                         {result.encounters.map((encounter) => (
                           <article key={encounter.id} className="px-5 py-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -877,6 +1024,17 @@ export default function ClinicalPatientPage({ params }: Props) {
                                     ? "Cancelado"
                                     : "Pendiente"}
                               </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span className="rounded border border-[#ebebeb] bg-white px-2 py-0.5 text-[10px] text-[#525252]">
+                                  {followUpTaskTypeLabel(task.type)}
+                                </span>
+                                <span
+                                  className={`rounded border px-2 py-0.5 text-[10px] ${followUpPriorityClass(task.priority)}`}
+                                >
+                                  Prioridad{" "}
+                                  {followUpPriorityLabel(task.priority)}
+                                </span>
+                              </div>
                               {task.details && (
                                 <p className="mt-2 text-sm leading-6 text-[#525252]">
                                   {task.details}
@@ -904,9 +1062,32 @@ export default function ClinicalPatientPage({ params }: Props) {
                             </div>
                           </article>
                         ))}
-                        {result.encounters.length +
+                        {result.clinicalObservations
+                          .filter((observation) => !observation.voidedAt)
+                          .map((observation) => (
+                            <article
+                              key={observation.id}
+                              className="flex items-start gap-3 px-5 py-4"
+                            >
+                              <Activity className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+                              <div>
+                                <p className="text-sm font-medium text-[#171717]">
+                                  {clinicalObservationCatalog[
+                                    observation.code as ClinicalObservationCode
+                                  ]?.label ?? observation.code}
+                                </p>
+                                <p className="mt-1 text-xs text-[#737373]">
+                                  {observation.value} {observation.unit} ·{" "}
+                                  {formatDate(observation.measuredAt)}
+                                </p>
+                              </div>
+                            </article>
+                          ))}
+                        {result.appointmentIntakes.length +
+                          result.encounters.length +
                           result.followUpTasks.length +
-                          result.outcomeAssessments.length ===
+                          result.outcomeAssessments.length +
+                          result.clinicalObservations.length ===
                           0 && (
                           <p className="px-5 py-10 text-center text-sm text-[#737373]">
                             Aún no hay actividad clínica registrada.
@@ -918,6 +1099,11 @@ export default function ClinicalPatientPage({ params }: Props) {
                     <OutcomeTrendPanel
                       episodeId={episodeId}
                       assessments={result.outcomeAssessments}
+                    />
+                    <ObservationPanel
+                      patientId={patientId}
+                      episodeId={episodeId}
+                      observations={result.clinicalObservations}
                     />
                   </div>
 
@@ -944,6 +1130,76 @@ export default function ClinicalPatientPage({ params }: Props) {
                             maxLength={160}
                             required
                           />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="follow-up-type">Tipo</Label>
+                            <select
+                              id="follow-up-type"
+                              value={taskType}
+                              onChange={(event) =>
+                                setTaskType(
+                                  event.target.value as FollowUpTaskType,
+                                )
+                              }
+                              className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                            >
+                              {followUpTypes.map((type) => (
+                                <option key={type.value} value={type.value}>
+                                  {type.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="follow-up-priority">
+                              Prioridad
+                            </Label>
+                            <select
+                              id="follow-up-priority"
+                              value={taskPriority}
+                              onChange={(event) =>
+                                setTaskPriority(
+                                  event.target.value as FollowUpTaskPriority,
+                                )
+                              }
+                              className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                            >
+                              {followUpPriorities.map((priority) => (
+                                <option
+                                  key={priority.value}
+                                  value={priority.value}
+                                >
+                                  {priority.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="follow-up-assignee">
+                            Responsable
+                          </Label>
+                          <select
+                            id="follow-up-assignee"
+                            value={taskAssigneeId}
+                            onChange={(event) =>
+                              setTaskAssigneeId(event.target.value)
+                            }
+                            disabled={membersQuery.isLoading}
+                            className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20 disabled:cursor-wait disabled:opacity-60"
+                          >
+                            <option value="">Yo</option>
+                            {teamDoctors.map((member) => (
+                              <option key={member.userId} value={member.userId}>
+                                {member.user.name || "Doctor"}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-[#888]">
+                            Si eliges a otra persona del equipo, el seguimiento
+                            aparecerá en su bandeja.
+                          </p>
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="follow-up-due">Fecha límite</Label>
@@ -1161,6 +1417,28 @@ export default function ClinicalPatientPage({ params }: Props) {
                   }}
                 >
                   Firmar consulta
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog
+            open={exportConfirmOpen}
+            onOpenChange={setExportConfirmOpen}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Exportar expediente clínico</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Se descargará un archivo JSON con tus consultas, seguimientos,
+                  mediciones y citas de este paciente en el consultorio actual.
+                  Los documentos se incluyen como metadatos y se descargan por
+                  separado. Guarda el archivo en un lugar seguro.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void exportClinicalRecord()}>
+                  Exportar archivo
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

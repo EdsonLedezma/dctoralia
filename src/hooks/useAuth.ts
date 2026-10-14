@@ -1,4 +1,5 @@
-import { useSession, signIn } from "next-auth/react";
+import { useState } from "react";
+import { getSession, useSession, signIn } from "next-auth/react";
 import { api } from "~/trpc/react";
 import { unwrapTrpcResult } from "~/types/trpc-response";
 
@@ -6,46 +7,45 @@ export function useAuth() {
   const { data: session, status } = useSession();
 
   // tRPC mutations
-  const signinMutation = api.auth.signin.useMutation();
   const updateProfileMutation = api.auth.updateProfile.useMutation();
   const changePasswordMutation = api.auth.changePassword.useMutation();
+  const [signinError, setSigninError] = useState<Error | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   // tRPC queries
   const profileQuery = api.auth.getProfile.useQuery(undefined, {
     enabled: !!session?.user,
   });
 
-  // Enhanced signin that combines tRPC validation with NextAuth session creation
   const signin = async (email: string, password: string) => {
+    setSigninError(null);
+    setIsSigningIn(true);
     try {
-      // First, validate credentials with tRPC
-      const tRPCResult = unwrapTrpcResult(
-        await signinMutation.mutateAsync({ email, password }),
-      );
+      const nextAuthResult = await signIn("credentials", {
+        email: email.trim().toLowerCase(),
+        password,
+        redirect: false,
+      });
 
-      if (tRPCResult.user) {
-        // If tRPC validation succeeds, create NextAuth session
-        const nextAuthResult = await signIn("credentials", {
-          email,
-          password,
-          redirect: false,
-        });
-
-        if (nextAuthResult?.error) {
-          throw new Error("Error en la autenticación");
-        }
-
-        return {
-          success: true,
-          user: tRPCResult.user,
-          nextAuthResult,
-        };
+      if (nextAuthResult?.error || !nextAuthResult?.ok) {
+        throw new Error("El correo o la contraseña no son correctos.");
       }
 
-      throw new Error("Credenciales inválidas");
-    } catch (error) {
-      // Re-throw the error so it can be caught by the calling component
+      const authenticatedSession = await getSession();
+      return {
+        success: true,
+        user: authenticatedSession?.user ?? null,
+        nextAuthResult,
+      };
+    } catch (caughtError) {
+      const error =
+        caughtError instanceof Error
+          ? caughtError
+          : new Error("No se pudo iniciar sesión.");
+      setSigninError(error);
       throw error;
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
@@ -95,12 +95,12 @@ export function useAuth() {
     changePassword,
 
     // Loading states
-    isSigningIn: signinMutation.isPending,
+    isSigningIn,
     isUpdatingProfile: updateProfileMutation.isPending,
     isChangingPassword: changePasswordMutation.isPending,
 
     // Error states
-    signinError: signinMutation.error,
+    signinError,
     updateProfileError:
       updateProfileMutation.error ??
       (updateProfileMutation.data?.error
@@ -113,7 +113,7 @@ export function useAuth() {
         : null),
 
     // Reset functions
-    resetSigninError: signinMutation.reset,
+    resetSigninError: () => setSigninError(null),
     resetUpdateProfileError: updateProfileMutation.reset,
     resetChangePasswordError: changePasswordMutation.reset,
   };

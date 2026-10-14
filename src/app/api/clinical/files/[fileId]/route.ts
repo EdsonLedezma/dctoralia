@@ -5,6 +5,7 @@ import { env } from "~/env";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import {
+  clinicalFileScope,
   patientClinicalScope,
   resolveClinicalActor,
 } from "~/server/domain/clinical/access";
@@ -45,9 +46,7 @@ export async function GET(
   }
   const canUseOidc = Boolean(env.VERCEL_OIDC_TOKEN && env.CLINICAL_STORE_ID);
   const localToken =
-    env.NODE_ENV === "production"
-      ? undefined
-      : env.CLINICAL_READ_WRITE_TOKEN;
+    env.NODE_ENV === "production" ? undefined : env.CLINICAL_READ_WRITE_TOKEN;
   if (!canUseOidc && !localToken) {
     return NextResponse.json(
       {
@@ -74,7 +73,7 @@ export async function GET(
   const file = await db.clinicalFile.findFirst({
     where: {
       id: fileId,
-      clinicId: actor.clinicId,
+      ...clinicalFileScope(actor),
       patient: patientClinicalScope(actor),
     },
     select: {
