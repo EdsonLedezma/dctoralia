@@ -11,7 +11,14 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { toast } from "sonner";
-import { BriefcaseMedical, Camera, Pencil, Star } from "lucide-react";
+import {
+  BriefcaseMedical,
+  Camera,
+  ExternalLink,
+  MapPin,
+  Pencil,
+  Star,
+} from "lucide-react";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
 import { unwrapTrpcResult } from "~/types/trpc-response";
@@ -23,6 +30,22 @@ type DoctorProfile = Exclude<
 >;
 type DoctorService = DoctorProfile["services"][number];
 type DoctorReview = DoctorProfile["reviews"][number];
+
+function coordinatesFromMapsUrl(value: string) {
+  const direct = value.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  if (direct)
+    return { latitude: Number(direct[1]), longitude: Number(direct[2]) };
+  const pin = value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (pin) return { latitude: Number(pin[1]), longitude: Number(pin[2]) };
+  try {
+    const query = new URL(value).searchParams.get("q");
+    const pair = query?.match(/^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$/);
+    if (pair) return { latitude: Number(pair[1]), longitude: Number(pair[2]) };
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 export default function DoctorProfilePage() {
   const router = useRouter();
@@ -58,6 +81,12 @@ export default function DoctorProfilePage() {
     about: profile?.about ?? "",
     experience: profile?.experience ?? 0,
     phone: profile?.phone ?? "",
+    address: profile?.address ?? "",
+    city: profile?.city ?? "",
+    state: profile?.state ?? "",
+    googleMapsUrl: profile?.googleMapsUrl ?? "",
+    latitude: profile?.latitude ?? "",
+    longitude: profile?.longitude ?? "",
   });
 
   useEffect(() => {
@@ -71,6 +100,12 @@ export default function DoctorProfilePage() {
       about: profile.about ?? "",
       experience: profile.experience ?? 0,
       phone: profile.phone ?? "",
+      address: profile.address ?? "",
+      city: profile.city ?? "",
+      state: profile.state ?? "",
+      googleMapsUrl: profile.googleMapsUrl ?? "",
+      latitude: profile.latitude ?? "",
+      longitude: profile.longitude ?? "",
     });
   }, [profile]);
 
@@ -109,8 +144,30 @@ export default function DoctorProfilePage() {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "experience" ? parseInt(value, 10) || 0 : value,
+      [name]:
+        name === "experience"
+          ? parseInt(value, 10) || 0
+          : name === "latitude" || name === "longitude"
+            ? value === ""
+              ? ""
+              : Number(value)
+            : value,
     }));
+  };
+
+  const handleMapsUrlBlur = () => {
+    const coordinates = coordinatesFromMapsUrl(formData.googleMapsUrl);
+    if (!coordinates) return;
+    if (
+      coordinates.latitude < 14 ||
+      coordinates.latitude > 33.5 ||
+      coordinates.longitude < -118 ||
+      coordinates.longitude > -86
+    ) {
+      toast.error("La ubicación debe estar dentro de México.");
+      return;
+    }
+    setFormData((current) => ({ ...current, ...coordinates }));
   };
 
   const handleAvatarSelected = (file: File | undefined) => {
@@ -169,6 +226,13 @@ export default function DoctorProfilePage() {
         about: formData.about,
         experience: formData.experience,
         phone: formData.phone,
+        address: formData.address.trim() || null,
+        city: formData.city.trim() || null,
+        state: formData.state.trim() || null,
+        googleMapsUrl: formData.googleMapsUrl.trim() || null,
+        latitude: formData.latitude === "" ? null : Number(formData.latitude),
+        longitude:
+          formData.longitude === "" ? null : Number(formData.longitude),
       });
       setFormData((current) => ({ ...current, image: nextImageUrl }));
       setAvatarFile(null);
@@ -194,6 +258,12 @@ export default function DoctorProfilePage() {
       about: profile?.about ?? "",
       experience: profile?.experience ?? 0,
       phone: profile?.phone ?? "",
+      address: profile?.address ?? "",
+      city: profile?.city ?? "",
+      state: profile?.state ?? "",
+      googleMapsUrl: profile?.googleMapsUrl ?? "",
+      latitude: profile?.latitude ?? "",
+      longitude: profile?.longitude ?? "",
     });
     setIsEditing(false);
   };
@@ -249,7 +319,13 @@ export default function DoctorProfilePage() {
     formData.license !== (profile.license ?? "") ||
     formData.about !== (profile.about ?? "") ||
     formData.experience !== (profile.experience ?? 0) ||
-    formData.phone !== (profile.phone ?? "");
+    formData.phone !== (profile.phone ?? "") ||
+    formData.address !== (profile.address ?? "") ||
+    formData.city !== (profile.city ?? "") ||
+    formData.state !== (profile.state ?? "") ||
+    formData.googleMapsUrl !== (profile.googleMapsUrl ?? "") ||
+    formData.latitude !== (profile.latitude ?? "") ||
+    formData.longitude !== (profile.longitude ?? "");
 
   return (
     <ProductShell role="DOCTOR">
@@ -264,7 +340,10 @@ export default function DoctorProfilePage() {
                       {(avatarPreview ?? formData.image) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={avatarPreview ?? avatarUrl(formData.image, profile.userId)}
+                          src={
+                            avatarPreview ??
+                            avatarUrl(formData.image, profile.userId)
+                          }
                           alt=""
                           className="h-full w-full object-cover"
                         />
@@ -315,6 +394,25 @@ export default function DoctorProfilePage() {
                           Lic. {profile.license || "—"}
                         </span>
                       </div>
+                      {(profile.city || profile.state || profile.address) && (
+                        <p className="mt-3 flex items-center gap-1.5 text-xs text-[#525252]">
+                          <MapPin className="size-3.5 shrink-0 text-[#737373]" />
+                          {[profile.address, profile.city, profile.state]
+                            .filter(Boolean)
+                            .join(", ")}
+                          {profile.googleMapsUrl && (
+                            <a
+                              href={profile.googleMapsUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label="Abrir ubicación en Google Maps"
+                              className="ml-1 inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-[#f5f5f5]"
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </a>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {!isEditing && (
@@ -493,6 +591,129 @@ export default function DoctorProfilePage() {
                     onChange={handleChange}
                     min="0"
                   />
+                </div>
+                <div className="sm:col-span-2">
+                  <div className="mb-3 border-t border-[#ebebeb] pt-5">
+                    <h3 className="text-sm font-medium text-[#171717]">
+                      Ubicación de consulta
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-[#737373]">
+                      Los pacientes podrán encontrarte por ciudad. Agrega
+                      coordenadas para mostrar un punto exacto en el mapa de
+                      México.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        htmlFor="address"
+                      >
+                        Dirección del consultorio
+                      </label>
+                      <Input
+                        id="address"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        placeholder="Calle, número y colonia"
+                        autoComplete="street-address"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        htmlFor="city"
+                      >
+                        Ciudad
+                      </label>
+                      <Input
+                        id="city"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        placeholder="Ciudad de México"
+                        autoComplete="address-level2"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        htmlFor="state"
+                      >
+                        Estado
+                      </label>
+                      <Input
+                        id="state"
+                        name="state"
+                        value={formData.state}
+                        onChange={handleChange}
+                        placeholder="Ciudad de México"
+                        autoComplete="address-level1"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        htmlFor="googleMapsUrl"
+                      >
+                        Enlace de Google Maps
+                      </label>
+                      <Input
+                        id="googleMapsUrl"
+                        name="googleMapsUrl"
+                        type="url"
+                        value={formData.googleMapsUrl}
+                        onChange={handleChange}
+                        onBlur={handleMapsUrlBlur}
+                        placeholder="https://maps.google.com/..."
+                      />
+                      <p className="mt-1 text-xs text-[#737373]">
+                        Si el enlace incluye coordenadas, las completamos
+                        automáticamente.
+                      </p>
+                    </div>
+                    <div>
+                      <label
+                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        htmlFor="latitude"
+                      >
+                        Latitud
+                      </label>
+                      <Input
+                        id="latitude"
+                        name="latitude"
+                        type="number"
+                        step="any"
+                        min="14"
+                        max="33.5"
+                        value={formData.latitude}
+                        onChange={handleChange}
+                        placeholder="19.4326"
+                        inputMode="decimal"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        htmlFor="longitude"
+                      >
+                        Longitud
+                      </label>
+                      <Input
+                        id="longitude"
+                        name="longitude"
+                        type="number"
+                        step="any"
+                        min="-118"
+                        max="-86"
+                        value={formData.longitude}
+                        onChange={handleChange}
+                        placeholder="-99.1332"
+                        inputMode="decimal"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="sm:col-span-2">
                   <label

@@ -350,26 +350,53 @@ export function buildDemoData(now = new Date()) {
       own.reduce((sum, review) => sum + review.rating, 0) /
       Math.max(1, own.length);
   }
+  const doctorUserById = new Map(
+    doctors.map((doctor) => [doctor.id, doctor.userId]),
+  );
+  const patientUserById = new Map(
+    patients.map((patient) => [patient.id, patient.userId]),
+  );
   const notifications: Prisma.NotificationCreateManyInput[] = appointments
     .filter((item) => new Date(item.date).getTime() >= day(-7).getTime())
-    .map((item, index) => ({
-      id: demoId(`notification:${item.id}`),
-      doctorId: item.doctorId,
-      patientId: item.patientId,
-      clinicId: item.clinicId,
-      appointmentId: item.id,
-      type:
-        item.status === "CANCELLED"
-          ? "APPOINTMENT_CANCELLED"
-          : "APPOINTMENT_BOOKED",
-      title:
-        item.status === "CANCELLED"
-          ? "Cita cancelada · Demo"
-          : "Cita agendada · Demo",
-      message: `Actividad ficticia: consulta a las ${item.time}.`,
-      isRead: index % 3 !== 0,
-      createdAt: day(-index % 7),
-    }));
+    .flatMap((item, index) => {
+      const doctorUserId = doctorUserById.get(item.doctorId);
+      const patientUserId = patientUserById.get(item.patientId);
+      if (!doctorUserId || !patientUserId) return [];
+
+      const isCancelled = item.status === "CANCELLED";
+      const type = isCancelled ? "APPOINTMENT_CANCELLED" : "APPOINTMENT_BOOKED";
+      const dayCreated = day(-index % 7);
+      return [
+        {
+          id: demoId(`notification:${item.id}:doctor`),
+          recipientUserId: doctorUserId,
+          doctorId: item.doctorId,
+          patientId: item.patientId,
+          clinicId: item.clinicId,
+          appointmentId: item.id,
+          type,
+          title: isCancelled ? "Cita cancelada · Demo" : "Cita agendada · Demo",
+          message: `Actividad ficticia: consulta a las ${item.time}.`,
+          isRead: index % 3 !== 0,
+          createdAt: dayCreated,
+        },
+        {
+          id: demoId(`notification:${item.id}:patient`),
+          recipientUserId: patientUserId,
+          doctorId: item.doctorId,
+          patientId: item.patientId,
+          clinicId: item.clinicId,
+          appointmentId: item.id,
+          type,
+          title: isCancelled
+            ? "Cita cancelada · Demo"
+            : "Solicitud recibida · Demo",
+          message: `Actividad ficticia: consulta a las ${item.time}.`,
+          isRead: index % 2 === 0,
+          createdAt: dayCreated,
+        },
+      ];
+    });
   const messageStatuses: MessageDeliveryStatus[] = [
     "DELIVERED",
     "READ",

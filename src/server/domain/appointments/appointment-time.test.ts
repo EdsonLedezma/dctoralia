@@ -42,6 +42,9 @@ describe("appointment-time", () => {
       false,
     );
     expect(isTodayOrFuture(new Date("2026-09-16T01:00:00.000Z"), now)).toBe(
+      false,
+    );
+    expect(isTodayOrFuture(new Date("2026-09-16T12:00:00.000Z"), now)).toBe(
       true,
     );
   });

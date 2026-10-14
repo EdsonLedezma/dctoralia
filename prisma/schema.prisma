@@ -57,11 +57,14 @@ model User {
   createdFollowUpTasks       FollowUpTask[]               @relation("FollowUpCreator")
   completedFollowUpTasks     FollowUpTask[]               @relation("FollowUpCompleter")
   recordedOutcomeAssessments OutcomeAssessment[]          @relation("OutcomeRecorder")
+  recordedClinicalObservations ClinicalObservation[]       @relation("ClinicalObservationRecorder")
+  voidedClinicalObservations   ClinicalObservation[]       @relation("ClinicalObservationVoider")
   clinicalAuditEvents        ClinicalAuditEvent[]         @relation("ClinicalAuditActor")
   authoredClinicalAmendments ClinicalEncounterAmendment[] @relation("ClinicalAmendmentAuthor")
   appointmentLifecycleEvents AppointmentLifecycleEvent[]  @relation("AppointmentLifecycleActor")
   addedClinicPatients        ClinicPatient[]              @relation("ClinicPatientAdder")
   uploadedClinicalFiles      ClinicalFile[]               @relation("ClinicalFileUploader")
+  receivedNotifications      Notification[]               @relation("NotificationRecipient")
 }
 
 /// Tenant boundary for a medical practice. Links on current operational
@@ -91,12 +94,14 @@ model Clinic {
   encounters                  ClinicalEncounter[]
   followUpTasks               FollowUpTask[]
   outcomeAssessments          OutcomeAssessment[]
+  clinicalObservations        ClinicalObservation[]
   clinicalAuditEvents         ClinicalAuditEvent[]
   clinicalEncounterAmendments ClinicalEncounterAmendment[]
   appointmentLifecycleEvents  AppointmentLifecycleEvent[]
   patientMemberships          ClinicPatient[]
   clinicalFiles               ClinicalFile[]
   medicalHistoryConsents      MedicalHistoryConsent[]
+  patientMessageConsents      PatientMessageConsent[]
 }
 
 model ClinicLocation {
@@ -207,18 +212,24 @@ model VerificationToken {
 }
 
 model Doctor {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  specialty    String
-  license      String   @unique
-  phone        String
-  about        String?
-  experience   Int? // años de experiencia
-  rating       Float? // promedio de calificaciones
-  totalReviews Int? // total de reseñas
-  clinicId     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  specialty     String
+  license       String   @unique
+  phone         String
+  about         String?
+  experience    Int? // años de experiencia
+  rating        Float? // promedio de calificaciones
+  totalReviews  Int? // total de reseñas
+  address       String?
+  city          String?
+  state         String?
+  googleMapsUrl String?
+  latitude      Float?
+  longitude     Float?
+  clinicId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   clinic                     Clinic?                     @relation("ClinicDoctors", fields: [clinicId], references: [id], onDelete: SetNull)
@@ -255,11 +266,13 @@ model Patient {
   encounters                 ClinicalEncounter[]
   followUpTasks              FollowUpTask[]
   outcomeAssessments         OutcomeAssessment[]
+  clinicalObservations       ClinicalObservation[]
   clinicalAuditEvents        ClinicalAuditEvent[]
   appointmentLifecycleEvents AppointmentLifecycleEvent[]
   clinicMemberships          ClinicPatient[]
   clinicalFiles              ClinicalFile[]
   medicalHistoryConsents     MedicalHistoryConsent[]
+  patientMessageConsents     PatientMessageConsent[]
 
   @@index([clinicId])
 }
@@ -317,6 +330,10 @@ model Appointment {
   severity   AppointmentSeverity?
   notes      String?
   reason     String?
+  intakeSymptoms    String? @db.Text
+  intakeAllergies   String? @db.Text
+  intakeMedications String? @db.Text
+  intakeContext     String? @db.Text
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
   clinicId   String?
@@ -409,6 +426,8 @@ enum AppointmentLifecycleEventType {
   CREATED
   STATUS_CHANGED
   RESCHEDULED
+  CHECKED_IN
+  CONSULTATION_STARTED
 }
 
 enum ClinicPatientStatus {
@@ -543,6 +562,7 @@ model CareEpisode {
   encounters    ClinicalEncounter[]
   followUpTasks FollowUpTask[]
   assessments   OutcomeAssessment[]
+  observations  ClinicalObservation[]
   clinicalFiles ClinicalFile[]
 
   @@index([clinicId, patientId, status, updatedAt])
@@ -579,6 +599,7 @@ model ClinicalEncounter {
   amendments    ClinicalEncounterAmendment[]
   followUpTasks FollowUpTask[]
   assessments   OutcomeAssessment[]
+  observations  ClinicalObservation[]
   clinicalFiles ClinicalFile[]
 
   @@index([clinicId, patientId, encounterAt(sort: Desc)])
@@ -620,16 +641,18 @@ model FollowUpTask {
   status            FollowUpTaskStatus   @default(OPEN)
   dueAt             DateTime?
   completedAt       DateTime?
+  dueAlertedAt      DateTime?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  clinic      Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  episode     CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
-  encounter   ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
-  assignedTo  User?              @relation("FollowUpAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  createdBy   User               @relation("FollowUpCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  completedBy User?              @relation("FollowUpCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  clinic        Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient       Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  episode       CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  encounter     ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  assignedTo    User?              @relation("FollowUpAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdBy     User               @relation("FollowUpCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  completedBy   User?              @relation("FollowUpCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  notifications Notification[]
 
   @@index([clinicId, status, dueAt])
   @@index([clinicId, assignedToUserId, status, dueAt])
@@ -664,6 +687,36 @@ model OutcomeAssessment {
 
   @@index([clinicId, patientId, instrumentCode, instrumentVersion, measuredAt])
   @@index([clinicId, episodeId, measuredAt])
+}
+
+/// A unit-safe, append-only clinical measurement. Corrections void the prior
+/// record with an audited reason and create a new observation.
+model ClinicalObservation {
+  id               String    @id @default(cuid())
+  clinicId         String
+  patientId        String
+  episodeId        String?
+  encounterId      String?
+  recordedByUserId String
+  code             String
+  value            Decimal   @db.Decimal(10, 3)
+  unit             String
+  context          String?   @db.VarChar(240)
+  measuredAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  voidedAt         DateTime?
+  voidedByUserId   String?
+  voidReason       String?   @db.VarChar(500)
+
+  clinic     Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient    Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  episode    CareEpisode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  encounter  ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  recordedBy User               @relation("ClinicalObservationRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  voidedBy   User?              @relation("ClinicalObservationVoider", fields: [voidedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, patientId, code, measuredAt(sort: Desc)])
+  @@index([clinicId, episodeId, measuredAt(sort: Desc)])
 }
 
 /// Audit metadata only: never duplicate free-text clinical notes here.
@@ -733,21 +786,42 @@ model MedicalHistoryConsent {
   @@index([clinicId, status, updatedAt])
 }
 
+/// Patient-controlled consent for a specific reminder purpose and channel.
+/// Consent is never inferred from account creation or clinic membership.
+model PatientMessageConsent {
+  id          String                @id @default(cuid())
+  patientId   String
+  clinicId    String
+  channel     MessageChannel
+  purpose     PatientMessagePurpose @default(APPOINTMENT_REMINDER)
+  consentedAt DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@unique([patientId, clinicId, channel, purpose])
+  @@index([clinicId, channel, purpose, consentedAt])
+}
+
 /// Immutable operational events used to explain appointment analytics over time.
 model AppointmentLifecycleEvent {
-  id            String                        @id @default(cuid())
-  clinicId      String?
-  appointmentId String?
-  patientId     String?
-  doctorId      String?
-  actorUserId   String?
-  eventType     AppointmentLifecycleEventType
-  fromStatus    AppointmentStatus?
-  toStatus      AppointmentStatus
-  scheduledAt   DateTime?
-  scheduledTime String?
-  metadata      Json?
-  occurredAt    DateTime                      @default(now())
+  id             String                        @id @default(cuid())
+  clinicId       String?
+  appointmentId  String?
+  patientId      String?
+  doctorId       String?
+  actorUserId    String?
+  eventType      AppointmentLifecycleEventType
+  fromStatus     AppointmentStatus?
+  toStatus       AppointmentStatus
+  scheduledAt    DateTime?
+  scheduledTime  String?
+  metadata       Json?
+  idempotencyKey String?                       @unique
+  occurredAt     DateTime                      @default(now())
 
   clinic      Clinic?      @relation(fields: [clinicId], references: [id], onDelete: SetNull)
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
@@ -762,21 +836,27 @@ model AppointmentLifecycleEvent {
 
 // Notificaciones para eventos de citas
 model Notification {
-  id            String           @id @default(cuid())
-  doctorId      String
-  patientId     String
-  type          NotificationType
-  title         String
-  message       String
-  appointmentId String?
-  isRead        Boolean          @default(false)
-  createdAt     DateTime         @default(now())
-  clinicId      String?
+  id              String           @id @default(cuid())
+  recipientUserId String?
+  doctorId        String
+  patientId       String
+  type            NotificationType
+  title           String
+  message         String
+  appointmentId   String?
+  followUpTaskId  String?
+  idempotencyKey  String?          @unique
+  isRead          Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  clinicId        String?
 
-  doctor  Doctor  @relation("DoctorNotifications", fields: [doctorId], references: [id], onDelete: Cascade)
-  patient Patient @relation("PatientNotifications", fields: [patientId], references: [id], onDelete: Cascade)
-  clinic  Clinic? @relation("ClinicNotifications", fields: [clinicId], references: [id], onDelete: SetNull)
+  recipient    User?         @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  doctor       Doctor        @relation("DoctorNotifications", fields: [doctorId], references: [id], onDelete: Cascade)
+  patient      Patient       @relation("PatientNotifications", fields: [patientId], references: [id], onDelete: Cascade)
+  followUpTask FollowUpTask? @relation(fields: [followUpTaskId], references: [id], onDelete: Cascade)
+  clinic       Clinic?       @relation("ClinicNotifications", fields: [clinicId], references: [id], onDelete: SetNull)
 
+  @@index([recipientUserId, isRead, createdAt])
   @@index([clinicId, createdAt])
 }
 
@@ -799,6 +879,7 @@ model MessageOutbox {
   status            MessageDeliveryStatus @default(PENDING)
   attempts          Int                   @default(0)
   nextAttemptAt     DateTime              @default(now())
+  expiresAt         DateTime?
   lastAttemptAt     DateTime?
   sentAt            DateTime?
   deliveredAt       DateTime?
@@ -847,6 +928,11 @@ enum MessageChannel {
   RCS
 }
 
+enum PatientMessagePurpose {
+  APPOINTMENT_REMINDER
+  FOLLOW_UP_REMINDER
+}
+
 enum MessageDeliveryStatus {
   PENDING
   PROCESSING
@@ -863,4 +949,8 @@ enum NotificationType {
   APPOINTMENT_CANCELLED
   APPOINTMENT_RESCHEDULE_REQUEST
   APPOINTMENT_RESCHEDULED
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_COMPLETED
+  FOLLOW_UP_TASK_ASSIGNED
+  FOLLOW_UP_TASK_DUE
 }

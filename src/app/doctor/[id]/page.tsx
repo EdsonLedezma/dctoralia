@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Calendar,
   Clock3,
-  Mail,
   MapPin,
   Phone,
   Star,
@@ -261,7 +260,7 @@ export default function DoctorProfilePage() {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="text-sm font-medium">
-                            {review.patient?.user?.name ?? "Paciente"}
+                            Paciente verificado
                           </p>
                           <div className="mt-1 flex items-center gap-1">
                             <Star className="h-3 w-3 fill-current text-[#171717]" />
@@ -329,16 +328,7 @@ export default function DoctorProfilePage() {
                     {doctor.phone}
                   </a>
                 )}
-                {doctor.user?.email && (
-                  <a
-                    href={`mailto:${doctor.user.email}`}
-                    className="flex min-h-11 items-center gap-2 break-all transition-colors hover:text-[#171717]"
-                  >
-                    <Mail className="h-3.5 w-3.5 text-[#737373]" />
-                    {doctor.user.email}
-                  </a>
-                )}
-                {!doctor.phone && !doctor.user?.email && (
+                {!doctor.phone && (
                   <p className="py-2 text-[#737373]">Contacto no publicado.</p>
                 )}
               </div>

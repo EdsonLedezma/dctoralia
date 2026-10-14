@@ -27,11 +27,6 @@ const registerSchema = z.object({
   license: z.string().optional(),
 });
 
-const signinSchema = z.object({
-  email: z.string().email("Email inválido"),
-  password: z.string().min(1, "La contraseña es requerida"),
-});
-
 const isVercelBlobUrl = (image: string) => {
   try {
     const url = new URL(image);
@@ -123,57 +118,6 @@ export const authRouter = createTRPCRouter({
       }
     }),
 
-  signin: publicProcedure
-    .input(signinSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { email, password } = input;
-
-      try {
-        const user = await ctx.db.user.findUnique({
-          where: {
-            email: email.toLowerCase(),
-          },
-          include: {
-            doctor: true,
-            patient: true,
-          },
-        });
-
-        if (!user)
-          return trpcFailure(
-            "INVALID_CREDENTIALS",
-            "Credenciales inválidas",
-            401,
-          );
-
-        // Verificar contraseña
-        let isValidPassword = false;
-        try {
-          isValidPassword = await verify(user.password, password);
-        } catch {
-          isValidPassword = false;
-        }
-
-        if (!isValidPassword) {
-          return trpcFailure(
-            "INVALID_CREDENTIALS",
-            "Credenciales inválidas",
-            401,
-          );
-        }
-
-        // Retornar información del usuario sin la contraseña
-        const { password: _, ...userWithoutPassword } = user;
-
-        return trpcSuccess(
-          { user: userWithoutPassword },
-          "Inicio de sesión exitoso",
-        );
-      } catch {
-        return trpcFailure("INTERNAL_ERROR", "Error al iniciar sesión", 500);
-      }
-    }),
-
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 
@@ -218,25 +162,6 @@ export const authRouter = createTRPCRouter({
       return trpcFailure("INTERNAL_ERROR", "Error al obtener el perfil", 500);
     }
   }),
-
-  checkUserExists: publicProcedure
-    .input(z.object({ email: z.string().email() }))
-    .query(async ({ ctx, input }) => {
-      try {
-        const user = await ctx.db.user.findUnique({
-          where: { email: input.email.toLowerCase() },
-          select: { id: true, email: true },
-        });
-
-        return trpcSuccess({ exists: !!user }, "Usuario verificado");
-      } catch {
-        return trpcFailure(
-          "INTERNAL_ERROR",
-          "Error al verificar el usuario",
-          500,
-        );
-      }
-    }),
 
   updateProfile: protectedProcedure
     .input(

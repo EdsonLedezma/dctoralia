@@ -1,4 +1,4 @@
-import { head, issueSignedToken } from "@vercel/blob";
+import { get, head, issueSignedToken } from "@vercel/blob";
 import {
   handleUploadPresigned,
   type HandleUploadPresignedBody,
@@ -15,6 +15,13 @@ import {
   resolveClinicalActor,
 } from "~/server/domain/clinical/access";
 import { resolveWorkspaceContext } from "~/server/domain/workspaces/workspace-context";
+import { isSameOriginMutation } from "~/server/security/same-origin";
+import {
+  readJsonBody,
+  RequestBodyTooLargeError,
+} from "~/server/security/request-body";
+import { hasAllowedFileSignature } from "~/server/security/file-signatures";
+import { enforceRateLimit } from "~/server/security/rate-limit";
 
 const maxFileSize = 15 * 1024 * 1024;
 const allowedContentTypes = [
@@ -77,15 +84,20 @@ async function resolveUploadActor(userId: string, clinicId?: string) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginMutation(request)) {
+    return NextResponse.json(
+      { error: "Solicitud no permitida." },
+      { status: 403 },
+    );
+  }
+
+  const rateLimitResponse = await enforceRateLimit(request, "uploads");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const canUseOidc = Boolean(env.VERCEL_OIDC_TOKEN && env.CLINICAL_STORE_ID);
   const localToken =
-    env.NODE_ENV === "production"
-      ? undefined
-      : env.CLINICAL_READ_WRITE_TOKEN;
-  if (
-    !env.CLINICAL_WEBHOOK_PUBLIC_KEY ||
-    (!canUseOidc && !localToken)
-  ) {
+    env.NODE_ENV === "production" ? undefined : env.CLINICAL_READ_WRITE_TOKEN;
+  if (!env.CLINICAL_WEBHOOK_PUBLIC_KEY || (!canUseOidc && !localToken)) {
     return NextResponse.json(
       {
         error:
@@ -96,7 +108,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as HandleUploadPresignedBody;
+    const body = (await readJsonBody(
+      request,
+      32 * 1024,
+    )) as HandleUploadPresignedBody;
     const response = await handleUploadPresigned({
       body,
       request,
@@ -193,6 +208,23 @@ export async function POST(request: Request) {
           throw new Error("El tipo o tamaño del archivo no está permitido.");
         }
 
+        const storedContent = await get(blob.pathname, {
+          access: "private",
+          token: localToken,
+          oidcToken: env.VERCEL_OIDC_TOKEN,
+          storeId: env.CLINICAL_STORE_ID,
+        });
+        if (
+          !storedContent ||
+          storedContent.statusCode !== 200 ||
+          !(await hasAllowedFileSignature(
+            storedContent.stream,
+            storedBlob.contentType,
+          ))
+        ) {
+          throw new Error("El contenido del archivo no coincide con su tipo.");
+        }
+
         const patient = await db.patient.findFirst({
           where: {
             id: metadata.patientId,
@@ -255,8 +287,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "No se pudo procesar la carga.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json(
+        { error: "La solicitud supera el tamaño permitido." },
+        { status: 413 },
+      );
+    }
+    console.error("Clinical file upload request rejected");
+    return NextResponse.json(
+      { error: "No se pudo procesar la carga clínica." },
+      { status: 400 },
+    );
   }
 }

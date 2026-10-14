@@ -48,7 +48,7 @@ const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close
         aria-label="Cerrar"
-        className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-md text-[#737373] transition-[background-color,color,transform] duration-150 hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.96] disabled:pointer-events-none"
+        className="absolute top-3 right-3 flex size-11 items-center justify-center rounded-md text-[#737373] transition-[background-color,color,transform] duration-150 hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.96] disabled:pointer-events-none lg:size-8"
       >
         <X aria-hidden="true" className="size-4" />
       </DialogPrimitive.Close>

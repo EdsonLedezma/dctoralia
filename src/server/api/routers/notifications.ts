@@ -8,11 +8,8 @@ import {
 } from "~/types/trpc-response";
 
 const notificationInclude = {
-  patient: {
-    select: {
-      user: { select: { name: true } },
-    },
-  },
+  patient: { select: { user: { select: { name: true } } } },
+  doctor: { select: { user: { select: { name: true } } } },
 } satisfies Prisma.NotificationInclude;
 
 type NotificationResult = Prisma.NotificationGetPayload<{
@@ -24,20 +21,18 @@ type NotificationMutationResult = Pick<
   "id" | "isRead"
 >;
 
-async function getDoctorId(db: PrismaClient, userId: string) {
-  const doctor = await db.doctor.findUnique({
-    where: { userId },
-    select: { id: true },
-  });
-  return doctor?.id ?? null;
+function notificationScope(userId: string): Prisma.NotificationWhereInput {
+  return {
+    OR: [
+      { recipientUserId: userId },
+      { recipientUserId: null, doctor: { userId } },
+    ],
+  };
 }
 
-async function listNotifications(
-  db: PrismaClient,
-  doctorId: string,
-): Promise<NotificationResult[]> {
+async function listNotifications(db: PrismaClient, userId: string) {
   return db.notification.findMany({
-    where: { doctorId },
+    where: notificationScope(userId),
     include: notificationInclude,
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -47,26 +42,9 @@ async function listNotifications(
 export const useNotifications = createTRPCRouter({
   getMyNotifications: protectedProcedure.query(
     async ({ ctx }): Promise<TrpcResponse<NotificationResult[]>> => {
-      if (ctx.session.user.role !== "DOCTOR") {
-        return trpcFailure(
-          "FORBIDDEN",
-          "Esta bandeja es solo para doctores",
-          403,
-        );
-      }
-
       try {
-        const doctorId = await getDoctorId(ctx.db, ctx.session.user.id);
-        if (!doctorId) {
-          return trpcFailure(
-            "DOCTOR_NOT_FOUND",
-            "Perfil de doctor no encontrado",
-            404,
-          );
-        }
-
         return trpcSuccess(
-          await listNotifications(ctx.db, doctorId),
+          await listNotifications(ctx.db, ctx.session.user.id),
           "Notificaciones recuperadas",
         );
       } catch {
@@ -80,31 +58,32 @@ export const useNotifications = createTRPCRouter({
   ),
 
   listMine: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.session.user.role !== "DOCTOR") {
-      return trpcFailure(
-        "FORBIDDEN",
-        "Esta bandeja es solo para doctores",
-        403,
-      );
-    }
-
     try {
-      const doctorId = await getDoctorId(ctx.db, ctx.session.user.id);
-      if (!doctorId) {
-        return trpcFailure(
-          "DOCTOR_NOT_FOUND",
-          "Perfil de doctor no encontrado",
-          404,
-        );
-      }
       return trpcSuccess(
-        await listNotifications(ctx.db, doctorId),
+        await listNotifications(ctx.db, ctx.session.user.id),
         "Notificaciones recuperadas",
       );
     } catch {
       return trpcFailure(
         "INTERNAL_ERROR",
         "No se pudieron cargar las notificaciones",
+        500,
+      );
+    }
+  }),
+
+  unreadCount: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const count = await ctx.db.notification.count({
+        where: {
+          AND: [notificationScope(ctx.session.user.id), { isRead: false }],
+        },
+      });
+      return trpcSuccess(count, "Avisos pendientes recuperados");
+    } catch {
+      return trpcFailure(
+        "INTERNAL_ERROR",
+        "No se pudieron cargar los avisos pendientes",
         500,
       );
     }
@@ -117,26 +96,11 @@ export const useNotifications = createTRPCRouter({
         input,
         ctx,
       }): Promise<TrpcResponse<NotificationMutationResult>> => {
-        if (ctx.session.user.role !== "DOCTOR") {
-          return trpcFailure(
-            "FORBIDDEN",
-            "No tienes permisos para actualizar esta notificación",
-            403,
-          );
-        }
-
         try {
-          const doctorId = await getDoctorId(ctx.db, ctx.session.user.id);
-          if (!doctorId) {
-            return trpcFailure(
-              "DOCTOR_NOT_FOUND",
-              "Perfil de doctor no encontrado",
-              404,
-            );
-          }
-
           const updated = await ctx.db.notification.updateMany({
-            where: { id: input.id, doctorId },
+            where: {
+              AND: [notificationScope(ctx.session.user.id), { id: input.id }],
+            },
             data: { isRead: true },
           });
           if (updated.count === 0) {
@@ -146,7 +110,6 @@ export const useNotifications = createTRPCRouter({
               404,
             );
           }
-
           return trpcSuccess(
             { id: input.id, isRead: true },
             "Notificación marcada como leída",
@@ -161,110 +124,14 @@ export const useNotifications = createTRPCRouter({
       },
     ),
 
-  markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
-    if (ctx.session.user.role !== "DOCTOR") {
-      return trpcFailure(
-        "FORBIDDEN",
-        "No tienes permisos para actualizar notificaciones",
-        403,
-      );
-    }
-
-    try {
-      const doctorId = await getDoctorId(ctx.db, ctx.session.user.id);
-      if (!doctorId) {
-        return trpcFailure(
-          "DOCTOR_NOT_FOUND",
-          "Perfil de doctor no encontrado",
-          404,
-        );
-      }
-
-      const result = await ctx.db.notification.updateMany({
-        where: { doctorId, isRead: false },
-        data: { isRead: true },
-      });
-      return trpcSuccess(result, "Todas las notificaciones están al día");
-    } catch {
-      return trpcFailure(
-        "INTERNAL_ERROR",
-        "No se pudieron actualizar las notificaciones",
-        500,
-      );
-    }
-  }),
-
-  delete: protectedProcedure
-    .input(z.object({ id: z.string().cuid() }))
-    .mutation(
-      async ({
-        input,
-        ctx,
-      }): Promise<TrpcResponse<NotificationMutationResult>> => {
-        if (ctx.session.user.role !== "DOCTOR") {
-          return trpcFailure(
-            "FORBIDDEN",
-            "No tienes permisos para eliminar esta notificación",
-            403,
-          );
-        }
-
-        try {
-          const doctorId = await getDoctorId(ctx.db, ctx.session.user.id);
-          if (!doctorId) {
-            return trpcFailure(
-              "DOCTOR_NOT_FOUND",
-              "Perfil de doctor no encontrado",
-              404,
-            );
-          }
-
-          const deleted = await ctx.db.notification.deleteMany({
-            where: { id: input.id, doctorId },
-          });
-          if (deleted.count === 0) {
-            return trpcFailure(
-              "NOTIFICATION_NOT_FOUND",
-              "Notificación no encontrada",
-              404,
-            );
-          }
-
-          return trpcSuccess(
-            { id: input.id, isRead: true },
-            "Notificación eliminada",
-          );
-        } catch {
-          return trpcFailure(
-            "INTERNAL_ERROR",
-            "No se pudo eliminar la notificación",
-            500,
-          );
-        }
-      },
-    ),
-
   markRead: protectedProcedure
     .input(z.object({ id: z.string().cuid() }))
     .mutation(async ({ input, ctx }) => {
-      if (ctx.session.user.role !== "DOCTOR") {
-        return trpcFailure(
-          "FORBIDDEN",
-          "No tienes permisos para actualizar esta notificación",
-          403,
-        );
-      }
       try {
-        const doctorId = await getDoctorId(ctx.db, ctx.session.user.id);
-        if (!doctorId) {
-          return trpcFailure(
-            "DOCTOR_NOT_FOUND",
-            "Perfil de doctor no encontrado",
-            404,
-          );
-        }
         const updated = await ctx.db.notification.updateMany({
-          where: { id: input.id, doctorId },
+          where: {
+            AND: [notificationScope(ctx.session.user.id), { id: input.id }],
+          },
           data: { isRead: true },
         });
         if (updated.count === 0) {
@@ -286,4 +153,56 @@ export const useNotifications = createTRPCRouter({
         );
       }
     }),
+
+  markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      const result = await ctx.db.notification.updateMany({
+        where: {
+          AND: [notificationScope(ctx.session.user.id), { isRead: false }],
+        },
+        data: { isRead: true },
+      });
+      return trpcSuccess(result, "Todas las notificaciones están al día");
+    } catch {
+      return trpcFailure(
+        "INTERNAL_ERROR",
+        "No se pudieron actualizar las notificaciones",
+        500,
+      );
+    }
+  }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().cuid() }))
+    .mutation(
+      async ({
+        input,
+        ctx,
+      }): Promise<TrpcResponse<NotificationMutationResult>> => {
+        try {
+          const deleted = await ctx.db.notification.deleteMany({
+            where: {
+              AND: [notificationScope(ctx.session.user.id), { id: input.id }],
+            },
+          });
+          if (deleted.count === 0) {
+            return trpcFailure(
+              "NOTIFICATION_NOT_FOUND",
+              "Notificación no encontrada",
+              404,
+            );
+          }
+          return trpcSuccess(
+            { id: input.id, isRead: true },
+            "Notificación eliminada",
+          );
+        } catch {
+          return trpcFailure(
+            "INTERNAL_ERROR",
+            "No se pudo eliminar la notificación",
+            500,
+          );
+        }
+      },
+    ),
 });

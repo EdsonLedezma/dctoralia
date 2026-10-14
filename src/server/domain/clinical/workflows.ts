@@ -3,6 +3,8 @@ import type { PrismaClient } from "@prisma/client";
 
 import type { ClinicalActor } from "~/server/domain/clinical/access";
 import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import { clinicalObservationCatalog } from "~/lib/clinical-observations";
+import { scheduleFollowUpReminder } from "~/server/domain/messaging/follow-up-reminders";
 import {
   careEpisodeScope,
   patientClinicalScope,
@@ -14,6 +16,7 @@ import type {
   CreateEncounterDraftInput,
   CreateFollowUpTaskInput,
   RecordOutcomeAssessmentInput,
+  RecordClinicalObservationInput,
   UpdateEncounterDraftInput,
 } from "~/server/domain/clinical/schemas";
 
@@ -36,6 +39,128 @@ export class ClinicalWorkflowError extends Error {
   ) {
     super(message);
   }
+}
+
+export async function recordClinicalObservation(
+  db: Db,
+  actor: ClinicalActor,
+  input: RecordClinicalObservationInput,
+) {
+  await assertPatientInScope(db, actor, input.patientId);
+  if (input.episodeId) {
+    const episode = await db.careEpisode.findFirst({
+      where: {
+        id: input.episodeId,
+        patientId: input.patientId,
+        ...careEpisodeScope(actor),
+      },
+      select: { id: true },
+    });
+    if (!episode) {
+      throw new ClinicalWorkflowError(
+        "INVALID_RELATIONSHIP",
+        "El episodio no pertenece a este expediente.",
+      );
+    }
+  }
+  if (input.encounterId) {
+    const encounter = await db.clinicalEncounter.findFirst({
+      where: {
+        id: input.encounterId,
+        patientId: input.patientId,
+        clinicId: actor.clinicId,
+        doctorId: actor.doctorId,
+        ...(input.episodeId ? { episodeId: input.episodeId } : {}),
+      },
+      select: { id: true },
+    });
+    if (!encounter) {
+      throw new ClinicalWorkflowError(
+        "INVALID_RELATIONSHIP",
+        "La consulta no pertenece a este expediente.",
+      );
+    }
+  }
+
+  return db.$transaction(async (tx) => {
+    const observation = await tx.clinicalObservation.create({
+      data: {
+        clinicId: actor.clinicId,
+        patientId: input.patientId,
+        episodeId: input.episodeId,
+        encounterId: input.encounterId,
+        recordedByUserId: actor.userId,
+        code: input.code,
+        unit: clinicalObservationCatalog[input.code].unit,
+        value: new Prisma.Decimal(input.value),
+        context: input.context || null,
+        measuredAt: input.measuredAt,
+      },
+      select: { id: true, code: true, measuredAt: true },
+    });
+    await tx.clinicalAuditEvent.create({
+      data: {
+        clinicId: actor.clinicId,
+        patientId: input.patientId,
+        actorUserId: actor.userId,
+        resourceType: "CLINICAL_OBSERVATION",
+        resourceId: observation.id,
+        action: "CLINICAL_OBSERVATION_RECORDED",
+        metadata: { code: observation.code },
+      },
+    });
+    return observation;
+  });
+}
+
+export async function voidClinicalObservation(
+  db: Db,
+  actor: ClinicalActor,
+  input: { observationId: string; reason: string },
+) {
+  const observation = await db.clinicalObservation.findFirst({
+    where: {
+      id: input.observationId,
+      clinicId: actor.clinicId,
+      recordedByUserId: actor.userId,
+      voidedAt: null,
+    },
+    select: { id: true, patientId: true },
+  });
+  if (!observation) {
+    throw new ClinicalWorkflowError(
+      "NOT_FOUND",
+      "No se encontró una medición vigente registrada por ti.",
+    );
+  }
+  await assertPatientInScope(db, actor, observation.patientId);
+  return db.$transaction(async (tx) => {
+    const updated = await tx.clinicalObservation.updateMany({
+      where: { id: observation.id, clinicId: actor.clinicId, voidedAt: null },
+      data: {
+        voidedAt: new Date(),
+        voidedByUserId: actor.userId,
+        voidReason: input.reason,
+      },
+    });
+    if (updated.count !== 1) {
+      throw new ClinicalWorkflowError(
+        "CONFLICT",
+        "La medición cambió. Actualiza el expediente.",
+      );
+    }
+    await tx.clinicalAuditEvent.create({
+      data: {
+        clinicId: actor.clinicId,
+        patientId: observation.patientId,
+        actorUserId: actor.userId,
+        resourceType: "CLINICAL_OBSERVATION",
+        resourceId: observation.id,
+        action: "CLINICAL_OBSERVATION_VOIDED",
+      },
+    });
+    return { id: observation.id };
+  });
 }
 
 async function assertPatientInScope(
@@ -431,7 +556,11 @@ export async function createFollowUpTask(
         priority: input.priority,
         dueAt: input.dueAt,
       },
+      include: {
+        patient: { select: { phone: true, user: { select: { name: true } } } },
+      },
     });
+    await scheduleFollowUpReminder(tx, task);
     await tx.clinicalAuditEvent.create({
       data: {
         clinicId: actor.clinicId,
@@ -443,6 +572,22 @@ export async function createFollowUpTask(
         metadata: { status: task.status, priority: task.priority },
       },
     });
+    if (task.assignedToUserId && task.assignedToUserId !== actor.userId) {
+      await tx.notification.create({
+        data: {
+          recipientUserId: task.assignedToUserId,
+          doctorId: actor.doctorId,
+          patientId: task.patientId,
+          clinicId: task.clinicId,
+          followUpTaskId: task.id,
+          type: "FOLLOW_UP_TASK_ASSIGNED",
+          title: "Te asignaron un seguimiento",
+          message: task.dueAt
+            ? `Tienes una tarea de seguimiento pendiente para el ${task.dueAt.toLocaleDateString("es-MX", { day: "numeric", month: "short" })}.`
+            : "Tienes una nueva tarea de seguimiento pendiente.",
+        },
+      });
+    }
     return task;
   });
 }

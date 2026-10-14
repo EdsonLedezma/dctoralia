@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { clinicalObservationCatalog } from "~/lib/clinical-observations";
+
 const optionalClinicalText = z
   .string()
   .trim()
@@ -156,6 +158,39 @@ export const outcomeTrendInput = z.object({
   instrumentVersion: z.string().trim().min(1).max(40),
 });
 
+export const recordClinicalObservationInput = z.object({
+  patientId: z.string().cuid(),
+  episodeId: z.string().cuid().optional(),
+  encounterId: z.string().cuid().optional(),
+  code: z.enum(
+    Object.keys(clinicalObservationCatalog) as [
+      keyof typeof clinicalObservationCatalog,
+      ...(keyof typeof clinicalObservationCatalog)[],
+    ],
+  ),
+  value: z
+    .number()
+    .finite()
+    .positive()
+    .max(9_999_999)
+    .refine(
+      (value) => Math.abs(value * 1_000 - Math.round(value * 1_000)) < 0.000001,
+      "Usa como máximo tres decimales.",
+    ),
+  context: z.string().trim().max(240).optional(),
+  measuredAt: z.coerce
+    .date()
+    .refine(
+      (date) => date.getTime() <= Date.now() + 5 * 60_000,
+      "La medición no puede tener una fecha futura.",
+    ),
+});
+
+export const voidClinicalObservationInput = z.object({
+  observationId: z.string().cuid(),
+  reason: z.string().trim().min(5).max(500),
+});
+
 export const operationalAnalyticsInput = z
   .object({
     from: z.coerce.date(),
@@ -182,4 +217,7 @@ export type AmendEncounterInput = z.infer<typeof amendEncounterInput>;
 export type CreateFollowUpTaskInput = z.infer<typeof createFollowUpTaskInput>;
 export type RecordOutcomeAssessmentInput = z.infer<
   typeof recordOutcomeAssessmentInput
+>;
+export type RecordClinicalObservationInput = z.infer<
+  typeof recordClinicalObservationInput
 >;

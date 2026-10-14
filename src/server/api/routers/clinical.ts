@@ -5,10 +5,15 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   careEpisodeScope,
+  clinicalFileScope,
   patientClinicalScope,
   resolveClinicalActor,
 } from "~/server/domain/clinical/access";
 import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import {
+  cancelPendingFollowUpReminder,
+  scheduleFollowUpReminder,
+} from "~/server/domain/messaging/follow-up-reminders";
 import {
   amendSignedEncounter,
   ClinicalWorkflowError,
@@ -17,6 +22,8 @@ import {
   getOutcomeTrend,
   openCareEpisode,
   recordOutcomeAssessment,
+  recordClinicalObservation,
+  voidClinicalObservation,
   signClinicalEncounter,
   updateEncounterDraft,
 } from "~/server/domain/clinical/workflows";
@@ -29,6 +36,8 @@ import {
   operationalAnalyticsInput,
   outcomeTrendInput,
   recordOutcomeAssessmentInput,
+  recordClinicalObservationInput,
+  voidClinicalObservationInput,
   signEncounterInput,
   updateEncounterDraftInput,
   updateFollowUpTaskStatusInput,
@@ -41,6 +50,150 @@ type ClinicalContext = {
   session: { user: { id: string; role: Role } };
   getWorkspace: () => Promise<WorkspaceContext | null>;
 };
+
+type MinuteWindow = { start: number; end: number };
+
+function clockMinutes(value: string): number | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours < 24 && minutes < 60 ? hours * 60 + minutes : null;
+}
+
+function mergeWindows(windows: MinuteWindow[]): MinuteWindow[] {
+  const merged: MinuteWindow[] = [];
+  for (const window of windows.sort((a, b) => a.start - b.start)) {
+    const previous = merged.at(-1);
+    if (previous && window.start <= previous.end) {
+      previous.end = Math.max(previous.end, window.end);
+    } else {
+      merged.push({ ...window });
+    }
+  }
+  return merged;
+}
+
+function localDateKey(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+async function getUpcomingCapacity(
+  db: PrismaClient,
+  actor: NonNullable<Awaited<ReturnType<typeof resolveClinicalActor>>>,
+  requestedTimeZone: string,
+) {
+  let timeZone = requestedTimeZone;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone });
+  } catch {
+    timeZone = "America/Mexico_City";
+  }
+  const now = new Date();
+  const startKey = localDateKey(now, timeZone);
+  const [year, month, day] = startKey.split("-").map(Number);
+  const startDay = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
+  const dayKeys = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(startDay);
+    date.setUTCDate(date.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
+  const endDay = new Date(startDay);
+  endDay.setUTCDate(endDay.getUTCDate() + 7);
+  const [schedules, appointments] = await Promise.all([
+    db.schedule.findMany({
+      where: {
+        doctorId: actor.doctorId,
+        isActive: true,
+        OR: [{ clinicId: actor.clinicId }, { clinicId: null }],
+      },
+      select: { dayOfWeek: true, startTime: true, endTime: true },
+    }),
+    db.appointment.findMany({
+      where: {
+        clinicId: actor.clinicId,
+        doctorId: actor.doctorId,
+        status: { in: ["PENDING", "CONFIRMED"] },
+        date: { gte: startDay, lt: endDay },
+      },
+      select: { date: true, time: true, duration: true },
+    }),
+  ]);
+  const scheduleByDay = new Map<number, MinuteWindow[]>();
+  for (const schedule of schedules) {
+    const start = clockMinutes(schedule.startTime);
+    const end = clockMinutes(schedule.endTime);
+    if (start === null || end === null || end <= start) continue;
+    const dayWindows = scheduleByDay.get(schedule.dayOfWeek) ?? [];
+    dayWindows.push({ start, end });
+    scheduleByDay.set(schedule.dayOfWeek, dayWindows);
+  }
+  const appointmentsByDate = new Map<string, MinuteWindow[]>();
+  const currentLocalTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  const currentMinutes = clockMinutes(currentLocalTime) ?? 0;
+  for (const appointment of appointments) {
+    const dateKey = appointment.date.toISOString().slice(0, 10);
+    let start = clockMinutes(appointment.time);
+    if (start === null) continue;
+    const end = start + appointment.duration;
+    if (dateKey === startKey) {
+      if (end <= currentMinutes) continue;
+      start = Math.max(start, currentMinutes);
+    }
+    const dayWindows = appointmentsByDate.get(dateKey) ?? [];
+    dayWindows.push({ start, end });
+    appointmentsByDate.set(dateKey, dayWindows);
+  }
+
+  let availableMinutes = 0;
+  let bookedMinutes = 0;
+  for (const dateKey of dayKeys) {
+    const [dateYear, dateMonth, dateDay] = dateKey.split("-").map(Number);
+    const weekday = new Date(
+      Date.UTC(dateYear ?? 1970, (dateMonth ?? 1) - 1, dateDay ?? 1),
+    ).getUTCDay();
+    const windows = mergeWindows(scheduleByDay.get(weekday) ?? []);
+    const busy = appointmentsByDate.get(dateKey) ?? [];
+    availableMinutes += windows.reduce(
+      (sum, window) => sum + window.end - window.start,
+      0,
+    );
+    for (const window of windows) {
+      const overlaps = busy
+        .map((appointment) => ({
+          start: Math.max(window.start, appointment.start),
+          end: Math.min(window.end, appointment.end),
+        }))
+        .filter((interval) => interval.end > interval.start);
+      bookedMinutes += mergeWindows(overlaps).reduce(
+        (sum, interval) => sum + interval.end - interval.start,
+        0,
+      );
+    }
+  }
+
+  return {
+    from: startDay,
+    through: new Date(endDay.getTime() - 1),
+    availableMinutes,
+    bookedMinutes,
+    freeMinutes: Math.max(0, availableMinutes - bookedMinutes),
+    occupancyRate:
+      availableMinutes === 0
+        ? null
+        : Number((bookedMinutes / availableMinutes).toFixed(3)),
+  };
+}
 
 async function getActor(ctx: ClinicalContext) {
   const actor = await resolveClinicalActor({
@@ -64,7 +217,7 @@ function workflowFailure(error: unknown) {
             : 400;
     return trpcFailure(error.code, error.message, status);
   }
-  console.error("Clinical workflow failed", error);
+  console.error("Clinical workflow failed");
   return trpcFailure(
     "INTERNAL_ERROR",
     "No se pudo completar la operación clínica. Inténtalo de nuevo.",
@@ -240,9 +393,46 @@ export const clinicalRouter = createTRPCRouter({
           createdAt: true,
           patient: { select: { user: { select: { name: true } } } },
         },
-        orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+        orderBy: [
+          { dueAt: { sort: "asc", nulls: "last" } },
+          { priority: "desc" },
+          { createdAt: "desc" },
+        ],
         take: input.limit,
       });
+      const reminderMessages = tasks.length
+        ? await ctx.db.messageOutbox.findMany({
+            where: {
+              clinicId: actor.clinicId,
+              correlationId: { in: tasks.map((task) => task.id) },
+              idempotencyKey: { startsWith: "follow-up-reminder:" },
+            },
+            select: {
+              correlationId: true,
+              channel: true,
+              status: true,
+              nextAttemptAt: true,
+              sentAt: true,
+              deliveredAt: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+            take: tasks.length * 2,
+          })
+        : [];
+      const remindersByTask = new Map<
+        string,
+        Map<string, (typeof reminderMessages)[number]>
+      >();
+      for (const message of reminderMessages) {
+        if (!message.correlationId) continue;
+        const byChannel =
+          remindersByTask.get(message.correlationId) ?? new Map();
+        if (!byChannel.has(message.channel)) {
+          byChannel.set(message.channel, message);
+          remindersByTask.set(message.correlationId, byChannel);
+        }
+      }
       await recordClinicalRead(ctx.db, actor, {
         resourceType: "FOLLOW_UP_TASK_LIST",
         resourceId: actor.clinicId,
@@ -254,6 +444,15 @@ export const clinicalRouter = createTRPCRouter({
           canUpdate:
             task.assignedToUserId === actor.userId ||
             (!task.assignedToUserId && createdByUserId === actor.userId),
+          reminderStatuses: [
+            ...(remindersByTask.get(task.id)?.values() ?? []),
+          ].map(({ channel, status, nextAttemptAt, sentAt, deliveredAt }) => ({
+            channel,
+            status,
+            nextAttemptAt,
+            sentAt,
+            deliveredAt,
+          })),
         })),
         "Seguimientos obtenidos",
       );
@@ -280,7 +479,7 @@ export const clinicalRouter = createTRPCRouter({
               { assignedToUserId: null, createdByUserId: actor.userId },
             ],
           },
-          select: { id: true, patientId: true, status: true },
+          select: { id: true, patientId: true, status: true, dueAt: true },
         });
         if (!task) {
           return trpcFailure(
@@ -328,7 +527,28 @@ export const clinicalRouter = createTRPCRouter({
               metadata: { from: task.status, to: input.status },
             },
           });
-          return tx.followUpTask.findUniqueOrThrow({ where: { id: task.id } });
+          const updatedTask = await tx.followUpTask.findUniqueOrThrow({
+            where: { id: task.id },
+            include: {
+              patient: {
+                select: { phone: true, user: { select: { name: true } } },
+              },
+            },
+          });
+          if (input.status === "COMPLETED" || input.status === "CANCELLED") {
+            await cancelPendingFollowUpReminder(tx, task.id);
+            await tx.notification.updateMany({
+              where: {
+                followUpTaskId: task.id,
+                recipientUserId: actor.userId,
+                isRead: false,
+              },
+              data: { isRead: true },
+            });
+          } else {
+            await scheduleFollowUpReminder(tx, updatedTask);
+          }
+          return updatedTask;
         });
         return trpcSuccess(updated, "Estado del seguimiento actualizado");
       } catch (error) {
@@ -382,8 +602,10 @@ export const clinicalRouter = createTRPCRouter({
         encounters,
         tasks,
         assessments,
+        observations,
         clinicalFiles,
         medicalHistory,
+        appointmentIntakes,
       ] = await Promise.all([
         ctx.db.careEpisode.findMany({
           where: { ...careEpisodeScope(actor), patientId: patient.id },
@@ -475,8 +697,35 @@ export const clinicalRouter = createTRPCRouter({
           orderBy: { measuredAt: "desc" },
           take: input.limit,
         }),
+        ctx.db.clinicalObservation.findMany({
+          where: {
+            clinicId: actor.clinicId,
+            patientId: patient.id,
+            OR: [
+              { recordedByUserId: actor.userId },
+              { episode: { primaryDoctorId: actor.doctorId } },
+              { encounter: { doctorId: actor.doctorId } },
+            ],
+          },
+          select: {
+            id: true,
+            episodeId: true,
+            encounterId: true,
+            code: true,
+            value: true,
+            unit: true,
+            context: true,
+            measuredAt: true,
+            voidedAt: true,
+            voidReason: true,
+            recordedByUserId: true,
+            recordedBy: { select: { name: true } },
+          },
+          orderBy: [{ measuredAt: "desc" }, { id: "desc" }],
+          take: input.limit,
+        }),
         ctx.db.clinicalFile.findMany({
-          where: { clinicId: actor.clinicId, patientId: patient.id },
+          where: { patientId: patient.id, ...clinicalFileScope(actor) },
           select: {
             id: true,
             originalFilename: true,
@@ -501,6 +750,26 @@ export const clinicalRouter = createTRPCRouter({
               },
             })
           : Promise.resolve(null),
+        ctx.db.appointment.findMany({
+          where: {
+            clinicId: actor.clinicId,
+            doctorId: actor.doctorId,
+            patientId: patient.id,
+            intakeSymptoms: { not: null },
+          },
+          select: {
+            id: true,
+            date: true,
+            time: true,
+            status: true,
+            intakeSymptoms: true,
+            intakeAllergies: true,
+            intakeMedications: true,
+            intakeContext: true,
+          },
+          orderBy: [{ date: "desc" }, { time: "desc" }],
+          take: input.limit,
+        }),
       ]);
 
       await Promise.all([
@@ -536,15 +805,68 @@ export const clinicalRouter = createTRPCRouter({
           encounters,
           followUpTasks: tasks,
           clinicalFiles,
+          appointmentIntakes,
           outcomeAssessments: assessments.map((assessment) => ({
             ...assessment,
             score: assessment.score?.toNumber() ?? null,
             scoreMin: assessment.scoreMin?.toNumber() ?? null,
             scoreMax: assessment.scoreMax?.toNumber() ?? null,
           })),
+          clinicalObservations: observations.map((observation) => ({
+            ...observation,
+            value: observation.value.toNumber(),
+            canVoid:
+              observation.recordedByUserId === actor.userId &&
+              observation.voidedAt === null,
+          })),
         },
         "Línea de tiempo clínica obtenida",
       );
+    }),
+
+  recordClinicalObservation: protectedProcedure
+    .input(recordClinicalObservationInput)
+    .mutation(async ({ input, ctx }) => {
+      const actor = await getActor(ctx);
+      if (!actor) {
+        return trpcFailure(
+          "CLINICAL_ACCESS_REQUIRED",
+          "Acceso clínico requerido",
+          403,
+        );
+      }
+      try {
+        const observation = await recordClinicalObservation(
+          ctx.db,
+          actor,
+          input,
+        );
+        return trpcSuccess(observation, "Medición clínica registrada", 201);
+      } catch (error) {
+        return workflowFailure(error);
+      }
+    }),
+
+  voidClinicalObservation: protectedProcedure
+    .input(voidClinicalObservationInput)
+    .mutation(async ({ input, ctx }) => {
+      const actor = await getActor(ctx);
+      if (!actor) {
+        return trpcFailure(
+          "CLINICAL_ACCESS_REQUIRED",
+          "Acceso clínico requerido",
+          403,
+        );
+      }
+      try {
+        const observation = await voidClinicalObservation(ctx.db, actor, input);
+        return trpcSuccess(
+          observation,
+          "Medición anulada con motivo registrado",
+        );
+      } catch (error) {
+        return workflowFailure(error);
+      }
     }),
 
   recordOutcomeAssessment: protectedProcedure
@@ -596,13 +918,17 @@ export const clinicalRouter = createTRPCRouter({
           403,
         );
       }
+      const clinicTimezone =
+        (await ctx.getWorkspace())?.clinic.timezone ?? "America/Mexico_City";
       const [
         appointmentsByStatus,
         appointmentEvents,
+        attendanceEvents,
         followUpTasks,
         followUpEvents,
         signedEncounters,
         assessments,
+        upcomingCapacity,
       ] = await Promise.all([
         ctx.db.appointment.groupBy({
           by: ["status"],
@@ -621,6 +947,16 @@ export const clinicalRouter = createTRPCRouter({
             occurredAt: { gte: input.from, lt: input.to },
           },
           _count: { _all: true },
+        }),
+        ctx.db.appointmentLifecycleEvent.findMany({
+          where: {
+            clinicId: actor.clinicId,
+            doctorId: actor.doctorId,
+            eventType: { in: ["CHECKED_IN", "CONSULTATION_STARTED"] },
+            appointmentId: { not: null },
+            scheduledAt: { gte: input.from, lt: input.to },
+          },
+          select: { appointmentId: true, eventType: true, occurredAt: true },
         }),
         ctx.db.followUpTask.groupBy({
           by: ["status"],
@@ -660,6 +996,7 @@ export const clinicalRouter = createTRPCRouter({
             measuredAt: { gte: input.from, lt: input.to },
           },
         }),
+        getUpcomingCapacity(ctx.db, actor, clinicTimezone),
       ]);
 
       const appointmentCounts = Object.fromEntries(
@@ -708,6 +1045,52 @@ export const clinicalRouter = createTRPCRouter({
         },
         { created: 0, started: 0, completed: 0, cancelled: 0 },
       );
+      const attendanceByAppointment = new Map<
+        string,
+        { checkIn?: Date; started?: Date }
+      >();
+      for (const event of attendanceEvents) {
+        if (!event.appointmentId) continue;
+        const current = attendanceByAppointment.get(event.appointmentId) ?? {};
+        if (event.eventType === "CHECKED_IN" && !current.checkIn) {
+          current.checkIn = event.occurredAt;
+        }
+        if (event.eventType === "CONSULTATION_STARTED" && !current.started) {
+          current.started = event.occurredAt;
+        }
+        attendanceByAppointment.set(event.appointmentId, current);
+      }
+      const waitingSamples = [...attendanceByAppointment.values()]
+        .filter(
+          (pair): pair is { checkIn: Date; started: Date } =>
+            !!pair.checkIn && !!pair.started && pair.started >= pair.checkIn,
+        )
+        .map(
+          (pair) => (pair.started.getTime() - pair.checkIn.getTime()) / 60_000,
+        )
+        .sort((a, b) => a - b);
+      const medianIndex = Math.floor(waitingSamples.length / 2);
+      const medianWaitMinutes =
+        waitingSamples.length === 0
+          ? null
+          : waitingSamples.length % 2 === 0
+            ? Number(
+                (
+                  ((waitingSamples[medianIndex - 1] ?? 0) +
+                    (waitingSamples[medianIndex] ?? 0)) /
+                  2
+                ).toFixed(1),
+              )
+            : Number((waitingSamples[medianIndex] ?? 0).toFixed(1));
+      const averageWaitMinutes =
+        waitingSamples.length === 0
+          ? null
+          : Number(
+              (
+                waitingSamples.reduce((total, value) => total + value, 0) /
+                waitingSamples.length
+              ).toFixed(1),
+            );
 
       await recordClinicalRead(ctx.db, actor, {
         resourceType: "OPERATIONAL_ANALYTICS",
@@ -720,8 +1103,13 @@ export const clinicalRouter = createTRPCRouter({
           period: {
             from: input.from,
             to: input.to,
-            clinicTimezone:
-              (await ctx.getWorkspace())?.clinic.timezone ?? "UTC",
+            clinicTimezone,
+          },
+          upcomingCapacity,
+          waitingTime: {
+            pairedAppointments: waitingSamples.length,
+            medianMinutes: medianWaitMinutes,
+            averageMinutes: averageWaitMinutes,
           },
           appointments: {
             denominator: totalAppointments,
@@ -759,6 +1147,7 @@ export const clinicalRouter = createTRPCRouter({
           recordedOutcomeAssessments: assessments,
           caveats: [
             "Los estados actuales son una fotografía del momento de consulta. Los eventos de transición sólo existen desde que se habilite esta versión; no se reconstruye historial anterior.",
+            "La espera se calcula sólo si una cita tiene llegada e inicio registrados, usando la diferencia entre ambas marcas. No representa el tiempo entre reserva y cita.",
             "Las puntuaciones de instrumentos diferentes no se combinan ni se interpretan como mejoría automáticamente.",
           ],
         },

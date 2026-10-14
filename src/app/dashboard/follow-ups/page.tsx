@@ -1,13 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
-import { Activity, ArrowUpRight, Check, Clock3, ListTodo } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Activity,
+  ArrowUpRight,
+  Check,
+  Clock3,
+  ListTodo,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import DashboardWrapper from "~/components/auth/DashboardWrapper";
 import { ProductShell } from "~/components/shell/product-shell";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "~/trpc/react";
 
@@ -18,6 +34,7 @@ function formatDate(value: Date | null) {
     month: "short",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Mexico_City",
   }).format(new Date(value));
 }
 
@@ -30,11 +47,60 @@ function isOverdue(value: Date | null, status: string) {
   );
 }
 
+function priorityLabel(priority: string) {
+  if (priority === "URGENT") return "Urgente";
+  if (priority === "HIGH") return "Alta";
+  if (priority === "LOW") return "Baja";
+  return "Normal";
+}
+
+function priorityClass(priority: string) {
+  if (priority === "URGENT") return "border-red-200 bg-red-50 text-red-700";
+  if (priority === "HIGH") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-[#ebebeb] bg-white text-[#737373]";
+}
+
+function reminderStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "En cola",
+    PROCESSING: "Procesando",
+    SENT: "Aceptado",
+    DELIVERED: "Entregado",
+    READ: "Leído",
+    FAILED: "Reintentando",
+    DEAD_LETTER: "Requiere revisión",
+    CANCELLED: "Cancelado",
+  };
+  return labels[status] ?? "Estado desconocido";
+}
+
+function reminderStatusClass(status: string) {
+  if (status === "DELIVERED" || status === "READ")
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "FAILED" || status === "DEAD_LETTER")
+    return "border-red-200 bg-red-50 text-red-700";
+  if (status === "CANCELLED")
+    return "border-[#ebebeb] bg-[#fafafa] text-[#737373]";
+  return "border-blue-200 bg-blue-50 text-blue-800";
+}
+
 export default function FollowUpsPage() {
+  const [filter, setFilter] = useState<
+    "ACTIVE" | "OVERDUE" | "COMPLETED" | "ALL"
+  >("ACTIVE");
+  const [search, setSearch] = useState("");
   const utils = api.useUtils();
-  const { data, isLoading, error } = api.clinical.listFollowUpTasks.useQuery({
-    limit: 100,
-  });
+  const listInput = useMemo(() => {
+    const now = new Date();
+    return {
+      limit: 100,
+      includeClosed: filter === "COMPLETED" || filter === "ALL",
+      ...(filter === "COMPLETED" ? { status: "COMPLETED" as const } : {}),
+      ...(filter === "OVERDUE" ? { dueBefore: now } : {}),
+    };
+  }, [filter]);
+  const { data, isLoading, isFetching, error, refetch } =
+    api.clinical.listFollowUpTasks.useQuery(listInput);
   const from = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -66,6 +132,15 @@ export default function FollowUpsPage() {
   const activeTasks = tasks.filter(
     (task) => task.status === "OPEN" || task.status === "IN_PROGRESS",
   );
+  const visibleTasks = tasks.filter((task) => {
+    const query = search.trim().toLocaleLowerCase("es-MX");
+    return (
+      !query ||
+      task.title.toLocaleLowerCase("es-MX").includes(query) ||
+      task.patient.user.name.toLocaleLowerCase("es-MX").includes(query) ||
+      Boolean(task.details?.toLocaleLowerCase("es-MX").includes(query))
+    );
+  });
   const summary = analytics.data?.result;
 
   return (
@@ -111,11 +186,25 @@ export default function FollowUpsPage() {
                 icon={Check}
               />
               <Metric
-                label="Seguimientos vencidos"
-                value={isLoading ? undefined : overdueCount}
-                detail="Pendientes a la fecha"
+                label={
+                  filter === "COMPLETED"
+                    ? "Completadas en lista"
+                    : "Seguimientos vencidos"
+                }
+                value={
+                  isLoading
+                    ? undefined
+                    : filter === "COMPLETED"
+                      ? tasks.length
+                      : overdueCount
+                }
+                detail={
+                  filter === "COMPLETED"
+                    ? "Coinciden con el filtro actual"
+                    : "Pendientes a la fecha"
+                }
                 icon={ListTodo}
-                danger={overdueCount > 0}
+                danger={filter !== "COMPLETED" && overdueCount > 0}
               />
               <Metric
                 label="Mediciones registradas"
@@ -190,12 +279,51 @@ export default function FollowUpsPage() {
                   <p className="mt-1 text-xs text-[#737373]">
                     {isLoading
                       ? "Cargando tareas…"
-                      : `${activeTasks.length} activas · ${overdueCount} vencidas`}
+                      : filter === "COMPLETED"
+                        ? `${tasks.length} completadas`
+                        : `${activeTasks.length} activas · ${overdueCount} vencidas`}
                   </p>
                 </div>
-                <span className="font-mono text-[11px] text-[#888]">
-                  Actualizado al abrir esta vista
-                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  disabled={isFetching}
+                  onClick={() => void refetch()}
+                >
+                  <RefreshCw
+                    className={`mr-1.5 size-3.5 ${isFetching ? "animate-spin motion-reduce:animate-none" : ""}`}
+                  />
+                  {isFetching ? "Actualizando…" : "Actualizar"}
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-2 border-b border-[#ebebeb] px-5 py-3 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1 sm:max-w-sm">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#a3a3a3]" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Buscar paciente o tarea"
+                    aria-label="Buscar paciente o tarea"
+                    className="h-9 pl-9 text-sm"
+                  />
+                </div>
+                <Select
+                  value={filter}
+                  onValueChange={(value) => setFilter(value as typeof filter)}
+                >
+                  <SelectTrigger className="h-9 w-full sm:w-48">
+                    <SelectValue aria-label="Filtrar tareas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Activas</SelectItem>
+                    <SelectItem value="OVERDUE">Vencidas</SelectItem>
+                    <SelectItem value="COMPLETED">Completadas</SelectItem>
+                    <SelectItem value="ALL">Todas</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {error || data?.error ? (
@@ -212,22 +340,29 @@ export default function FollowUpsPage() {
                     <Skeleton key={index} className="h-14 w-full" />
                   ))}
                 </div>
-              ) : tasks.length === 0 ? (
+              ) : visibleTasks.length === 0 ? (
                 <div className="px-5 py-16 text-center">
                   <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[#ebebeb] bg-[#fafafa]">
                     <ListTodo className="h-4 w-4 text-[#737373]" />
                   </div>
                   <p className="text-sm font-medium text-[#171717]">
-                    No tienes seguimientos pendientes.
+                    {search
+                      ? "No encontramos tareas con esa búsqueda."
+                      : filter === "OVERDUE"
+                        ? "No tienes seguimientos vencidos."
+                        : filter === "COMPLETED"
+                          ? "Aún no has completado seguimientos."
+                          : "No tienes seguimientos pendientes."}
                   </p>
                   <p className="mt-1 text-sm text-[#737373]">
-                    Puedes crear el siguiente paso desde la ficha de un
-                    paciente.
+                    {search
+                      ? "Prueba con otro nombre de paciente o título."
+                      : "Puedes crear el siguiente paso desde la ficha de un paciente."}
                   </p>
                 </div>
               ) : (
                 <ul className="divide-y divide-[#ebebeb]">
-                  {tasks.map((task) => {
+                  {visibleTasks.map((task) => {
                     const overdue = isOverdue(task.dueAt, task.status);
                     const active =
                       task.status === "OPEN" || task.status === "IN_PROGRESS";
@@ -258,6 +393,11 @@ export default function FollowUpsPage() {
                                 Vencida
                               </span>
                             )}
+                            <span
+                              className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${priorityClass(task.priority)}`}
+                            >
+                              {priorityLabel(task.priority)}
+                            </span>
                           </div>
                           <p className="mt-1 text-sm text-[#404040]">
                             {task.title}
@@ -273,6 +413,27 @@ export default function FollowUpsPage() {
                               .replaceAll("_", " ")
                               .toLocaleLowerCase("es-MX")}
                           </p>
+                          {task.dueAt && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              {task.reminderStatuses.length ? (
+                                task.reminderStatuses.map((reminder) => (
+                                  <span
+                                    key={reminder.channel}
+                                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${reminderStatusClass(reminder.status)}`}
+                                  >
+                                    {reminder.channel === "WHATSAPP"
+                                      ? "WhatsApp"
+                                      : "SMS"}
+                                    : {reminderStatusLabel(reminder.status)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[10px] text-[#888]">
+                                  Sin mensaje programado
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         {active && task.canUpdate && (
                           <div className="flex shrink-0 gap-2">

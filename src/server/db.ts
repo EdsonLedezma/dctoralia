@@ -6,8 +6,9 @@ import { env } from "~/env";
 const createPrismaClient = () =>
   new PrismaClient({
     adapter: new PrismaPg({ connectionString: env.POSTGRES_PRISMA_URL }),
-    log:
-      env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+    // SQL query logs can contain patient-authored values and identifiers.
+    // Keep diagnostics useful without writing query parameters to local logs.
+    log: env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
 const globalForPrisma = globalThis as unknown as {

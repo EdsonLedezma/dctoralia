@@ -25,6 +25,8 @@ import {
   Mail,
   Heart,
   Shield,
+  MessageCircle,
+  MessageSquareText,
 } from "lucide-react";
 import { api, type RouterInputs } from "~/trpc/react";
 import { toast } from "sonner";
@@ -102,6 +104,43 @@ export default function PatientProfilePage() {
 
   const upsertMedicalHistory = api.patients.upsertMedicalHistory.useMutation();
   const updateAccount = api.auth.updateProfile.useMutation();
+  const {
+    data: reminderPreferencesRes,
+    isLoading: isReminderPreferencesLoading,
+    isError: isReminderPreferencesError,
+    refetch: refetchReminderPreferences,
+  } = api.patients.listMessageReminderPreferences.useQuery();
+  const reminderPreferences = reminderPreferencesRes?.result ?? [];
+  const setReminderPreference =
+    api.patients.setMessageReminderPreference.useMutation();
+
+  const handleReminderPreference = async (
+    clinicId: string,
+    channel: "SMS" | "WHATSAPP",
+    purpose: "APPOINTMENT_REMINDER" | "FOLLOW_UP_REMINDER",
+    enabled: boolean,
+  ) => {
+    try {
+      unwrapTrpcResult(
+        await setReminderPreference.mutateAsync({
+          clinicId,
+          channel,
+          purpose,
+          enabled,
+        }),
+      );
+      await refetchReminderPreferences();
+      toast.success(
+        enabled ? "Recordatorio activado" : "Recordatorio desactivado",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la preferencia",
+      );
+    }
+  };
 
   const [profileData, setProfileData] = useState<ProfileFormData>({
     firstName: user?.name?.split(" ")[0] ?? "",
@@ -915,6 +954,135 @@ export default function PatientProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Appointment reminders */}
+          <MotionList>
+            <Card className="border-[#ebebeb] bg-white shadow-none">
+              <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+                <CardTitle className="flex items-center text-base">
+                  <MessageCircle className="mr-2 h-4 w-4 text-[#737373]" />
+                  Mensajes de recordatorio
+                </CardTitle>
+                <p className="text-sm text-[#6b6b6b]">
+                  Elige por separado los avisos de citas y las fechas límite de
+                  seguimiento, para cada consultorio y canal.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-5 p-5 sm:p-6">
+                {isReminderPreferencesLoading ? (
+                  <div className="h-20 animate-pulse rounded-md bg-[#f5f5f5] motion-reduce:animate-none" />
+                ) : isReminderPreferencesError ||
+                  reminderPreferencesRes?.error ? (
+                  <p className="text-sm text-[#c50000]" role="alert">
+                    No pudimos cargar tus preferencias. Actualiza la página e
+                    inténtalo de nuevo.
+                  </p>
+                ) : reminderPreferences.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-[#d4d4d4] px-4 py-5 text-sm text-[#737373]">
+                    Tus preferencias aparecerán aquí cuando tengas relación con
+                    un consultorio.
+                  </p>
+                ) : (
+                  reminderPreferences.map((clinic) => (
+                    <section key={clinic.id} className="space-y-3">
+                      <h3 className="text-sm font-medium text-[#171717]">
+                        {clinic.name}
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {clinic.channels.map((channel) => {
+                          const isWhatsApp = channel.channel === "WHATSAPP";
+                          return (
+                            <div
+                              key={channel.channel}
+                              className="space-y-3 rounded-lg border border-[#ebebeb] p-4"
+                            >
+                              <div className="flex items-center gap-3">
+                                {isWhatsApp ? (
+                                  <MessageCircle
+                                    aria-hidden="true"
+                                    className="h-4 w-4 shrink-0 text-[#525252]"
+                                  />
+                                ) : (
+                                  <MessageSquareText
+                                    aria-hidden="true"
+                                    className="h-4 w-4 shrink-0 text-[#525252]"
+                                  />
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {isWhatsApp ? "WhatsApp" : "SMS"}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="divide-y divide-[#ebebeb]">
+                                {channel.purposes.map((purpose) => {
+                                  const appointment =
+                                    purpose.purpose === "APPOINTMENT_REMINDER";
+                                  const label = appointment
+                                    ? "Recordatorios de cita"
+                                    : "Fechas límite de seguimiento";
+                                  return (
+                                    <div
+                                      key={purpose.purpose}
+                                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-medium text-[#404040]">
+                                          {label}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] text-[#888]">
+                                          {purpose.enabled
+                                            ? "Activado"
+                                            : "Desactivado"}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={
+                                          purpose.enabled
+                                            ? "outline"
+                                            : "default"
+                                        }
+                                        aria-pressed={purpose.enabled}
+                                        disabled={
+                                          setReminderPreference.isPending
+                                        }
+                                        onClick={() =>
+                                          void handleReminderPreference(
+                                            clinic.id,
+                                            channel.channel,
+                                            purpose.purpose,
+                                            !purpose.enabled,
+                                          )
+                                        }
+                                        className="shrink-0 active:scale-[0.98]"
+                                      >
+                                        {purpose.enabled
+                                          ? "Desactivar"
+                                          : "Activar"}
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))
+                )}
+                <p className="text-xs leading-5 text-[#737373]">
+                  Cada propósito requiere autorización independiente. Los
+                  mensajes de seguimiento usan texto neutro: nunca incluyen el
+                  título, detalles ni datos clínicos de la tarea. Se programan
+                  entre 9:00 y 19:00 en la zona del consultorio y sólo se envían
+                  con plantilla aprobada y el servicio habilitado.
+                </p>
+              </CardContent>
+            </Card>
+          </MotionList>
 
           {/* Insurance Information */}
           <Card className="border-[#ebebeb] bg-white shadow-none">

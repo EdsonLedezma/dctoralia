@@ -10,6 +10,9 @@ import {
   patientClinicalScope,
   resolveClinicalActor,
 } from "~/server/domain/clinical/access";
+import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import { scheduleAppointmentReminders } from "~/server/domain/messaging/appointment-reminders";
+import { scheduleFollowUpReminder } from "~/server/domain/messaging/follow-up-reminders";
 
 const medicalHistorySharingPolicyVersion = "medical-history-sharing-v1";
 
@@ -413,6 +416,294 @@ export const usePatients = createTRPCRouter({
       }
     }),
 
+  listMessageReminderPreferences: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "PATIENT") {
+      return trpcFailure(
+        "FORBIDDEN",
+        "Sólo el paciente puede administrar sus recordatorios.",
+        403,
+      );
+    }
+    const patient = await ctx.db.patient.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+    if (!patient)
+      return trpcFailure("PATIENT_NOT_FOUND", "Perfil no encontrado", 404);
+    const [clinics, consents] = await Promise.all([
+      ctx.db.clinic.findMany({
+        where: {
+          OR: [
+            {
+              patientMemberships: {
+                some: { patientId: patient.id, status: "ACTIVE" },
+              },
+            },
+            { patients: { some: { id: patient.id } } },
+            { appointments: { some: { patientId: patient.id } } },
+          ],
+        },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      ctx.db.patientMessageConsent.findMany({
+        where: { patientId: patient.id },
+        select: {
+          clinicId: true,
+          channel: true,
+          purpose: true,
+          consentedAt: true,
+          revokedAt: true,
+        },
+      }),
+    ]);
+    const consentByKey = new Map(
+      consents.map((consent) => [
+        `${consent.clinicId}:${consent.channel}:${consent.purpose}`,
+        consent,
+      ]),
+    );
+    return trpcSuccess(
+      clinics.map((clinic) => ({
+        ...clinic,
+        channels: (["SMS", "WHATSAPP"] as const).map((channel) => ({
+          channel,
+          purposes: (
+            ["APPOINTMENT_REMINDER", "FOLLOW_UP_REMINDER"] as const
+          ).map((purpose) => {
+            const consent = consentByKey.get(
+              `${clinic.id}:${channel}:${purpose}`,
+            );
+            return {
+              purpose,
+              enabled: !!consent?.consentedAt && !consent.revokedAt,
+              updatedAt: consent?.revokedAt ?? consent?.consentedAt ?? null,
+            };
+          }),
+        })),
+      })),
+      "Preferencias de recordatorios",
+    );
+  }),
+
+  setMessageReminderPreference: protectedProcedure
+    .input(
+      z.object({
+        clinicId: z.string().cuid(),
+        channel: z.enum(["SMS", "WHATSAPP"]),
+        purpose: z.enum(["APPOINTMENT_REMINDER", "FOLLOW_UP_REMINDER"]),
+        enabled: z.boolean(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.session.user.role !== "PATIENT") {
+        return trpcFailure(
+          "FORBIDDEN",
+          "Sólo el paciente puede administrar sus recordatorios.",
+          403,
+        );
+      }
+      const patient = await ctx.db.patient.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!patient)
+        return trpcFailure("PATIENT_NOT_FOUND", "Perfil no encontrado", 404);
+
+      try {
+        const result = await ctx.db.$transaction(async (tx) => {
+          const clinic = await tx.clinic.findFirst({
+            where: {
+              id: input.clinicId,
+              OR: [
+                {
+                  patientMemberships: {
+                    some: { patientId: patient.id, status: "ACTIVE" },
+                  },
+                },
+                { patients: { some: { id: patient.id } } },
+                { appointments: { some: { patientId: patient.id } } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (!clinic) throw new Error("CLINIC_ACCESS_REQUIRED");
+          const key = {
+            patientId_clinicId_channel_purpose: {
+              patientId: patient.id,
+              clinicId: input.clinicId,
+              channel: input.channel,
+              purpose: input.purpose,
+            },
+          };
+          const existing = await tx.patientMessageConsent.findUnique({
+            where: key,
+          });
+          const now = new Date();
+          if (input.enabled && existing?.consentedAt && !existing.revokedAt) {
+            return { enabled: true };
+          }
+          if (
+            !input.enabled &&
+            (!existing?.consentedAt || existing.revokedAt)
+          ) {
+            return { enabled: false };
+          }
+          const preference = await tx.patientMessageConsent.upsert({
+            where: key,
+            create: {
+              patientId: patient.id,
+              clinicId: input.clinicId,
+              channel: input.channel,
+              purpose: input.purpose,
+              consentedAt: input.enabled ? now : null,
+              revokedAt: input.enabled ? null : now,
+            },
+            update: {
+              consentedAt: input.enabled ? now : existing?.consentedAt,
+              revokedAt: input.enabled ? null : now,
+            },
+          });
+          await tx.clinicalAuditEvent.create({
+            data: {
+              clinicId: input.clinicId,
+              patientId: patient.id,
+              actorUserId: ctx.session.user.id,
+              resourceType: "PATIENT_MESSAGE_CONSENT",
+              resourceId: preference.id,
+              action: input.enabled
+                ? `${input.purpose}_OPTED_IN`
+                : `${input.purpose}_OPTED_OUT`,
+              metadata: { channel: input.channel, purpose: input.purpose },
+            },
+          });
+          if (!input.enabled) {
+            const correlationIds =
+              input.purpose === "APPOINTMENT_REMINDER"
+                ? (
+                    await tx.appointment.findMany({
+                      where: {
+                        patientId: patient.id,
+                        clinicId: input.clinicId,
+                        status: { in: ["PENDING", "CONFIRMED"] },
+                      },
+                      select: { id: true },
+                    })
+                  ).map(({ id }) => id)
+                : (
+                    await tx.followUpTask.findMany({
+                      where: {
+                        patientId: patient.id,
+                        clinicId: input.clinicId,
+                        status: { in: ["OPEN", "IN_PROGRESS"] },
+                      },
+                      select: { id: true },
+                    })
+                  ).map(({ id }) => id);
+            if (correlationIds.length) {
+              await tx.messageOutbox.updateMany({
+                where: {
+                  correlationId: { in: correlationIds },
+                  channel: input.channel,
+                  idempotencyKey: {
+                    startsWith:
+                      input.purpose === "APPOINTMENT_REMINDER"
+                        ? "appointment-reminder:"
+                        : "follow-up-reminder:",
+                  },
+                  status: { in: ["PENDING", "FAILED"] },
+                },
+                data: {
+                  status: "CANCELLED",
+                  lastErrorCode: "PATIENT_OPTED_OUT",
+                },
+              });
+            }
+          } else if (input.purpose === "APPOINTMENT_REMINDER") {
+            const appointments = await tx.appointment.findMany({
+              where: {
+                patientId: patient.id,
+                clinicId: input.clinicId,
+                status: { in: ["PENDING", "CONFIRMED"] },
+                date: {
+                  // Appointments are stored as UTC calendar days while the
+                  // product calendar is Mexico-local; include the prior UTC day.
+                  gte: new Date(
+                    Date.UTC(
+                      now.getUTCFullYear(),
+                      now.getUTCMonth(),
+                      now.getUTCDate() - 1,
+                    ),
+                  ),
+                  lte: new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000),
+                },
+              },
+              include: {
+                patient: {
+                  select: {
+                    id: true,
+                    phone: true,
+                    user: { select: { name: true } },
+                  },
+                },
+                doctor: { select: { user: { select: { name: true } } } },
+              },
+              orderBy: [{ date: "asc" }, { time: "asc" }],
+              take: 100,
+            });
+            for (const appointment of appointments) {
+              await scheduleAppointmentReminders(tx, appointment, now);
+            }
+          } else {
+            const tasks = await tx.followUpTask.findMany({
+              where: {
+                patientId: patient.id,
+                clinicId: input.clinicId,
+                status: { in: ["OPEN", "IN_PROGRESS"] },
+                dueAt: { gt: now },
+              },
+              include: {
+                patient: {
+                  select: {
+                    phone: true,
+                    user: { select: { name: true } },
+                  },
+                },
+              },
+              orderBy: { dueAt: "asc" },
+              take: 100,
+            });
+            for (const task of tasks) {
+              await scheduleFollowUpReminder(tx, task, now, input.channel);
+            }
+          }
+          return { enabled: input.enabled };
+        });
+        return trpcSuccess(
+          result,
+          input.enabled
+            ? "Recordatorios activados"
+            : "Recordatorios desactivados",
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "CLINIC_ACCESS_REQUIRED"
+        ) {
+          return trpcFailure(
+            "CLINIC_ACCESS_REQUIRED",
+            "No existe una relación con este consultorio.",
+            403,
+          );
+        }
+        return trpcFailure(
+          "INTERNAL_ERROR",
+          "No se pudo guardar la preferencia.",
+          500,
+        );
+      }
+    }),
+
   // Obtener paciente por ID
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
@@ -449,6 +740,13 @@ export const usePatients = createTRPCRouter({
             "Paciente no encontrado",
             404,
           );
+        }
+        if (clinicalActor) {
+          await recordClinicalRead(ctx.db, clinicalActor, {
+            resourceType: "PATIENT_PROFILE",
+            resourceId: patient.id,
+            patientId: patient.id,
+          });
         }
         return trpcSuccess(patient, "Paciente encontrado");
       } catch {

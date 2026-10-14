@@ -26,6 +26,7 @@ const row: MessageOutbox = {
   sandbox: true,
   status: "PENDING",
   attempts: 0,
+  expiresAt: null,
   nextAttemptAt: now,
   lastAttemptAt: null,
   sentAt: null,

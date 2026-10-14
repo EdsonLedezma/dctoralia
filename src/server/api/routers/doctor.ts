@@ -16,7 +16,8 @@ function hideLegacyVercelBlobImages<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map(hideLegacyVercelBlobImages) as T;
   }
-  if (!value || typeof value !== "object" || value instanceof Date) return value;
+  if (!value || typeof value !== "object" || value instanceof Date)
+    return value;
 
   const sanitized = Object.fromEntries(
     Object.entries(value).map(([key, entry]) => {
@@ -59,12 +60,40 @@ export const useDoctor = createTRPCRouter({
   getAll: publicProcedure.query(async ({ ctx }) => {
     try {
       const doctors = await ctx.db.doctor.findMany({
-        include: {
+        select: {
+          id: true,
+          userId: true,
+          specialty: true,
+          license: true,
+          phone: true,
+          about: true,
+          experience: true,
+          rating: true,
+          totalReviews: true,
+          address: true,
+          city: true,
+          state: true,
+          googleMapsUrl: true,
+          latitude: true,
+          longitude: true,
+          createdAt: true,
           user: { select: { id: true, name: true, image: true } },
-          services: true,
-          reviews: true,
+          services: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              duration: true,
+              isActive: true,
+            },
+          },
+          // Directory cards need aggregate ratings, never review text or patient IDs.
+          reviews: { select: { rating: true } },
         },
         orderBy: { createdAt: "desc" },
+        take: 100,
       });
       return trpcSuccess(
         hideLegacyVercelBlobImages(doctors),
@@ -108,7 +137,7 @@ export const useDoctor = createTRPCRouter({
   search: publicProcedure
     .input(
       z.object({
-        q: z.string().min(1),
+        q: z.string().trim().min(1).max(80),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -127,12 +156,39 @@ export const useDoctor = createTRPCRouter({
               },
             ],
           },
-          include: {
+          select: {
+            id: true,
+            userId: true,
+            specialty: true,
+            license: true,
+            phone: true,
+            about: true,
+            experience: true,
+            rating: true,
+            totalReviews: true,
+            address: true,
+            city: true,
+            state: true,
+            googleMapsUrl: true,
+            latitude: true,
+            longitude: true,
+            createdAt: true,
             user: { select: { id: true, name: true, image: true } },
-            services: true,
-            reviews: true,
+            services: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                price: true,
+                duration: true,
+                isActive: true,
+              },
+            },
+            reviews: { select: { rating: true } },
           },
           orderBy: { createdAt: "desc" },
+          take: 50,
         });
         return trpcSuccess(
           hideLegacyVercelBlobImages(doctors),
@@ -145,25 +201,53 @@ export const useDoctor = createTRPCRouter({
 
   // Obtener doctor por ID (público)
   getById: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().cuid() }))
     .query(async ({ input, ctx }) => {
       try {
         const doctor = await ctx.db.doctor.findUnique({
           where: { id: input.id },
-          include: {
-            user: {
-              select: { id: true, name: true, image: true, email: true },
-            },
-            services: true,
-            schedules: true,
-            reviews: {
-              include: {
-                patient: {
-                  include: {
-                    user: { select: { name: true, image: true } },
-                  },
-                },
+          select: {
+            id: true,
+            specialty: true,
+            license: true,
+            phone: true,
+            about: true,
+            experience: true,
+            rating: true,
+            totalReviews: true,
+            address: true,
+            city: true,
+            state: true,
+            googleMapsUrl: true,
+            latitude: true,
+            longitude: true,
+            createdAt: true,
+            user: { select: { name: true } },
+            services: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                price: true,
+                duration: true,
+                isActive: true,
               },
+            },
+            schedules: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                dayOfWeek: true,
+                startTime: true,
+                endTime: true,
+                isActive: true,
+              },
+            },
+            reviews: {
+              select: { id: true, rating: true, comment: true, createdAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 100,
             },
           },
         });
@@ -325,13 +409,54 @@ export const useDoctor = createTRPCRouter({
   // Actualizar perfil completo del doctor
   updateProfile: protectedProcedure
     .input(
-      z.object({
-        specialty: z.string().optional(),
-        license: z.string().min(1).optional(),
-        about: z.string().optional(),
-        experience: z.number().int().min(0).optional(),
-        phone: z.string().optional(),
-      }),
+      z
+        .object({
+          specialty: z.string().optional(),
+          license: z.string().min(1).optional(),
+          about: z.string().optional(),
+          experience: z.number().int().min(0).optional(),
+          phone: z.string().optional(),
+          address: z.string().trim().max(240).nullable().optional(),
+          city: z.string().trim().max(100).nullable().optional(),
+          state: z.string().trim().max(100).nullable().optional(),
+          googleMapsUrl: z
+            .string()
+            .trim()
+            .url()
+            .max(500)
+            .refine((value) => {
+              try {
+                const host = new URL(value).hostname.toLowerCase();
+                return (
+                  host === "google.com" ||
+                  host === "www.google.com" ||
+                  host === "maps.google.com" ||
+                  host === "google.com.mx" ||
+                  host === "www.google.com.mx" ||
+                  host === "maps.app.goo.gl" ||
+                  host === "goo.gl" ||
+                  host.endsWith(".google.com") ||
+                  host.endsWith(".google.com.mx")
+                );
+              } catch {
+                return false;
+              }
+            }, "Usa un enlace válido de Google Maps")
+            .nullable()
+            .optional(),
+          latitude: z.number().min(14).max(33.5).nullable().optional(),
+          longitude: z.number().min(-118).max(-86).nullable().optional(),
+        })
+        .superRefine((input, refinementContext) => {
+          if ((input.latitude == null) !== (input.longitude == null)) {
+            refinementContext.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                "Agrega latitud y longitud juntas para mostrar el punto en el mapa",
+              path: [input.latitude == null ? "latitude" : "longitude"],
+            });
+          }
+        }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
@@ -355,6 +480,12 @@ export const useDoctor = createTRPCRouter({
             about: input.about,
             experience: input.experience,
             phone: input.phone,
+            address: input.address,
+            city: input.city,
+            state: input.state,
+            googleMapsUrl: input.googleMapsUrl,
+            latitude: input.latitude,
+            longitude: input.longitude,
           },
           include: {
             user: {
@@ -464,6 +595,11 @@ export const useDoctor = createTRPCRouter({
             },
           },
           orderBy: { createdAt: "desc" },
+        });
+
+        await recordClinicalRead(ctx.db, actor, {
+          resourceType: "PATIENT_DIRECTORY",
+          resourceId: actor.clinicId,
         });
 
         return trpcSuccess(patients, "Mis pacientes");

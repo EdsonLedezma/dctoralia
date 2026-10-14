@@ -9,7 +9,7 @@ export const env = createEnv({
   server: {
     AUTH_SECRET:
       process.env.NODE_ENV === "production"
-        ? z.string()
+        ? z.string().min(32)
         : z.string().optional(),
 
     DATABASE_URL: z.string().url(),
@@ -36,9 +36,13 @@ export const env = createEnv({
     SENT_PROFILE_ID: z.string().uuid().optional(),
     SENT_WEBHOOK_SECRET: z.string().min(1).optional(),
     SENT_TEST_TEMPLATE: z.string().min(1).optional(),
+    SENT_APPOINTMENT_REMINDER_TEMPLATE: z.string().min(1).optional(),
+    SENT_FOLLOW_UP_REMINDER_TEMPLATE: z.string().min(1).optional(),
     SENT_ENABLED: z.enum(["true", "false"]).default("false"),
     SENT_SANDBOX: z.enum(["true", "false"]).default("true"),
     CRON_SECRET: z.string().min(32).optional(),
+    UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   },
 
   /**
@@ -78,9 +82,15 @@ export const env = createEnv({
     SENT_PROFILE_ID: process.env.SENT_PROFILE_ID,
     SENT_WEBHOOK_SECRET: process.env.SENT_WEBHOOK_SECRET,
     SENT_TEST_TEMPLATE: process.env.SENT_TEST_TEMPLATE,
+    SENT_APPOINTMENT_REMINDER_TEMPLATE:
+      process.env.SENT_APPOINTMENT_REMINDER_TEMPLATE,
+    SENT_FOLLOW_UP_REMINDER_TEMPLATE:
+      process.env.SENT_FOLLOW_UP_REMINDER_TEMPLATE,
     SENT_ENABLED: process.env.SENT_ENABLED,
     SENT_SANDBOX: process.env.SENT_SANDBOX,
     CRON_SECRET: process.env.CRON_SECRET,
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

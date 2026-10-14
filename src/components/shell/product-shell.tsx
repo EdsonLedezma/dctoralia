@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -16,6 +17,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
+  MoreHorizontal,
   Search,
   Settings,
   Stethoscope,
@@ -74,6 +76,7 @@ const patientNav: NavItem[] = [
     href: "/patient/medical-history",
     icon: FileText,
   },
+  { label: "Notificaciones", href: "/patient/notifications", icon: Bell },
   { label: "Mi perfil", href: "/patient/profile", icon: Settings },
 ];
 
@@ -83,7 +86,15 @@ function isActive(pathname: string, href: string) {
     : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({
+  item,
+  pathname,
+  notificationCount = 0,
+}: {
+  item: NavItem;
+  pathname: string;
+  notificationCount?: number;
+}) {
   const active = isActive(pathname, item.href);
   const Icon = item.icon;
 
@@ -99,6 +110,42 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
     >
       <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.1 : 1.8} />
       <span className="truncate">{item.label}</span>
+      {item.icon === Bell && notificationCount > 0 && (
+        <span className="ml-auto min-w-5 rounded-full bg-white px-1 text-center text-[10px] leading-5 font-semibold text-[#171717]">
+          {notificationCount > 9 ? "9+" : notificationCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function MobileNavLink({
+  item,
+  pathname,
+}: {
+  item: NavItem;
+  pathname: string;
+}) {
+  const active = isActive(pathname, item.href);
+  const Icon = item.icon;
+  const compactLabel: Record<string, string> = {
+    "/dashboard": "Inicio",
+    "/dashboard/follow-ups": "Seguimiento",
+    "/patient/appointments": "Citas",
+    "/patient/doctors": "Buscar",
+    "/patient/medical-history": "Historial",
+  };
+
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={`flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none active:bg-[#f5f5f5] ${active ? "text-[#171717]" : "text-[#737373]"}`}
+    >
+      <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.2 : 1.8} />
+      <span className="max-w-full truncate">
+        {compactLabel[item.href] ?? item.label}
+      </span>
     </Link>
   );
 }
@@ -196,7 +243,27 @@ export function ProductShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
+  const queryClient = useQueryClient();
+  const previousUserId = useRef<string | null>(null);
+  const currentUserId = session?.user?.id ?? null;
+
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      queryClient.clear();
+      previousUserId.current = null;
+      return;
+    }
+
+    if (sessionStatus !== "authenticated") return;
+    if (
+      previousUserId.current &&
+      currentUserId !== previousUserId.current
+    ) {
+      queryClient.clear();
+    }
+    previousUserId.current = currentUserId;
+  }, [currentUserId, queryClient, sessionStatus]);
   const workspacesQuery = api.workspace.listMine.useQuery(undefined, {
     enabled: role === "DOCTOR",
     staleTime: 60_000,
@@ -209,6 +276,16 @@ export function ProductShell({
   const activeClinicId = workspacesQuery.data?.result?.activeClinicId ?? null;
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
+  const [moreNavOpen, setMoreNavOpen] = useState(false);
+  const { data: unreadCountRes } = api.notifications.unreadCount.useQuery(
+    undefined,
+    { staleTime: 30_000, refetchInterval: 60_000 },
+  );
+  const unreadCount = unreadCountRes?.result ?? 0;
+  const primaryMobileItems = items.slice(0, 4);
+  const secondaryMobileItems = items.slice(4);
+  const notificationHref =
+    role === "DOCTOR" ? "/dashboard/notifications" : "/patient/notifications";
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -291,11 +368,21 @@ export function ProductShell({
           aria-label="Navegación principal"
         >
           {items.slice(0, 3).map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              notificationCount={unreadCount}
+            />
           ))}
           <div className="my-3 border-t border-[#252525]" />
           {items.slice(3).map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              notificationCount={unreadCount}
+            />
           ))}
         </nav>
 
@@ -401,6 +488,22 @@ export function ProductShell({
                   />
                 </div>
               )}
+              <Link
+                href={notificationHref}
+                aria-label={
+                  unreadCount > 0
+                    ? `Notificaciones, ${unreadCount} sin leer`
+                    : "Notificaciones"
+                }
+                className="relative flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md p-2 text-[#6b6b6b] transition-colors hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:ring-2 focus-visible:ring-[#0070f3] focus-visible:outline-none"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#171717] px-1 text-[9px] font-semibold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
               <button
                 type="button"
                 onClick={openCommandMenu}
@@ -419,16 +522,59 @@ export function ProductShell({
               </button>
             </div>
           </div>
-          <nav
-            className="flex touch-pan-y gap-1 overflow-x-auto px-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            aria-label="Navegación móvil"
-          >
-            {items.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} />
-            ))}
-          </nav>
         </div>
-        <main id="main-content" className="min-w-0">
+        <Dialog open={moreNavOpen} onOpenChange={setMoreNavOpen}>
+          <DialogContent className="top-auto bottom-0 left-0 max-h-[min(75dvh,38rem)] w-full max-w-none translate-x-0 translate-y-0 gap-4 rounded-t-2xl rounded-b-none px-4 pt-7 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:bottom-1/2 sm:left-1/2 sm:w-[calc(100%-2rem)] sm:max-w-md sm:-translate-x-1/2 sm:translate-y-1/2 sm:rounded-xl sm:p-6">
+            <DialogTitle className="text-base">Más secciones</DialogTitle>
+            <DialogDescription>
+              Accesos secundarios de tu cuenta.
+            </DialogDescription>
+            <nav className="grid gap-1" aria-label="Más secciones">
+              {secondaryMobileItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMoreNavOpen(false)}
+                    className={`flex min-h-12 items-center gap-3 rounded-md px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none ${active ? "bg-[#f1f1f1] font-medium text-[#171717]" : "text-[#525252] hover:bg-[#f5f5f5]"}`}
+                  >
+                    <Icon className="h-4 w-4 text-[#737373]" />
+                    <span className="flex-1">{item.label}</span>
+                    {item.icon === Bell && unreadCount > 0 && (
+                      <span className="rounded-full bg-[#171717] px-2 py-0.5 text-xs text-white">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </DialogContent>
+        </Dialog>
+        <nav
+          className="fixed right-0 bottom-0 left-0 z-40 flex border-t border-[#e5e5e5] bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.04)] backdrop-blur md:hidden"
+          aria-label="Navegación móvil"
+        >
+          {primaryMobileItems.map((item) => (
+            <MobileNavLink key={item.href} item={item} pathname={pathname} />
+          ))}
+          <button
+            type="button"
+            onClick={() => setMoreNavOpen(true)}
+            className={`flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none active:bg-[#f5f5f5] ${moreNavOpen || secondaryMobileItems.some((item) => isActive(pathname, item.href)) ? "text-[#171717]" : "text-[#737373]"}`}
+            aria-haspopup="dialog"
+            aria-expanded={moreNavOpen}
+          >
+            <MoreHorizontal className="h-[18px] w-[18px]" />
+            <span>Más</span>
+          </button>
+        </nav>
+        <main
+          id="main-content"
+          className="min-w-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0"
+        >
           {children}
         </main>
       </div>
