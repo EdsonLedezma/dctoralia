@@ -837,6 +837,7 @@ model AppointmentLifecycleEvent {
 // Notificaciones para eventos de citas
 model Notification {
   id              String           @id @default(cuid())
+  // Nulo sólo para avisos anteriores a la bandeja por usuario. Las escrituras nuevas deben asignar destinatario.
   recipientUserId String?
   doctorId        String
   patientId       String

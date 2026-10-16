@@ -126,20 +126,26 @@ export default function MedicalHistoryPage() {
   }, [medicalHistory]);
 
   const upsertHistory = api.patients.upsertMedicalHistory.useMutation({
-    onSuccess: () => {
+    onSuccess: async (response) => {
+      if (response.error) {
+        toast.error(response.message);
+        return;
+      }
       toast.success("Historial médico actualizado");
       setIsEditing(false);
+      await utils.patients.getMedicalHistory.invalidate();
     },
     onError: (error) => {
       toast.error(error.message ?? "Error al actualizar historial");
     },
   });
 
-  const formatDate = (dateString: string | Date) => {
+  const formatDate = (dateString: string | Date, dateOnly = false) => {
     return new Date(dateString).toLocaleDateString("es-ES", {
       year: "numeric",
       month: "long",
       day: "numeric",
+      timeZone: dateOnly ? "UTC" : undefined,
     });
   };
 
@@ -162,6 +168,21 @@ export default function MedicalHistoryPage() {
     }
 
     upsertHistory.mutate(dataToSubmit);
+  };
+
+  const handleCancel = () => {
+    if (medicalHistory) {
+      setFormData({
+        bloodType: medicalHistory.bloodType ?? "",
+        allergies: medicalHistory.allergies ?? [],
+        medications: medicalHistory.medications ?? [],
+        chronicDiseases: medicalHistory.chronicDiseases ?? [],
+        surgeries: medicalHistory.surgeries ?? [],
+        immunizations: medicalHistory.immunizations ?? [],
+        notes: medicalHistory.notes ?? "",
+      });
+    }
+    setIsEditing(false);
   };
 
   const handleAddItem = (field: string, value: string) => {
@@ -201,6 +222,25 @@ export default function MedicalHistoryPage() {
     <ProductShell role="PATIENT">
       <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-5xl">
+          <div className="mb-4 flex justify-end gap-2">
+            {!isEditing ? (
+              <Button onClick={() => setIsEditing(true)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar historial
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={handleCancel}>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar
+                </Button>
+                <Button onClick={handleSave} disabled={upsertHistory.isPending}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {upsertHistory.isPending ? "Guardando..." : "Guardar"}
+                </Button>
+              </>
+            )}
+          </div>
           <Tabs defaultValue="history" className="space-y-6">
             <TabsList className="flex w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-[#ebebeb] bg-transparent p-0">
               <TabsTrigger value="history">Historial</TabsTrigger>
@@ -243,7 +283,8 @@ export default function MedicalHistoryPage() {
                           </p>
                           {clinic.isGranted && clinic.grantedAt ? (
                             <p className="mt-1 text-[11px] text-gray-400">
-                              Permiso concedido el {formatDate(clinic.grantedAt)}
+                              Permiso concedido el{" "}
+                              {formatDate(clinic.grantedAt)}
                             </p>
                           ) : clinic.revokedAt ? (
                             <p className="mt-1 text-[11px] text-gray-400">
@@ -308,7 +349,7 @@ export default function MedicalHistoryPage() {
                                 {record.doctor?.specialty ?? "Especialidad"}
                               </p>
                               <p className="text-sm text-gray-600">
-                                {formatDate(record.date)}
+                                {formatDate(record.date, true)}
                               </p>
                             </div>
                             <Badge variant="outline">Completada</Badge>
@@ -354,34 +395,7 @@ export default function MedicalHistoryPage() {
             <TabsContent value="personal" className="space-y-6">
               <Card className="border-[#ebebeb] bg-white shadow-none">
                 <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Información Personal</CardTitle>
-                    </div>
-                    {!isEditing ? (
-                      <Button onClick={() => setIsEditing(true)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Editar
-                      </Button>
-                    ) : (
-                      <div className="space-x-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsEditing(false)}
-                        >
-                          <X className="mr-2 h-4 w-4" />
-                          Cancelar
-                        </Button>
-                        <Button
-                          onClick={handleSave}
-                          disabled={upsertHistory.isPending}
-                        >
-                          <Save className="mr-2 h-4 w-4" />
-                          {upsertHistory.isPending ? "Guardando..." : "Guardar"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  <CardTitle>Información Personal</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-6 md:grid-cols-2">
@@ -462,7 +476,10 @@ export default function MedicalHistoryPage() {
                           <div>
                             <Label>Fecha de Nacimiento</Label>
                             <p className="text-lg font-medium">
-                              {formatDate(patient.birthDate.toISOString())}
+                              {formatDate(
+                                patient.birthDate.toISOString(),
+                                true,
+                              )}
                             </p>
                           </div>
                         )}

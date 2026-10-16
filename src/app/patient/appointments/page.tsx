@@ -29,6 +29,27 @@ import DashboardWrapper from "~/components/auth/DashboardWrapper";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
 
+function mexicoDateKey(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
+function isUpcomingAppointment(date: string, time: string, now: Date) {
+  const today = mexicoDateKey(now);
+  if (date !== today) return date > today;
+  const currentTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Mexico_City",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  return time > currentTime;
+}
+
 export default function PatientAppointmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -63,6 +84,28 @@ export default function PatientAppointmentsPage() {
     phone: appointment.doctor.phone,
     diagnosis: appointment.notes ?? "",
   }));
+  const availableSlots = api.appointments.availableSlots.useQuery(
+    {
+      appointmentId: rescheduleDialog.appointmentId ?? "",
+      date: new Date(
+        `${rescheduleData.date || mexicoDateKey(new Date())}T12:00:00.000Z`,
+      ),
+    },
+    {
+      enabled: rescheduleDialog.open && Boolean(rescheduleDialog.appointmentId),
+    },
+  );
+  const availableTimes = availableSlots.data?.result ?? [];
+  const currentAppointment = appointments.find(
+    (appointment) => appointment.id === rescheduleDialog.appointmentId,
+  );
+  const canReschedule =
+    availableTimes.includes(rescheduleData.time) &&
+    Boolean(
+      currentAppointment &&
+        (currentAppointment.date !== rescheduleData.date ||
+          currentAppointment.time !== rescheduleData.time),
+    );
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -74,6 +117,8 @@ export default function PatientAppointmentsPage() {
         return "Completada";
       case "cancelled":
         return "Cancelada";
+      case "no_show":
+        return "No asistió";
       default:
         return status;
     }
@@ -85,6 +130,7 @@ export default function PatientAppointmentsPage() {
       year: "numeric",
       month: "long",
       day: "numeric",
+      timeZone: "UTC",
     });
   };
 
@@ -122,16 +168,18 @@ export default function PatientAppointmentsPage() {
     if (
       !rescheduleDialog.appointmentId ||
       !rescheduleData.date ||
-      !rescheduleData.time
+      !canReschedule
     ) {
-      toast.error("Completa todos los campos");
+      toast.error(
+        "Elige una fecha y un horario disponible distintos a tu cita actual",
+      );
       return;
     }
 
     try {
       const response = await rescheduleMutation.mutateAsync({
         id: rescheduleDialog.appointmentId,
-        newDate: new Date(`${rescheduleData.date}T${rescheduleData.time}:00`),
+        newDate: new Date(`${rescheduleData.date}T12:00:00.000Z`),
         newTime: rescheduleData.time,
       });
       unwrapTrpcResult(response);
@@ -306,30 +354,35 @@ export default function PatientAppointmentsPage() {
                         </Button>
                       </Link>
                       {(appointment.status === "confirmed" ||
-                        appointment.status === "pending") && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              openRescheduleDialog(
-                                appointment.id,
-                                appointment.date,
-                                appointment.time,
-                              )
-                            }
-                          >
-                            Reagendar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleCancel(appointment.id)}
-                          >
-                            Cancelar
-                          </Button>
-                        </>
-                      )}
+                        appointment.status === "pending") &&
+                        isUpcomingAppointment(
+                          appointment.date,
+                          appointment.time,
+                          new Date(),
+                        ) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                openRescheduleDialog(
+                                  appointment.id,
+                                  appointment.date,
+                                  appointment.time,
+                                )
+                              }
+                            >
+                              Reagendar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleCancel(appointment.id)}
+                            >
+                              Cancelar
+                            </Button>
+                          </>
+                        )}
                       {appointment.phone && (
                         <Button size="sm" variant="ghost" asChild>
                           <a href={`tel:${appointment.phone}`}>
@@ -367,27 +420,49 @@ export default function PatientAppointmentsPage() {
                     type="date"
                     value={rescheduleData.date}
                     onChange={(e) =>
-                      setRescheduleData({
-                        ...rescheduleData,
-                        date: e.target.value,
-                      })
+                      setRescheduleData({ date: e.target.value, time: "" })
                     }
-                    min={new Date().toISOString().split("T")[0]}
+                    min={mexicoDateKey(new Date())}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="reschedule-time">Nueva Hora</Label>
-                  <Input
-                    id="reschedule-time"
-                    type="time"
-                    value={rescheduleData.time}
-                    onChange={(e) =>
-                      setRescheduleData({
-                        ...rescheduleData,
-                        time: e.target.value,
-                      })
-                    }
-                  />
+                  <Label>Horarios disponibles</Label>
+                  {availableSlots.isLoading ? (
+                    <p className="text-sm text-[#737373]">
+                      Consultando horarios…
+                    </p>
+                  ) : availableSlots.error || availableSlots.data?.error ? (
+                    <p className="text-sm text-red-700" role="alert">
+                      No pudimos consultar los horarios. Elige otra fecha o
+                      intenta de nuevo.
+                    </p>
+                  ) : availableTimes.length === 0 ? (
+                    <p className="text-sm text-[#737373]">
+                      No hay horarios libres para esta fecha.
+                    </p>
+                  ) : (
+                    <div
+                      className="grid max-h-48 grid-cols-3 gap-2 overflow-y-auto pr-1"
+                      aria-label="Horarios disponibles"
+                    >
+                      {availableTimes.map((time) => (
+                        <button
+                          key={time}
+                          type="button"
+                          aria-pressed={rescheduleData.time === time}
+                          onClick={() =>
+                            setRescheduleData((current) => ({
+                              ...current,
+                              time,
+                            }))
+                          }
+                          className={`min-h-11 rounded-lg border text-sm font-medium transition-colors ${rescheduleData.time === time ? "border-[#238a69] bg-[#238a69] text-white" : "border-[#dedede] hover:border-[#238a69]"}`}
+                        >
+                          {time}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <DialogFooter>
@@ -399,7 +474,14 @@ export default function PatientAppointmentsPage() {
                 >
                   Cancelar
                 </Button>
-                <Button onClick={handleReschedule}>Confirmar Reagendado</Button>
+                <Button
+                  onClick={handleReschedule}
+                  disabled={!canReschedule || rescheduleMutation.isPending}
+                >
+                  {rescheduleMutation.isPending
+                    ? "Guardando…"
+                    : "Confirmar reagendamiento"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

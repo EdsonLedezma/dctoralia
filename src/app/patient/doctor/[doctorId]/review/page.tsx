@@ -140,6 +140,7 @@ export default function LeaveReviewPage() {
                               year: "numeric",
                               month: "long",
                               day: "numeric",
+                              timeZone: "UTC",
                             })}
                             {" a las "} {apt.time}
                           </p>

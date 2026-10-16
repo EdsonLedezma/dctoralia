@@ -70,17 +70,33 @@ export function DashboardView() {
     () => appointments.data?.result ?? [],
     [appointments.data?.result],
   );
-  const upcoming = useMemo(
-    () =>
-      all
-        .filter((item) => ["PENDING", "CONFIRMED"].includes(item.status))
-        .sort(
-          (a, b) =>
-            new Date(a.date).getTime() - new Date(b.date).getTime() ||
-            a.time.localeCompare(b.time),
-        ),
-    [all],
-  );
+  const upcoming = useMemo(() => {
+    const now = new Date();
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Mexico_City",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const currentTime = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Mexico_City",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(now);
+
+    return all
+      .filter((item) => {
+        if (!["PENDING", "CONFIRMED"].includes(item.status)) return false;
+        const day = new Date(item.date).toISOString().slice(0, 10);
+        return day > today || (day === today && item.time > currentTime);
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.date).getTime() - new Date(b.date).getTime() ||
+          a.time.localeCompare(b.time),
+      );
+  }, [all]);
   const recent = useMemo(
     () => all.filter((item) => item.status === "COMPLETED").slice(0, 3),
     [all],
@@ -296,7 +312,10 @@ export function DashboardView() {
               >
                 {history.isLoading || profile.isLoading ? (
                   <LoadingRows />
-                ) : history.error || history.data?.error ? (
+                ) : profile.error ||
+                  profile.data?.error ||
+                  history.error ||
+                  history.data?.error ? (
                   <ErrorState />
                 ) : medications.length === 0 ? (
                   <Empty

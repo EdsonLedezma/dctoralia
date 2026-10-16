@@ -126,6 +126,7 @@ No ejecutar `db push`, migraciones de producción ni cambios destructivos desde 
 - `prisma/migrations/20261008010000_unique_appointment_attendance/migration.sql` agrega claves idempotentes para evitar marcas duplicadas.
 - `prisma/migrations/20261008020000_message_consent_purposes/migration.sql` separa el consentimiento de citas y seguimiento; los consentimientos previos conservan sólo el propósito de citas.
 - `prisma/migrations/20261008030000_user_notifications/migration.sql` agrega destinatario independiente, idempotencia de avisos, marca de vencimiento y el vínculo a tareas asignadas; conserva la bandeja histórica del doctor.
+- **Estado actual:** el schema mantiene `Notification.recipientUserId` opcional para conservar las notificaciones existentes sin backfill destructivo. La migración SQL anterior lo marca obligatorio y no representa el estado que aplica `pnpm db:push`; no ejecutar `db:migrate` sobre una base sincronizada con `db:push` sin reconciliar previamente ambas rutas.
 - `prisma/migrations/20261008040000_clinical_observations/migration.sql` agrega observaciones clínicas estructuradas y conserva anulaciones con motivo y autor.
 - Base vacía: `pnpm exec prisma migrate deploy` ejecuta las diez migraciones preparadas.
 - Base existente que coincide exactamente con el baseline: comparar primero el esquema real; sólo entonces marcar `20261006000000_baseline` como aplicado con `pnpm exec prisma migrate resolve --applied 20261006000000_baseline` y desplegar la migración clínica en staging.

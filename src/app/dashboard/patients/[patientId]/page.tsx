@@ -76,6 +76,13 @@ function formatDate(value: Date) {
   }).format(new Date(value));
 }
 
+function formatAppointmentDate(value: Date) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
 function followUpTaskTypeLabel(type: string) {
   return followUpTypes.find((item) => item.value === type)?.label ?? "Otro";
 }
@@ -783,7 +790,8 @@ export default function ClinicalPatientPage({ params }: Props) {
                               Brief previo a la consulta
                             </p>
                             <p className="mt-1 text-xs text-[#60736d]">
-                              {formatDate(intake.date)} · {intake.time} ·{" "}
+                              {formatAppointmentDate(intake.date)} ·{" "}
+                              {intake.time} ·{" "}
                               {intake.status === "PENDING"
                                 ? "Por confirmar"
                                 : "Cita registrada"}
