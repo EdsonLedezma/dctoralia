@@ -22,7 +22,6 @@ import {
   Heart,
   Pill,
   AlertTriangle,
-  Download,
   Edit,
   Save,
   X,
@@ -91,6 +90,10 @@ export default function MedicalHistoryPage() {
     appointmentsRes?.result?.filter(
       (a: Appointment) => a.status === "COMPLETED",
     ) ?? [];
+  const signedRecords = api.clinical.mySignedRecords.useQuery(undefined, {
+    enabled: !!patient?.id,
+  });
+  const professionalRecords = signedRecords.data?.result;
 
   const [formData, setFormData] = useState<{
     bloodType: BloodType;
@@ -252,6 +255,149 @@ export default function MedicalHistoryPage() {
 
             {/* Medical History */}
             <TabsContent value="history" className="space-y-6">
+              <Card className="border-[#dce9df] bg-white shadow-none">
+                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+                  <CardTitle>Consultas firmadas por tus doctores</CardTitle>
+                  <p className="text-sm text-[#64766c]">
+                    Aquí aparecen los resúmenes que tus doctores compartieron al
+                    cerrar cada consulta.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3 p-5 sm:p-6">
+                  {signedRecords.isLoading ? (
+                    <p className="text-sm text-[#64766c]">
+                      Cargando registros...
+                    </p>
+                  ) : signedRecords.error || signedRecords.data?.error ? (
+                    <p className="text-sm text-red-700">
+                      No se pudieron cargar tus registros clínicos.
+                    </p>
+                  ) : professionalRecords?.encounters.length ? (
+                    professionalRecords.encounters.map((encounter) => (
+                      <article
+                        key={encounter.id}
+                        className="rounded-xl border border-[#e3ece5] bg-[#f8faf8] p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <h3 className="font-semibold text-[#173b34]">
+                              Consulta médica
+                            </h3>
+                            <p className="mt-1 text-xs text-[#64766c]">
+                              {encounter.doctor.user.name} ·{" "}
+                              {encounter.doctor.specialty} ·{" "}
+                              {encounter.clinic.name}
+                            </p>
+                          </div>
+                          <Badge variant="outline">Firmada</Badge>
+                        </div>
+                        <p className="mt-2 text-xs text-[#64766c]">
+                          {new Intl.DateTimeFormat("es-MX", {
+                            dateStyle: "long",
+                          }).format(new Date(encounter.encounterAt))}
+                        </p>
+                        {encounter.patientSummary ? (
+                          <p className="mt-3 text-sm leading-6 whitespace-pre-wrap text-[#334b3e]">
+                            {encounter.patientSummary}
+                          </p>
+                        ) : (
+                          <p className="mt-3 text-sm text-[#64766c]">
+                            Tu doctor no agregó un resumen para compartir en
+                            esta consulta.
+                          </p>
+                        )}
+                      </article>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[#64766c]">
+                      Aún no tienes consultas firmadas por un doctor.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-[#dce9df] bg-white shadow-none">
+                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+                  <CardTitle>Recetas emitidas</CardTitle>
+                  <p className="text-sm text-[#64766c]">
+                    Indicaciones registradas por tu doctor. Los medicamentos que
+                    tú reportas aparecen en la pestaña Medicamentos.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3 p-5 sm:p-6">
+                  {signedRecords.isLoading ? (
+                    <p className="text-sm text-[#64766c]">
+                      Cargando recetas...
+                    </p>
+                  ) : signedRecords.error || signedRecords.data?.error ? (
+                    <p className="text-sm text-red-700">
+                      No se pudieron cargar tus recetas.
+                    </p>
+                  ) : professionalRecords?.prescriptions.length ? (
+                    professionalRecords.prescriptions.map((prescription) => (
+                      <article
+                        key={prescription.id}
+                        className={`rounded-xl border p-4 ${prescription.voidedAt ? "border-[#ebebeb] bg-[#fafafa] opacity-70" : "border-[#dce9df] bg-[#f8faf8]"}`}
+                      >
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-[#173b34]">
+                              {prescription.voidedAt
+                                ? "Receta anulada"
+                                : "Receta emitida"}
+                            </p>
+                            <p className="mt-1 text-xs text-[#64766c]">
+                              {prescription.doctor.user.name} ·{" "}
+                              {prescription.clinic.name} ·{" "}
+                              {new Intl.DateTimeFormat("es-MX", {
+                                dateStyle: "medium",
+                              }).format(new Date(prescription.issuedAt))}
+                            </p>
+                          </div>
+                          <Pill
+                            className="size-5 text-[#438565]"
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <ul className="mt-3 space-y-2">
+                          {prescription.medications.map((medication) => (
+                            <li
+                              key={medication.id}
+                              className="text-sm text-[#334b3e]"
+                            >
+                              <strong>{medication.name}</strong> ·{" "}
+                              {medication.dose} · {medication.frequency}
+                              {medication.route ? ` · ${medication.route}` : ""}
+                              {medication.duration
+                                ? ` · ${medication.duration}`
+                                : ""}
+                              {medication.notes && (
+                                <p className="mt-1 text-xs whitespace-pre-wrap">
+                                  {medication.notes}
+                                </p>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                        {prescription.instructions && (
+                          <p className="mt-3 text-sm whitespace-pre-wrap text-[#334b3e]">
+                            {prescription.instructions}
+                          </p>
+                        )}
+                        {prescription.voidReason && (
+                          <p className="mt-3 text-xs text-red-700">
+                            Motivo de anulación: {prescription.voidReason}
+                          </p>
+                        )}
+                      </article>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[#64766c]">
+                      Aún no tienes recetas emitidas.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
               <Card className="border-[#ebebeb] bg-white shadow-none">
                 <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
                   <CardTitle>Permisos para compartir antecedentes</CardTitle>
@@ -323,10 +469,6 @@ export default function MedicalHistoryPage() {
                     <div>
                       <CardTitle>Historial de Consultas</CardTitle>
                     </div>
-                    <Button variant="outline">
-                      <Download className="mr-2 h-4 w-4" />
-                      Exportar PDF
-                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -358,7 +500,7 @@ export default function MedicalHistoryPage() {
                           {record.notes && (
                             <div className="mb-4">
                               <h4 className="mb-2 font-medium">
-                                Notas del doctor
+                                Notas de la cita
                               </h4>
                               <p className="text-sm text-gray-700">
                                 {record.notes}

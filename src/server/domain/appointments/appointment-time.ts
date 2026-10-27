@@ -3,6 +3,13 @@ export type ExistingAppointmentSlot = {
   duration: number;
 };
 
+export type CalendarAppointmentSlot = ExistingAppointmentSlot & { date: Date };
+export type WeeklyScheduleWindow = {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+};
+
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 export function timeToMinutes(time: string): number | null {
@@ -100,6 +107,59 @@ export function getAvailableAppointmentSlots(
   }
 
   return slots;
+}
+
+export function getNextAvailableAppointmentSlot({
+  schedules,
+  appointments,
+  duration,
+  now = new Date(),
+  days = 31,
+}: {
+  schedules: WeeklyScheduleWindow[];
+  appointments: CalendarAppointmentSlot[];
+  duration: number;
+  now?: Date;
+  days?: number;
+}): { date: string; time: string } | null {
+  if (duration <= 0 || days <= 0) return null;
+
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  // Noon UTC stays on the same calendar day in Mexico City.
+  const date = new Date(`${today}T12:00:00.000Z`);
+  const appointmentsByDay = new Map<string, ExistingAppointmentSlot[]>();
+  for (const appointment of appointments) {
+    const key = appointment.date.toISOString().slice(0, 10);
+    const day = appointmentsByDay.get(key) ?? [];
+    day.push({ time: appointment.time, duration: appointment.duration });
+    appointmentsByDay.set(key, day);
+  }
+
+  for (let index = 0; index < days; index += 1) {
+    const dateKey = date.toISOString().slice(0, 10);
+    const schedule = schedules.find(
+      (window) => window.dayOfWeek === date.getUTCDay(),
+    );
+    if (schedule) {
+      const slots = getAvailableAppointmentSlots(
+        date,
+        duration,
+        schedule.startTime,
+        schedule.endTime,
+        appointmentsByDay.get(dateKey) ?? [],
+        now,
+      );
+      if (slots[0]) return { date: dateKey, time: slots[0] };
+    }
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+
+  return null;
 }
 
 export function getUtcDayBounds(date: Date): { start: Date; end: Date } {

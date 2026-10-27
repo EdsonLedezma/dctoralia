@@ -20,12 +20,14 @@ import {
   createEncounterDraft,
   createFollowUpTask,
   getOutcomeTrend,
+  issueClinicalPrescription,
   openCareEpisode,
   recordOutcomeAssessment,
   recordClinicalObservation,
   voidClinicalObservation,
   signClinicalEncounter,
   updateEncounterDraft,
+  voidClinicalPrescription,
 } from "~/server/domain/clinical/workflows";
 import {
   amendEncounterInput,
@@ -33,6 +35,7 @@ import {
   createEncounterDraftInput,
   createFollowUpTaskInput,
   listFollowUpTasksInput,
+  issuePrescriptionInput,
   operationalAnalyticsInput,
   outcomeTrendInput,
   recordOutcomeAssessmentInput,
@@ -41,6 +44,7 @@ import {
   signEncounterInput,
   updateEncounterDraftInput,
   updateFollowUpTaskStatusInput,
+  voidPrescriptionInput,
 } from "~/server/domain/clinical/schemas";
 import type { WorkspaceContext } from "~/server/domain/workspaces/workspace-context";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
@@ -226,6 +230,158 @@ function workflowFailure(error: unknown) {
 }
 
 export const clinicalRouter = createTRPCRouter({
+  mySignedRecords: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "PATIENT") {
+      return trpcFailure(
+        "PATIENT_ACCESS_REQUIRED",
+        "Acceso de paciente requerido",
+        403,
+      );
+    }
+    const patient = await ctx.db.patient.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+    if (!patient) {
+      return trpcFailure(
+        "PATIENT_NOT_FOUND",
+        "Perfil de paciente no encontrado",
+        404,
+      );
+    }
+    const [encounters, prescriptions] = await Promise.all([
+      ctx.db.clinicalEncounter.findMany({
+        where: { patientId: patient.id, status: "SIGNED" },
+        select: {
+          id: true,
+          clinicId: true,
+          encounterAt: true,
+          signedAt: true,
+          patientSummary: true,
+          clinic: { select: { name: true } },
+          doctor: {
+            select: { user: { select: { name: true } }, specialty: true },
+          },
+          amendments: {
+            select: { changes: true, createdAt: true },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+        orderBy: { encounterAt: "desc" },
+        take: 50,
+      }),
+      ctx.db.clinicalPrescription.findMany({
+        where: { patientId: patient.id, encounter: { status: "SIGNED" } },
+        select: {
+          id: true,
+          clinicId: true,
+          encounterId: true,
+          issuedAt: true,
+          instructions: true,
+          voidedAt: true,
+          voidReason: true,
+          medications: {
+            select: {
+              id: true,
+              name: true,
+              dose: true,
+              route: true,
+              frequency: true,
+              duration: true,
+              notes: true,
+            },
+          },
+          doctor: { select: { user: { select: { name: true } } } },
+          clinic: { select: { name: true } },
+        },
+        orderBy: { issuedAt: "desc" },
+        take: 50,
+      }),
+    ]);
+    const summaries = encounters.map(({ amendments, ...encounter }) => {
+      let patientSummary = encounter.patientSummary;
+      for (const amendment of amendments) {
+        const changes = amendment.changes;
+        if (
+          changes &&
+          typeof changes === "object" &&
+          !Array.isArray(changes) &&
+          "patientSummary" in changes
+        ) {
+          const corrected = changes.patientSummary;
+          if (typeof corrected === "string" || corrected === null)
+            patientSummary = corrected;
+        }
+      }
+      return { ...encounter, patientSummary };
+    });
+    const clinicIds = new Set([
+      ...encounters.map((record) => record.clinicId),
+      ...prescriptions.map((record) => record.clinicId),
+    ]);
+    if (clinicIds.size) {
+      await ctx.db.clinicalAuditEvent.createMany({
+        data: [...clinicIds].map((clinicId) => ({
+          clinicId,
+          patientId: patient.id,
+          actorUserId: ctx.session.user.id,
+          resourceType: "PATIENT_SIGNED_RECORDS",
+          resourceId: patient.id,
+          action: "PATIENT_SIGNED_RECORDS_READ",
+        })),
+      });
+    }
+    return trpcSuccess(
+      { encounters: summaries, prescriptions },
+      "Registros clínicos obtenidos",
+    );
+  }),
+
+  issuePrescription: protectedProcedure
+    .input(issuePrescriptionInput)
+    .mutation(async ({ input, ctx }) => {
+      const actor = await getActor(ctx);
+      if (!actor)
+        return trpcFailure(
+          "CLINICAL_ACCESS_REQUIRED",
+          "Acceso clínico requerido",
+          403,
+        );
+      try {
+        const prescription = await issueClinicalPrescription(
+          ctx.db,
+          actor,
+          input,
+        );
+        return trpcSuccess(prescription, "Receta emitida", 201);
+      } catch (error) {
+        return workflowFailure(error);
+      }
+    }),
+
+  voidPrescription: protectedProcedure
+    .input(voidPrescriptionInput)
+    .mutation(async ({ input, ctx }) => {
+      const actor = await getActor(ctx);
+      if (!actor)
+        return trpcFailure(
+          "CLINICAL_ACCESS_REQUIRED",
+          "Acceso clínico requerido",
+          403,
+        );
+      try {
+        const prescription = await voidClinicalPrescription(
+          ctx.db,
+          actor,
+          input.prescriptionId,
+          input.reason,
+        );
+        return trpcSuccess(prescription, "Receta anulada");
+      } catch (error) {
+        return workflowFailure(error);
+      }
+    }),
+
   openEpisode: protectedProcedure
     .input(createCareEpisodeInput)
     .mutation(async ({ input, ctx }) => {
@@ -635,6 +791,28 @@ export const clinicalRouter = createTRPCRouter({
             objective: true,
             assessment: true,
             plan: true,
+            patientSummary: true,
+            prescriptions: {
+              select: {
+                id: true,
+                issuedAt: true,
+                instructions: true,
+                voidedAt: true,
+                voidReason: true,
+                medications: {
+                  select: {
+                    id: true,
+                    name: true,
+                    dose: true,
+                    route: true,
+                    frequency: true,
+                    duration: true,
+                    notes: true,
+                  },
+                },
+              },
+              orderBy: { issuedAt: "desc" },
+            },
             signedAt: true,
             amendments: {
               select: {

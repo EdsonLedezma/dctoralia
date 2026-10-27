@@ -24,6 +24,7 @@ export const createEncounterDraftInput = z.object({
   objective: optionalClinicalText,
   assessment: optionalClinicalText,
   plan: optionalClinicalText,
+  patientSummary: optionalClinicalText,
 });
 
 export const updateEncounterDraftInput = z.object({
@@ -33,10 +34,34 @@ export const updateEncounterDraftInput = z.object({
   objective: optionalClinicalText,
   assessment: optionalClinicalText,
   plan: optionalClinicalText,
+  patientSummary: optionalClinicalText,
 });
 
 export const signEncounterInput = z.object({
   encounterId: z.string().cuid(),
+});
+
+export const issuePrescriptionInput = z.object({
+  encounterId: z.string().cuid(),
+  instructions: z.string().trim().max(4_000).optional(),
+  medications: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2).max(160),
+        dose: z.string().trim().min(1).max(160),
+        route: z.string().trim().max(100).optional(),
+        frequency: z.string().trim().min(1).max(160),
+        duration: z.string().trim().max(160).optional(),
+        notes: z.string().trim().max(1_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
+export const voidPrescriptionInput = z.object({
+  prescriptionId: z.string().cuid(),
+  reason: z.string().trim().min(5).max(500),
 });
 
 export const amendEncounterInput = z
@@ -50,6 +75,7 @@ export const amendEncounterInput = z
         objective: optionalClinicalText,
         assessment: optionalClinicalText,
         plan: optionalClinicalText,
+        patientSummary: optionalClinicalText,
       })
       .strict(),
   })
@@ -214,6 +240,7 @@ export type UpdateEncounterDraftInput = z.infer<
   typeof updateEncounterDraftInput
 >;
 export type AmendEncounterInput = z.infer<typeof amendEncounterInput>;
+export type IssuePrescriptionInput = z.infer<typeof issuePrescriptionInput>;
 export type CreateFollowUpTaskInput = z.infer<typeof createFollowUpTaskInput>;
 export type RecordOutcomeAssessmentInput = z.infer<
   typeof recordOutcomeAssessmentInput

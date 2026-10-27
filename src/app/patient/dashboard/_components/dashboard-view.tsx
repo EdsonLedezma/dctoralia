@@ -66,6 +66,12 @@ export function DashboardView() {
     { patientId: patientId ?? "" },
     { enabled: Boolean(patientId) },
   );
+  const signedRecords = api.clinical.mySignedRecords.useQuery(undefined, {
+    enabled: Boolean(patientId),
+  });
+  const latestPrescription = signedRecords.data?.result?.prescriptions.find(
+    (prescription) => !prescription.voidedAt,
+  );
   const all = useMemo(
     () => appointments.data?.result ?? [],
     [appointments.data?.result],
@@ -242,10 +248,34 @@ export function DashboardView() {
                 href="/patient/medical-history"
                 linkLabel="Ver historial"
               >
-                {appointments.isLoading ? (
+                {appointments.isLoading || signedRecords.isLoading ? (
                   <LoadingRows />
-                ) : appointments.error || appointments.data?.error ? (
+                ) : appointments.error ||
+                  appointments.data?.error ||
+                  signedRecords.error ||
+                  signedRecords.data?.error ? (
                   <ErrorState />
+                ) : (signedRecords.data?.result?.encounters.length ?? 0) > 0 ? (
+                  <div className="divide-y divide-[#edf1ed]">
+                    {signedRecords.data?.result?.encounters
+                      .slice(0, 3)
+                      .map((encounter) => (
+                        <div key={encounter.id} className="px-5 py-4">
+                          <p className="text-sm font-semibold text-[#173b34]">
+                            Consulta médica
+                          </p>
+                          <p className="mt-1 text-xs text-[#7b8d82]">
+                            {encounter.doctor.user.name} ·{" "}
+                            {dateLabel(encounter.encounterAt)}
+                          </p>
+                          {encounter.patientSummary && (
+                            <p className="mt-2 line-clamp-2 text-xs text-[#4b6657]">
+                              {encounter.patientSummary}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
                 ) : recent.length === 0 ? (
                   <Empty
                     icon={FileHeart}
@@ -305,8 +335,44 @@ export function DashboardView() {
                 )}
               </Panel>
               <Panel
-                title="Medicación actual"
-                eyebrow="Tu salud hoy"
+                title="Última receta"
+                eyebrow="Indicaciones de tu doctor"
+                href="/patient/medical-history"
+                linkLabel="Ver recetas"
+              >
+                {signedRecords.isLoading ? (
+                  <LoadingRows />
+                ) : signedRecords.error || signedRecords.data?.error ? (
+                  <ErrorState />
+                ) : latestPrescription ? (
+                  <div className="space-y-3 p-5">
+                    <p className="text-xs text-[#7b8d82]">
+                      {latestPrescription.doctor.user.name} ·{" "}
+                      {dateLabel(latestPrescription.issuedAt)}
+                    </p>
+                    {latestPrescription.medications.map((medication) => (
+                      <div
+                        key={medication.id}
+                        className="flex items-start gap-3 rounded-xl bg-[#f3f7f3] px-4 py-3 text-sm"
+                      >
+                        <Pill className="mt-0.5 size-4 shrink-0 text-[#438565]" />
+                        <span>
+                          <strong>{medication.name}</strong> · {medication.dose}{" "}
+                          · {medication.frequency}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty
+                    icon={Pill}
+                    text="Tus recetas emitidas aparecerán aquí."
+                  />
+                )}
+              </Panel>
+              <Panel
+                title="Medicamentos que reportaste"
+                eyebrow="Tu información"
                 href="/patient/medical-history"
                 linkLabel="Actualizar"
               >

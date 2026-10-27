@@ -45,6 +45,17 @@ type Doctor = Exclude<
 >[number];
 type DoctorReview = Doctor["reviews"][number];
 
+function nextAvailableLabel(slot: Doctor["nextAvailable"]): string {
+  if (!slot) return "Sin horarios en el próximo mes";
+  const day = new Intl.DateTimeFormat("es-MX", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${slot.date}T12:00:00.000Z`));
+  return `${day} · ${slot.time}`;
+}
+
 export default function DoctorsDirectoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("all");
@@ -53,7 +64,8 @@ export default function DoctorsDirectoryPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
 
-  const { data, isLoading } = api.doctor.getAll.useQuery();
+  const { data, isLoading, isError, refetch } = api.doctor.getAll.useQuery();
+  const hasDirectoryError = isError || Boolean(data?.error);
   const doctors = (data?.result ?? []).map((d: Doctor) => {
     const averageRating =
       d.rating ??
@@ -80,9 +92,11 @@ export default function DoctorsDirectoryPage() {
       latitude: d.latitude,
       longitude: d.longitude,
       googleMapsUrl: d.googleMapsUrl ?? "",
-      price: d.services?.[0]?.price ? `$${d.services[0].price}` : "",
+      price: d.services[0] ? `$${d.services[0].price}` : "Consultar",
+      priceAmount: d.services[0]?.price ?? Number.POSITIVE_INFINITY,
+      primaryServiceId: d.services[0]?.id,
       image: d.user?.image,
-      nextAvailable: "",
+      nextAvailable: d.nextAvailable,
       icon: Heart,
       languages: [],
       education: "",
@@ -129,9 +143,15 @@ export default function DoctorsDirectoryPage() {
       case "rating":
         return b.rating - a.rating;
       case "price":
+        return a.priceAmount === b.priceAmount
+          ? 0
+          : a.priceAmount - b.priceAmount;
+      case "availability":
+        if (!a.nextAvailable) return b.nextAvailable ? 1 : 0;
+        if (!b.nextAvailable) return -1;
         return (
-          Number.parseInt((a.price || "0").replace("$", "")) -
-          Number.parseInt((b.price || "0").replace("$", ""))
+          a.nextAvailable.date.localeCompare(b.nextAvailable.date) ||
+          a.nextAvailable.time.localeCompare(b.nextAvailable.time)
         );
       case "experience":
         return b.experience - a.experience;
@@ -221,6 +241,7 @@ export default function DoctorsDirectoryPage() {
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="rating">Mejor calificados</SelectItem>
+        <SelectItem value="availability">Próxima disponibilidad</SelectItem>
         <SelectItem value="price">Precio menor</SelectItem>
         <SelectItem value="experience">Más experiencia</SelectItem>
         <SelectItem value="reviews">Más reseñas</SelectItem>
@@ -262,15 +283,17 @@ export default function DoctorsDirectoryPage() {
                   </span>
                 )}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11 min-w-11 px-3 sm:hidden"
-                aria-label={`Abrir mapa con ${mapDoctors.length} ubicaciones`}
-                onClick={() => setMapOpen(true)}
-              >
-                <MapIcon className="size-4" />
-              </Button>
+              {mapDoctors.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 min-w-11 px-3 sm:hidden"
+                  aria-label={`Abrir mapa con ${mapDoctors.length} ubicaciones`}
+                  onClick={() => setMapOpen(true)}
+                >
+                  <MapIcon className="size-4" />
+                </Button>
+              )}
             </div>
 
             <div className="mt-2 hidden flex-wrap items-center gap-1.5 sm:flex">
@@ -297,9 +320,11 @@ export default function DoctorsDirectoryPage() {
             </div>
           </div>
 
-          <div className="mb-6 hidden sm:block">
-            <DoctorsMap doctors={mapDoctors} />
-          </div>
+          {mapDoctors.length > 0 && (
+            <div className="mb-6 hidden sm:block">
+              <DoctorsMap doctors={mapDoctors} />
+            </div>
+          )}
 
           <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
             <SheetContent
@@ -352,7 +377,10 @@ export default function DoctorsDirectoryPage() {
             </SheetContent>
           </Sheet>
 
-          <Sheet open={mapOpen} onOpenChange={setMapOpen}>
+          <Sheet
+            open={mapDoctors.length > 0 && mapOpen}
+            onOpenChange={setMapOpen}
+          >
             <SheetContent
               side="bottom"
               className="max-h-[85dvh] gap-3 overflow-y-auto px-3 pt-8 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:hidden"
@@ -377,6 +405,7 @@ export default function DoctorsDirectoryPage() {
               </Card>
             )}
             {!isLoading &&
+              !hasDirectoryError &&
               sortedDoctors.map((doctor) => {
                 const IconComponent = doctor.icon;
                 return (
@@ -465,15 +494,19 @@ export default function DoctorsDirectoryPage() {
                         </div>
                         <div className="w-full min-w-0 sm:w-40 sm:shrink-0 sm:text-right">
                           <div className="mb-1 text-xl font-semibold text-[#171717] sm:text-2xl">
-                            {doctor.price}
+                            {doctor.priceAmount !== Number.POSITIVE_INFINITY
+                              ? `Desde ${doctor.price}`
+                              : doctor.price}
                           </div>
-                          <div className="mb-3 text-sm text-[#6b6b6b]">
-                            por consulta
-                          </div>
+                          {doctor.priceAmount !== Number.POSITIVE_INFINITY && (
+                            <div className="mb-3 text-sm text-[#6b6b6b]">
+                              por consulta
+                            </div>
+                          )}
                           <div className="mb-4 flex items-center gap-1 text-sm sm:justify-end">
                             <Clock className="h-4 w-4 text-[#6b6b6b]" />
                             <span className="font-medium text-[#525252]">
-                              {doctor.nextAvailable}
+                              {nextAvailableLabel(doctor.nextAvailable)}
                             </span>
                           </div>
                           <div className="space-y-2">
@@ -485,12 +518,26 @@ export default function DoctorsDirectoryPage() {
                                 Ver Perfil
                               </Button>
                             </Link>
-                            <Link href={`/book-appointment/${doctor.id}`}>
-                              <Button className="min-h-11 w-full">
-                                <Calendar className="mr-2 h-4 w-4" />
-                                Agendar Cita
+                            {doctor.nextAvailable ? (
+                              <Link
+                                href={`/book-appointment/${doctor.id}?${new URLSearchParams(
+                                  {
+                                    serviceId: doctor.primaryServiceId ?? "",
+                                    date: doctor.nextAvailable.date,
+                                    time: doctor.nextAvailable.time,
+                                  },
+                                )}`}
+                              >
+                                <Button className="min-h-11 w-full">
+                                  <Calendar className="mr-2 h-4 w-4" />
+                                  Agendar cita
+                                </Button>
+                              </Link>
+                            ) : (
+                              <Button className="min-h-11 w-full" disabled>
+                                Sin horarios disponibles
                               </Button>
-                            </Link>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -500,7 +547,23 @@ export default function DoctorsDirectoryPage() {
               })}
           </MotionList>
 
-          {sortedDoctors.length === 0 && (
+          {hasDirectoryError && (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <h3 className="text-lg font-semibold">
+                  No pudimos cargar los doctores
+                </h3>
+                <p className="mt-2 text-sm text-gray-600">
+                  Revisa tu conexión e intenta de nuevo.
+                </p>
+                <Button className="mt-5" onClick={() => void refetch()}>
+                  Reintentar
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {!isLoading && !hasDirectoryError && sortedDoctors.length === 0 && (
             <Card>
               <CardContent className="p-8 text-center">
                 <Users className="mx-auto mb-4 h-16 w-16 text-gray-400" />

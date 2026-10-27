@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getUtcDayBounds,
+  getNextAvailableAppointmentSlot,
   hasTimeConflict,
   isSlotInsideSchedule,
   isTodayOrFuture,
@@ -47,5 +48,43 @@ describe("appointment-time", () => {
     expect(isTodayOrFuture(new Date("2026-09-16T12:00:00.000Z"), now)).toBe(
       true,
     );
+  });
+
+  it("encuentra el primer espacio libre sin ofrecer citas pasadas ni solapadas", () => {
+    const now = new Date("2026-10-16T15:30:00.000Z"); // 09:30 en CDMX
+    expect(
+      getNextAvailableAppointmentSlot({
+        now,
+        schedules: [{ dayOfWeek: 5, startTime: "09:00", endTime: "11:00" }],
+        appointments: [
+          {
+            date: new Date("2026-10-16T00:00:00.000Z"),
+            time: "09:45",
+            duration: 30,
+          },
+        ],
+        duration: 30,
+      }),
+    ).toEqual({ date: "2026-10-16", time: "10:15" });
+  });
+
+  it("continúa al siguiente día cuando la jornada actual está ocupada", () => {
+    expect(
+      getNextAvailableAppointmentSlot({
+        now: new Date("2026-10-16T15:30:00.000Z"),
+        schedules: [
+          { dayOfWeek: 5, startTime: "09:00", endTime: "10:00" },
+          { dayOfWeek: 6, startTime: "09:00", endTime: "10:00" },
+        ],
+        appointments: [
+          {
+            date: new Date("2026-10-16T00:00:00.000Z"),
+            time: "09:00",
+            duration: 60,
+          },
+        ],
+        duration: 30,
+      }),
+    ).toEqual({ date: "2026-10-17", time: "09:00" });
   });
 });

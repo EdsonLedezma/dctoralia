@@ -45,26 +45,28 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts                   Account[]
-  sessions                   Session[]
-  doctor                     Doctor?
-  patient                    Patient?
-  clinicMemberships          ClinicMember[]
-  clinicInvitations          ClinicInvitation[]           @relation("ClinicInvitations")
-  createdCareEpisodes        CareEpisode[]                @relation("CareEpisodeCreator")
-  authoredEncounters         ClinicalEncounter[]          @relation("ClinicalEncounterAuthor")
-  assignedFollowUpTasks      FollowUpTask[]               @relation("FollowUpAssignee")
-  createdFollowUpTasks       FollowUpTask[]               @relation("FollowUpCreator")
-  completedFollowUpTasks     FollowUpTask[]               @relation("FollowUpCompleter")
-  recordedOutcomeAssessments OutcomeAssessment[]          @relation("OutcomeRecorder")
-  recordedClinicalObservations ClinicalObservation[]       @relation("ClinicalObservationRecorder")
-  voidedClinicalObservations   ClinicalObservation[]       @relation("ClinicalObservationVoider")
-  clinicalAuditEvents        ClinicalAuditEvent[]         @relation("ClinicalAuditActor")
-  authoredClinicalAmendments ClinicalEncounterAmendment[] @relation("ClinicalAmendmentAuthor")
-  appointmentLifecycleEvents AppointmentLifecycleEvent[]  @relation("AppointmentLifecycleActor")
-  addedClinicPatients        ClinicPatient[]              @relation("ClinicPatientAdder")
-  uploadedClinicalFiles      ClinicalFile[]               @relation("ClinicalFileUploader")
-  receivedNotifications      Notification[]               @relation("NotificationRecipient")
+  accounts                     Account[]
+  sessions                     Session[]
+  doctor                       Doctor?
+  patient                      Patient?
+  clinicMemberships            ClinicMember[]
+  clinicInvitations            ClinicInvitation[]           @relation("ClinicInvitations")
+  createdCareEpisodes          CareEpisode[]                @relation("CareEpisodeCreator")
+  authoredEncounters           ClinicalEncounter[]          @relation("ClinicalEncounterAuthor")
+  assignedFollowUpTasks        FollowUpTask[]               @relation("FollowUpAssignee")
+  createdFollowUpTasks         FollowUpTask[]               @relation("FollowUpCreator")
+  completedFollowUpTasks       FollowUpTask[]               @relation("FollowUpCompleter")
+  recordedOutcomeAssessments   OutcomeAssessment[]          @relation("OutcomeRecorder")
+  recordedClinicalObservations ClinicalObservation[]        @relation("ClinicalObservationRecorder")
+  voidedClinicalObservations   ClinicalObservation[]        @relation("ClinicalObservationVoider")
+  clinicalAuditEvents          ClinicalAuditEvent[]         @relation("ClinicalAuditActor")
+  authoredClinicalAmendments   ClinicalEncounterAmendment[] @relation("ClinicalAmendmentAuthor")
+  issuedPrescriptions          ClinicalPrescription[]       @relation("ClinicalPrescriptionIssuer")
+  voidedPrescriptions          ClinicalPrescription[]       @relation("ClinicalPrescriptionVoider")
+  appointmentLifecycleEvents   AppointmentLifecycleEvent[]  @relation("AppointmentLifecycleActor")
+  addedClinicPatients          ClinicPatient[]              @relation("ClinicPatientAdder")
+  uploadedClinicalFiles        ClinicalFile[]               @relation("ClinicalFileUploader")
+  receivedNotifications        Notification[]               @relation("NotificationRecipient")
 }
 
 /// Tenant boundary for a medical practice. Links on current operational
@@ -92,6 +94,7 @@ model Clinic {
   messageInbox                MessageInbox[]
   careEpisodes                CareEpisode[]
   encounters                  ClinicalEncounter[]
+  prescriptions               ClinicalPrescription[]
   followUpTasks               FollowUpTask[]
   outcomeAssessments          OutcomeAssessment[]
   clinicalObservations        ClinicalObservation[]
@@ -240,6 +243,7 @@ model Doctor {
   notifications              Notification[]              @relation("DoctorNotifications")
   careEpisodes               CareEpisode[]
   encounters                 ClinicalEncounter[]
+  prescriptions              ClinicalPrescription[]
   appointmentLifecycleEvents AppointmentLifecycleEvent[]
 
   @@index([clinicId])
@@ -264,6 +268,7 @@ model Patient {
   notifications              Notification[]              @relation("PatientNotifications")
   careEpisodes               CareEpisode[]
   encounters                 ClinicalEncounter[]
+  prescriptions              ClinicalPrescription[]
   followUpTasks              FollowUpTask[]
   outcomeAssessments         OutcomeAssessment[]
   clinicalObservations       ClinicalObservation[]
@@ -318,26 +323,26 @@ model Service {
 }
 
 model Appointment {
-  id         String               @id @default(cuid())
-  doctorId   String
-  patientId  String
-  serviceId  String
-  date       DateTime
-  time       String
-  duration   Int // en minutos
-  status     AppointmentStatus    @default(PENDING)
+  id                String               @id @default(cuid())
+  doctorId          String
+  patientId         String
+  serviceId         String
+  date              DateTime
+  time              String
+  duration          Int // en minutos
+  status            AppointmentStatus    @default(PENDING)
   // Severidad percibida de la consulta/cita. Se utilizará para el algoritmo de card de salud.
-  severity   AppointmentSeverity?
-  notes      String?
-  reason     String?
-  intakeSymptoms    String? @db.Text
-  intakeAllergies   String? @db.Text
-  intakeMedications String? @db.Text
-  intakeContext     String? @db.Text
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  clinicId   String?
-  locationId String?
+  severity          AppointmentSeverity?
+  notes             String?
+  reason            String?
+  intakeSymptoms    String?              @db.Text
+  intakeAllergies   String?              @db.Text
+  intakeMedications String?              @db.Text
+  intakeContext     String?              @db.Text
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  clinicId          String?
+  locationId        String?
 
   doctor            Doctor                      @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
   patient           Patient                     @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
@@ -555,10 +560,10 @@ model CareEpisode {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  clinic        Clinic              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  primaryDoctor Doctor              @relation(fields: [primaryDoctorId], references: [id], onDelete: Restrict)
-  createdBy     User                @relation("CareEpisodeCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  clinic        Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient       Patient               @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  primaryDoctor Doctor                @relation(fields: [primaryDoctorId], references: [id], onDelete: Restrict)
+  createdBy     User                  @relation("CareEpisodeCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   encounters    ClinicalEncounter[]
   followUpTasks FollowUpTask[]
   assessments   OutcomeAssessment[]
@@ -586,6 +591,7 @@ model ClinicalEncounter {
   objective        String?                 @db.Text
   assessment       String?                 @db.Text
   plan             String?                 @db.Text
+  patientSummary   String?                 @db.Text
   signedAt         DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
@@ -601,6 +607,7 @@ model ClinicalEncounter {
   assessments   OutcomeAssessment[]
   observations  ClinicalObservation[]
   clinicalFiles ClinicalFile[]
+  prescriptions ClinicalPrescription[]
 
   @@index([clinicId, patientId, encounterAt(sort: Desc)])
   @@index([clinicId, doctorId, encounterAt(sort: Desc)])
@@ -622,6 +629,49 @@ model ClinicalEncounterAmendment {
   authoredBy User              @relation("ClinicalAmendmentAuthor", fields: [authoredByUserId], references: [id], onDelete: Restrict)
 
   @@index([clinicId, encounterId, createdAt])
+}
+
+/// An issued prescription is a separate, auditable clinical artifact. Its
+/// medications are immutable; an error is corrected by voiding and reissuing.
+model ClinicalPrescription {
+  id             String    @id @default(cuid())
+  clinicId       String
+  patientId      String
+  doctorId       String
+  encounterId    String
+  issuedByUserId String
+  instructions   String?   @db.Text
+  issuedAt       DateTime  @default(now())
+  voidedAt       DateTime?
+  voidReason     String?   @db.Text
+  voidedByUserId String?
+
+  clinic      Clinic                           @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient     Patient                          @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor      Doctor                           @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  encounter   ClinicalEncounter                @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  issuedBy    User                             @relation("ClinicalPrescriptionIssuer", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  voidedBy    User?                            @relation("ClinicalPrescriptionVoider", fields: [voidedByUserId], references: [id], onDelete: Restrict)
+  medications ClinicalPrescriptionMedication[]
+
+  @@index([patientId, issuedAt(sort: Desc)])
+  @@index([clinicId, doctorId, issuedAt(sort: Desc)])
+  @@index([encounterId, issuedAt(sort: Desc)])
+}
+
+model ClinicalPrescriptionMedication {
+  id             String  @id @default(cuid())
+  prescriptionId String
+  name           String
+  dose           String
+  route          String?
+  frequency      String
+  duration       String?
+  notes          String? @db.Text
+
+  prescription ClinicalPrescription @relation(fields: [prescriptionId], references: [id], onDelete: Restrict)
+
+  @@index([prescriptionId])
 }
 
 /// Operational work that keeps a care plan moving between consultations.
