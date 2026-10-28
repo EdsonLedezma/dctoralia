@@ -15,6 +15,7 @@ import type {
   AmendEncounterInput,
   CreateEncounterDraftInput,
   CreateFollowUpTaskInput,
+  IssuePrescriptionInput,
   RecordOutcomeAssessmentInput,
   RecordClinicalObservationInput,
   UpdateEncounterDraftInput,
@@ -286,6 +287,7 @@ export async function createEncounterDraft(
         objective: input.objective,
         assessment: input.assessment,
         plan: input.plan,
+        patientSummary: input.patientSummary,
       },
     });
     await tx.clinicalAuditEvent.create({
@@ -338,6 +340,7 @@ export async function updateEncounterDraft(
         objective: input.objective,
         assessment: input.assessment,
         plan: input.plan,
+        patientSummary: input.patientSummary,
       },
     });
     if (updated.count !== 1) {
@@ -484,6 +487,113 @@ export async function amendSignedEncounter(
       },
     });
     return amendment;
+  });
+}
+
+export async function issueClinicalPrescription(
+  db: Db,
+  actor: ClinicalActor,
+  input: IssuePrescriptionInput,
+) {
+  const encounter = await db.clinicalEncounter.findFirst({
+    where: {
+      id: input.encounterId,
+      clinicId: actor.clinicId,
+      doctorId: actor.doctorId,
+      authoredByUserId: actor.userId,
+      status: "SIGNED",
+    },
+    select: { id: true, patientId: true },
+  });
+  if (!encounter) {
+    throw new ClinicalWorkflowError(
+      "INVALID_STATE",
+      "Sólo puedes emitir recetas para consultas que hayas firmado.",
+    );
+  }
+
+  return db.$transaction(async (tx) => {
+    const prescription = await tx.clinicalPrescription.create({
+      data: {
+        clinicId: actor.clinicId,
+        patientId: encounter.patientId,
+        doctorId: actor.doctorId,
+        encounterId: encounter.id,
+        issuedByUserId: actor.userId,
+        instructions: input.instructions || null,
+        medications: { create: input.medications },
+      },
+      include: { medications: true },
+    });
+    await tx.clinicalAuditEvent.create({
+      data: {
+        clinicId: actor.clinicId,
+        patientId: encounter.patientId,
+        actorUserId: actor.userId,
+        resourceType: "CLINICAL_PRESCRIPTION",
+        resourceId: prescription.id,
+        action: "CLINICAL_PRESCRIPTION_ISSUED",
+      },
+    });
+    return prescription;
+  });
+}
+
+export async function voidClinicalPrescription(
+  db: Db,
+  actor: ClinicalActor,
+  prescriptionId: string,
+  reason: string,
+) {
+  const prescription = await db.clinicalPrescription.findFirst({
+    where: {
+      id: prescriptionId,
+      clinicId: actor.clinicId,
+      doctorId: actor.doctorId,
+      issuedByUserId: actor.userId,
+      voidedAt: null,
+    },
+    select: { id: true, patientId: true },
+  });
+  if (!prescription) {
+    throw new ClinicalWorkflowError(
+      "INVALID_STATE",
+      "La receta no existe, ya fue anulada o no te pertenece.",
+    );
+  }
+  return db.$transaction(async (tx) => {
+    const updated = await tx.clinicalPrescription.updateMany({
+      where: {
+        id: prescription.id,
+        clinicId: actor.clinicId,
+        issuedByUserId: actor.userId,
+        voidedAt: null,
+      },
+      data: {
+        voidedAt: new Date(),
+        voidReason: reason,
+        voidedByUserId: actor.userId,
+      },
+    });
+    if (updated.count !== 1) {
+      throw new ClinicalWorkflowError(
+        "CONFLICT",
+        "La receta cambió. Actualiza el expediente.",
+      );
+    }
+    await tx.clinicalAuditEvent.create({
+      data: {
+        clinicId: actor.clinicId,
+        patientId: prescription.patientId,
+        actorUserId: actor.userId,
+        resourceType: "CLINICAL_PRESCRIPTION",
+        resourceId: prescription.id,
+        action: "CLINICAL_PRESCRIPTION_VOIDED",
+      },
+    });
+    return tx.clinicalPrescription.findUniqueOrThrow({
+      where: { id: prescription.id },
+    });
   });
 }
 

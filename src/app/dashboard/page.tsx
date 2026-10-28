@@ -127,25 +127,29 @@ export default function DashboardPage() {
   const todayAppointments = allAppointments
     .filter(
       (appointment) =>
-        dateKey(new Date(appointment.date)) === today &&
+        new Date(appointment.date).toISOString().slice(0, 10) === today &&
         (appointment.status === "PENDING" ||
           appointment.status === "CONFIRMED"),
     )
     .sort((a, b) => a.time.localeCompare(b.time));
   const upcomingAppointments = allAppointments
-    .filter(
-      (appointment) =>
-        (dateKey(new Date(appointment.date)) > today ||
-          (dateKey(new Date(appointment.date)) === today &&
+    .filter((appointment) => {
+      const appointmentDay = new Date(appointment.date)
+        .toISOString()
+        .slice(0, 10);
+      return (
+        (appointmentDay > today ||
+          (appointmentDay === today &&
             appointment.time >=
               formatDate(now, {
                 hour: "2-digit",
                 minute: "2-digit",
                 hourCycle: "h23",
+                timeZone: "America/Mexico_City",
               }))) &&
-        (appointment.status === "PENDING" ||
-          appointment.status === "CONFIRMED"),
-    )
+        (appointment.status === "PENDING" || appointment.status === "CONFIRMED")
+      );
+    })
     .sort(
       (a, b) =>
         new Date(a.date).getTime() - new Date(b.date).getTime() ||
@@ -619,7 +623,7 @@ export default function DashboardPage() {
                     {followUpTasks.map((task, index) => {
                       const overdue =
                         task.dueAt !== null &&
-                        new Date(task.dueAt).getTime() < Date.now();
+                        new Date(task.dueAt).getTime() < now.getTime();
                       const active =
                         task.status === "OPEN" || task.status === "IN_PROGRESS";
                       return (
@@ -755,6 +759,7 @@ export default function DashboardPage() {
                                 weekday: "short",
                                 day: "numeric",
                                 month: "short",
+                                timeZone: "UTC",
                               })}{" "}
                               · {appointment.time}
                             </p>

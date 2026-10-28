@@ -11,6 +11,7 @@ import {
   patientClinicalScope,
   resolveClinicalActor,
 } from "~/server/domain/clinical/access";
+import { getNextAvailableAppointmentSlot } from "~/server/domain/appointments/appointment-time";
 
 function hideLegacyVercelBlobImages<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -80,6 +81,7 @@ export const useDoctor = createTRPCRouter({
           user: { select: { id: true, name: true, image: true } },
           services: {
             where: { isActive: true },
+            orderBy: { price: "asc" },
             select: {
               id: true,
               name: true,
@@ -89,14 +91,56 @@ export const useDoctor = createTRPCRouter({
               isActive: true,
             },
           },
+          schedules: {
+            where: { isActive: true },
+            select: { dayOfWeek: true, startTime: true, endTime: true },
+          },
           // Directory cards need aggregate ratings, never review text or patient IDs.
           reviews: { select: { rating: true } },
         },
         orderBy: { createdAt: "desc" },
         take: 100,
       });
+      const now = new Date();
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Mexico_City",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(now);
+      const start = new Date(`${today}T00:00:00.000Z`);
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 31);
+      const appointments = await ctx.db.appointment.findMany({
+        where: {
+          doctorId: { in: doctors.map((doctor) => doctor.id) },
+          date: { gte: start, lt: end },
+          status: { in: ["PENDING", "CONFIRMED"] },
+        },
+        select: { doctorId: true, date: true, time: true, duration: true },
+      });
+      const appointmentsByDoctor = new Map<
+        string,
+        Array<{ date: Date; time: string; duration: number }>
+      >();
+      for (const appointment of appointments) {
+        const existing = appointmentsByDoctor.get(appointment.doctorId) ?? [];
+        existing.push(appointment);
+        appointmentsByDoctor.set(appointment.doctorId, existing);
+      }
+      const directory = doctors.map(({ schedules, ...doctor }) => ({
+        ...doctor,
+        nextAvailable: doctor.services[0]
+          ? getNextAvailableAppointmentSlot({
+              schedules,
+              appointments: appointmentsByDoctor.get(doctor.id) ?? [],
+              duration: doctor.services[0].duration,
+              now,
+            })
+          : null,
+      }));
       return trpcSuccess(
-        hideLegacyVercelBlobImages(doctors),
+        hideLegacyVercelBlobImages(directory),
         "Doctores obtenidos correctamente",
       );
     } catch {
@@ -245,7 +289,12 @@ export const useDoctor = createTRPCRouter({
               },
             },
             reviews: {
-              select: { id: true, rating: true, comment: true, createdAt: true },
+              select: {
+                id: true,
+                rating: true,
+                comment: true,
+                createdAt: true,
+              },
               orderBy: { createdAt: "desc" },
               take: 100,
             },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -51,6 +51,7 @@ export default function BookAppointmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [bookedId, setBookedId] = useState<string | null>(null);
   const [today] = useState(mexicoDate);
+  const initializedDoctorId = useRef<string | null>(null);
   const lastDay = useMemo(() => {
     const end = new Date(`${today}T12:00:00.000Z`);
     end.setUTCDate(end.getUTCDate() + 30);
@@ -79,19 +80,41 @@ export default function BookAppointmentPage() {
   );
   const create = api.appointments.create.useMutation();
   const doctor = doctorQuery.data?.result;
-  const services = servicesQuery.data?.result ?? [];
+  const services = useMemo(
+    () => servicesQuery.data?.result ?? [],
+    [servicesQuery.data?.result],
+  );
   const service = services.find((item) => item.id === serviceId);
+  useEffect(() => {
+    if (initializedDoctorId.current === doctorId || services.length === 0)
+      return;
+    initializedDoctorId.current = doctorId;
+    const params = new URLSearchParams(window.location.search);
+    const suggestedServiceId = params.get("serviceId");
+    if (!services.some((item) => item.id === suggestedServiceId)) return;
+    setServiceId(suggestedServiceId ?? "");
+    const suggestedDate = params.get("date") ?? "";
+    const suggestedTime = params.get("time") ?? "";
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(suggestedDate) &&
+      /^\d{2}:\d{2}$/.test(suggestedTime)
+    ) {
+      setDate(suggestedDate);
+      setTime(suggestedTime);
+    }
+  }, [doctorId, services]);
   const dates = [
     ...new Set((slotsQuery.data?.result ?? []).map((slot) => slot.date)),
   ].sort();
   const times = (slotsQuery.data?.result ?? [])
     .filter((slot) => slot.date === date)
     .map((slot) => slot.time);
+  const selectedSlotAvailable = Boolean(date && time && times.includes(time));
   const canAdvance =
     step === 0
       ? Boolean(serviceId)
       : step === 1
-        ? Boolean(date && time)
+        ? selectedSlotAvailable
         : symptoms.trim().length >= 3;
 
   async function submit() {
@@ -278,7 +301,7 @@ export default function BookAppointmentPage() {
                           Elige fecha y hora
                         </h2>
                         <p className="mt-1 text-sm text-[#708078]">
-                          Horarios del consultorio durante los próximos 30 días.
+                          Horarios del consultorio durante el próximo mes.
                         </p>
                         {slotsQuery.isLoading ? (
                           <p className="mt-6 text-sm">
@@ -291,8 +314,8 @@ export default function BookAppointmentPage() {
                           </p>
                         ) : dates.length === 0 ? (
                           <p className="mt-6 rounded-xl bg-[#f7f8f6] p-5 text-sm">
-                            No hay horarios libres en los próximos 30 días.
-                            Puedes elegir otro doctor.
+                            No hay horarios libres en el próximo mes. Puedes
+                            elegir otro doctor.
                           </p>
                         ) : (
                           <>
@@ -317,6 +340,15 @@ export default function BookAppointmentPage() {
                             </div>
                             {date && (
                               <>
+                                {time && !selectedSlotAvailable && (
+                                  <p
+                                    className="mt-4 rounded-xl bg-[#fff4e8] p-3 text-sm text-[#8a4c13]"
+                                    role="alert"
+                                  >
+                                    El horario sugerido ya no está libre. Elige
+                                    otro de la lista.
+                                  </p>
+                                )}
                                 <p className="mt-6 text-sm font-semibold">
                                   Horarios disponibles
                                 </p>

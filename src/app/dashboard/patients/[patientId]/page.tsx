@@ -20,6 +20,7 @@ import {
   FolderPlus,
   Paperclip,
   PencilLine,
+  Pill,
 } from "lucide-react";
 
 import DashboardWrapper from "~/components/auth/DashboardWrapper";
@@ -76,6 +77,13 @@ function formatDate(value: Date) {
   }).format(new Date(value));
 }
 
+function formatAppointmentDate(value: Date) {
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
 function followUpTaskTypeLabel(type: string) {
   return followUpTypes.find((item) => item.value === type)?.label ?? "Otro";
 }
@@ -107,10 +115,21 @@ export default function ClinicalPatientPage({ params }: Props) {
   const [objective, setObjective] = useState("");
   const [assessment, setAssessment] = useState("");
   const [plan, setPlan] = useState("");
+  const [patientSummary, setPatientSummary] = useState("");
+  const [prescriptionEncounterId, setPrescriptionEncounterId] = useState("");
+  const [medicationName, setMedicationName] = useState("");
+  const [medicationDose, setMedicationDose] = useState("");
+  const [medicationRoute, setMedicationRoute] = useState("");
+  const [medicationFrequency, setMedicationFrequency] = useState("");
+  const [medicationDuration, setMedicationDuration] = useState("");
+  const [prescriptionInstructions, setPrescriptionInstructions] = useState("");
+  const [voidingPrescriptionId, setVoidingPrescriptionId] = useState("");
+  const [voidReason, setVoidReason] = useState("");
   const [amendingEncounterId, setAmendingEncounterId] = useState("");
   const [amendmentReason, setAmendmentReason] = useState("");
   const [amendmentAssessment, setAmendmentAssessment] = useState("");
   const [amendmentPlan, setAmendmentPlan] = useState("");
+  const [amendmentPatientSummary, setAmendmentPatientSummary] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDetails, setTaskDetails] = useState("");
   const [taskDueAt, setTaskDueAt] = useState("");
@@ -176,6 +195,7 @@ export default function ClinicalPatientPage({ params }: Props) {
       setObjective("");
       setAssessment("");
       setPlan("");
+      setPatientSummary("");
       toast.success("Consulta firmada y cerrada");
       await invalidateTimeline();
     },
@@ -191,7 +211,33 @@ export default function ClinicalPatientPage({ params }: Props) {
       setAmendmentReason("");
       setAmendmentAssessment("");
       setAmendmentPlan("");
+      setAmendmentPatientSummary("");
       toast.success("Enmienda agregada al expediente");
+      await invalidateTimeline();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const issuePrescription = api.clinical.issuePrescription.useMutation({
+    onSuccess: async (response) => {
+      if (response.error) return toast.error(response.message);
+      setPrescriptionEncounterId("");
+      setMedicationName("");
+      setMedicationDose("");
+      setMedicationRoute("");
+      setMedicationFrequency("");
+      setMedicationDuration("");
+      setPrescriptionInstructions("");
+      toast.success("Receta emitida y visible para el paciente");
+      await invalidateTimeline();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const voidPrescription = api.clinical.voidPrescription.useMutation({
+    onSuccess: async (response) => {
+      if (response.error) return toast.error(response.message);
+      setVoidingPrescriptionId("");
+      setVoidReason("");
+      toast.success("Receta anulada. El paciente verá el cambio.");
       await invalidateTimeline();
     },
     onError: (error) => toast.error(error.message),
@@ -240,6 +286,7 @@ export default function ClinicalPatientPage({ params }: Props) {
       objective: objective.trim() || null,
       assessment: assessment.trim() || null,
       plan: plan.trim() || null,
+      patientSummary: patientSummary.trim() || null,
     };
     try {
       const response = encounterId
@@ -270,6 +317,7 @@ export default function ClinicalPatientPage({ params }: Props) {
     objective: string | null;
     assessment: string | null;
     plan: string | null;
+    patientSummary: string | null;
   }) => {
     setEncounterId(encounter.id);
     setChiefComplaint(encounter.chiefComplaint ?? "");
@@ -277,6 +325,7 @@ export default function ClinicalPatientPage({ params }: Props) {
     setObjective(encounter.objective ?? "");
     setAssessment(encounter.assessment ?? "");
     setPlan(encounter.plan ?? "");
+    setPatientSummary(encounter.patientSummary ?? "");
     document.getElementById("encounter-form")?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -735,6 +784,25 @@ export default function ClinicalPatientPage({ params }: Props) {
                             maxLength={12_000}
                           />
                         </Field>
+                        <Field
+                          id="encounter-patient-summary"
+                          label="Resumen para el paciente"
+                        >
+                          <Textarea
+                            id="encounter-patient-summary"
+                            value={patientSummary}
+                            onChange={(event) =>
+                              setPatientSummary(event.target.value)
+                            }
+                            maxLength={12_000}
+                            placeholder="Indicaciones y próximos pasos en lenguaje claro"
+                          />
+                          <p className="mt-1 text-xs text-[#737373]">
+                            Visible para el paciente al firmar la consulta. Las
+                            demás notas clínicas permanecen en el expediente
+                            profesional.
+                          </p>
+                        </Field>
                         <div className="flex flex-wrap justify-end gap-2">
                           {encounterId && (
                             <Button
@@ -783,7 +851,8 @@ export default function ClinicalPatientPage({ params }: Props) {
                               Brief previo a la consulta
                             </p>
                             <p className="mt-1 text-xs text-[#60736d]">
-                              {formatDate(intake.date)} · {intake.time} ·{" "}
+                              {formatAppointmentDate(intake.date)} ·{" "}
+                              {intake.time} ·{" "}
                               {intake.status === "PENDING"
                                 ? "Por confirmar"
                                 : "Cita registrada"}
@@ -854,6 +923,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                     setAmendmentReason("");
                                     setAmendmentAssessment("");
                                     setAmendmentPlan("");
+                                    setAmendmentPatientSummary("");
                                   }}
                                 >
                                   Registrar enmienda
@@ -875,6 +945,260 @@ export default function ClinicalPatientPage({ params }: Props) {
                                 </strong>{" "}
                                 {encounter.plan}
                               </p>
+                            )}
+                            {encounter.patientSummary && (
+                              <p className="mt-2 text-sm leading-6 text-[#404040]">
+                                <strong className="font-medium text-[#171717]">
+                                  Resumen para el paciente:
+                                </strong>{" "}
+                                {encounter.patientSummary}
+                              </p>
+                            )}
+                            {encounter.status === "SIGNED" && (
+                              <div className="mt-4 rounded-lg border border-[#dce9df] bg-[#f7faf7] p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold text-[#173b34]">
+                                    Recetas emitidas
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setPrescriptionEncounterId(
+                                        prescriptionEncounterId === encounter.id
+                                          ? ""
+                                          : encounter.id,
+                                      )
+                                    }
+                                  >
+                                    <Pill className="mr-1.5 size-4" /> Emitir
+                                    receta
+                                  </Button>
+                                </div>
+                                {encounter.prescriptions.length === 0 ? (
+                                  <p className="mt-2 text-xs text-[#60736d]">
+                                    No hay recetas emitidas para esta consulta.
+                                  </p>
+                                ) : (
+                                  encounter.prescriptions.map(
+                                    (prescription) => (
+                                      <div
+                                        key={prescription.id}
+                                        className="mt-3 border-t border-[#dce9df] pt-3 text-sm"
+                                      >
+                                        <p className="font-medium">
+                                          {prescription.voidedAt
+                                            ? "Receta anulada"
+                                            : "Receta vigente"}{" "}
+                                          · {formatDate(prescription.issuedAt)}
+                                        </p>
+                                        {prescription.medications.map(
+                                          (medication) => (
+                                            <p
+                                              key={medication.id}
+                                              className="mt-1 text-[#525252]"
+                                            >
+                                              {medication.name} ·{" "}
+                                              {medication.dose} ·{" "}
+                                              {medication.frequency}
+                                              {medication.duration
+                                                ? ` · ${medication.duration}`
+                                                : ""}
+                                            </p>
+                                          ),
+                                        )}
+                                        {prescription.voidReason && (
+                                          <p className="mt-1 text-xs text-red-700">
+                                            Motivo de anulación:{" "}
+                                            {prescription.voidReason}
+                                          </p>
+                                        )}
+                                        {!prescription.voidedAt && (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            className="mt-2 text-red-700"
+                                            onClick={() => {
+                                              setVoidingPrescriptionId(
+                                                prescription.id,
+                                              );
+                                              setVoidReason("");
+                                            }}
+                                          >
+                                            Anular receta
+                                          </Button>
+                                        )}
+                                        {voidingPrescriptionId ===
+                                          prescription.id && (
+                                          <form
+                                            className="mt-2 flex flex-col gap-2"
+                                            onSubmit={(event) => {
+                                              event.preventDefault();
+                                              voidPrescription.mutate({
+                                                prescriptionId: prescription.id,
+                                                reason: voidReason.trim(),
+                                              });
+                                            }}
+                                          >
+                                            <Label
+                                              htmlFor={`void-reason-${prescription.id}`}
+                                            >
+                                              Motivo de anulación
+                                            </Label>
+                                            <Input
+                                              id={`void-reason-${prescription.id}`}
+                                              value={voidReason}
+                                              onChange={(event) =>
+                                                setVoidReason(
+                                                  event.target.value,
+                                                )
+                                              }
+                                              minLength={5}
+                                              maxLength={500}
+                                              required
+                                            />
+                                            <div className="flex gap-2">
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                  setVoidingPrescriptionId("")
+                                                }
+                                              >
+                                                Cancelar
+                                              </Button>
+                                              <Button
+                                                type="submit"
+                                                size="sm"
+                                                variant="destructive"
+                                                disabled={
+                                                  voidPrescription.isPending
+                                                }
+                                              >
+                                                Confirmar anulación
+                                              </Button>
+                                            </div>
+                                          </form>
+                                        )}
+                                      </div>
+                                    ),
+                                  )
+                                )}
+                                {prescriptionEncounterId === encounter.id && (
+                                  <form
+                                    className="mt-4 grid gap-3 border-t border-[#dce9df] pt-4 sm:grid-cols-2"
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      issuePrescription.mutate({
+                                        encounterId: encounter.id,
+                                        instructions:
+                                          prescriptionInstructions.trim() ||
+                                          undefined,
+                                        medications: [
+                                          {
+                                            name: medicationName.trim(),
+                                            dose: medicationDose.trim(),
+                                            route:
+                                              medicationRoute.trim() ||
+                                              undefined,
+                                            frequency:
+                                              medicationFrequency.trim(),
+                                            duration:
+                                              medicationDuration.trim() ||
+                                              undefined,
+                                          },
+                                        ],
+                                      });
+                                    }}
+                                  >
+                                    <Input
+                                      aria-label="Medicamento"
+                                      placeholder="Medicamento"
+                                      required
+                                      maxLength={160}
+                                      value={medicationName}
+                                      onChange={(event) =>
+                                        setMedicationName(event.target.value)
+                                      }
+                                    />
+                                    <Input
+                                      aria-label="Dosis"
+                                      placeholder="Dosis"
+                                      required
+                                      maxLength={160}
+                                      value={medicationDose}
+                                      onChange={(event) =>
+                                        setMedicationDose(event.target.value)
+                                      }
+                                    />
+                                    <Input
+                                      aria-label="Vía de administración"
+                                      placeholder="Vía de administración"
+                                      maxLength={100}
+                                      value={medicationRoute}
+                                      onChange={(event) =>
+                                        setMedicationRoute(event.target.value)
+                                      }
+                                    />
+                                    <Input
+                                      aria-label="Frecuencia"
+                                      placeholder="Frecuencia"
+                                      required
+                                      maxLength={160}
+                                      value={medicationFrequency}
+                                      onChange={(event) =>
+                                        setMedicationFrequency(
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <Input
+                                      aria-label="Duración"
+                                      placeholder="Duración"
+                                      maxLength={160}
+                                      value={medicationDuration}
+                                      onChange={(event) =>
+                                        setMedicationDuration(
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <Input
+                                      aria-label="Indicaciones adicionales"
+                                      placeholder="Indicaciones adicionales"
+                                      maxLength={4000}
+                                      value={prescriptionInstructions}
+                                      onChange={(event) =>
+                                        setPrescriptionInstructions(
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <div className="flex justify-end gap-2 sm:col-span-2">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          setPrescriptionEncounterId("")
+                                        }
+                                      >
+                                        Cancelar
+                                      </Button>
+                                      <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={issuePrescription.isPending}
+                                      >
+                                        Emitir y compartir con paciente
+                                      </Button>
+                                    </div>
+                                  </form>
+                                )}
+                              </div>
                             )}
                             {encounter.amendments.map((amendment) => (
                               <div
@@ -909,6 +1233,12 @@ export default function ClinicalPatientPage({ params }: Props) {
                                       : {}),
                                     ...(amendmentPlan.trim()
                                       ? { plan: amendmentPlan.trim() }
+                                      : {}),
+                                    ...(amendmentPatientSummary.trim()
+                                      ? {
+                                          patientSummary:
+                                            amendmentPatientSummary.trim(),
+                                        }
                                       : {}),
                                   };
                                   if (
@@ -981,6 +1311,23 @@ export default function ClinicalPatientPage({ params }: Props) {
                                       maxLength={12_000}
                                     />
                                   </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label
+                                    htmlFor={`amendment-patient-summary-${encounter.id}`}
+                                  >
+                                    Corrección del resumen para el paciente
+                                  </Label>
+                                  <Textarea
+                                    id={`amendment-patient-summary-${encounter.id}`}
+                                    value={amendmentPatientSummary}
+                                    onChange={(event) =>
+                                      setAmendmentPatientSummary(
+                                        event.target.value,
+                                      )
+                                    }
+                                    maxLength={12_000}
+                                  />
                                 </div>
                                 <div className="flex justify-end gap-2">
                                   <Button

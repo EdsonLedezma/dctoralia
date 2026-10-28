@@ -83,6 +83,13 @@ describe("dispatcher durable", () => {
     expect(db.messageOutbox.updateMany).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        where: expect.objectContaining({ expiresAt: { lte: now } }),
+        data: expect.objectContaining({ status: "CANCELLED" }),
+      }),
+    );
+    expect(db.messageOutbox.updateMany).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
         data: expect.objectContaining({ status: "DEAD_LETTER" }),
       }),
     );
