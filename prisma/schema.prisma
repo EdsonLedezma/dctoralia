@@ -105,6 +105,33 @@ model Clinic {
   clinicalFiles               ClinicalFile[]
   medicalHistoryConsents      MedicalHistoryConsent[]
   patientMessageConsents      PatientMessageConsent[]
+  voiceAgentLines             VoiceAgentLine[]
+}
+
+/// One public doctor number routes to one verified Vapi DID in one clinic.
+model VoiceAgentLine {
+  id                String   @id @default(cuid())
+  clinicId          String
+  doctorId          String
+  vapiPhoneNumberId String?  @unique
+  vapiDialInNumber  String?
+  vapiAssistantId   String?
+  phoneNumber       String   @unique
+  status            VoiceAgentLineStatus @default(PENDING)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, doctorId])
+  @@index([doctorId, status])
+}
+
+enum VoiceAgentLineStatus {
+  PENDING
+  ACTIVE
+  DISABLED
 }
 
 model ClinicLocation {
@@ -245,6 +272,7 @@ model Doctor {
   encounters                 ClinicalEncounter[]
   prescriptions              ClinicalPrescription[]
   appointmentLifecycleEvents AppointmentLifecycleEvent[]
+  voiceAgentLines            VoiceAgentLine[]
 
   @@index([clinicId])
 }

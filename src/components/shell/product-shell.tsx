@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { motion, useReducedMotion } from "motion/react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -18,6 +19,8 @@ import {
   LayoutDashboard,
   LogOut,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   Stethoscope,
@@ -90,10 +93,12 @@ function NavLink({
   item,
   pathname,
   notificationCount = 0,
+  collapsed = false,
 }: {
   item: NavItem;
   pathname: string;
   notificationCount?: number;
+  collapsed?: boolean;
 }) {
   const active = isActive(pathname, item.href);
   const Icon = item.icon;
@@ -102,19 +107,28 @@ function NavLink({
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      className={`group flex min-h-9 shrink-0 cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none active:scale-[0.99] ${
+      aria-label={collapsed ? item.label : undefined}
+      title={collapsed ? item.label : undefined}
+      className={`group relative flex min-h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none active:scale-[0.97] ${collapsed ? "justify-center px-0" : ""} ${
         active
-          ? "bg-[#1f1f1f] text-white"
-          : "text-[#a1a1aa] hover:bg-[#161616] hover:text-[#f4f4f5]"
+          ? "bg-[#235a49] text-[#f0fff4] shadow-[inset_0_0_0_1px_rgba(153,235,187,0.14)]"
+          : "text-[#9ec3b0] hover:bg-[#193d33] hover:text-[#f0fff4]"
       }`}
     >
-      <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.1 : 1.8} />
-      <span className="truncate">{item.label}</span>
-      {item.icon === Bell && notificationCount > 0 && (
-        <span className="ml-auto min-w-5 rounded-full bg-white px-1 text-center text-[10px] leading-5 font-semibold text-[#171717]">
-          {notificationCount > 9 ? "9+" : notificationCount}
-        </span>
-      )}
+      <Icon
+        className="h-[18px] w-[18px] shrink-0"
+        strokeWidth={active ? 2.1 : 1.8}
+      />
+      {!collapsed && <span className="truncate">{item.label}</span>}
+      {item.icon === Bell &&
+        notificationCount > 0 &&
+        (collapsed ? (
+          <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-[#f3b47f]" />
+        ) : (
+          <span className="ml-auto min-w-5 rounded-full bg-[#d6f3df] px-1 text-center text-[10px] leading-5 font-semibold text-[#1a513b]">
+            {notificationCount > 9 ? "9+" : notificationCount}
+          </span>
+        ))}
     </Link>
   );
 }
@@ -197,19 +211,24 @@ function WorkspaceSwitcher({
         <button
           type="button"
           disabled={switching}
-          className={`flex min-h-10 items-center gap-2 rounded-md text-left transition-colors hover:bg-[#161616] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${compact ? "w-full px-2" : "w-full px-2"}`}
-          aria-label="Cambiar espacio de trabajo"
+          className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left transition-colors hover:bg-[#193d33] focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none ${compact ? "justify-center" : ""}`}
+          aria-label={`Cambiar espacio de trabajo, actual: ${activeWorkspace.name}`}
+          title={compact ? activeWorkspace.name : undefined}
         >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#262626] text-[11px] font-medium text-white">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#2f775c] text-[11px] font-semibold text-white">
             {activeWorkspace.name.slice(0, 1).toUpperCase()}
           </span>
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
-            {activeWorkspace.name}
-          </span>
-          <span className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-[#a1a1aa]">
-            {activeWorkspace.plan ?? "Workspace"}
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#a1a1aa]" />
+          {!compact && (
+            <>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
+                {activeWorkspace.name}
+              </span>
+              <span className="rounded border border-[#376651] px-1.5 py-0.5 text-[10px] text-[#b9ddc7]">
+                {activeWorkspace.plan ?? "Workspace"}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#9ec3b0]" />
+            </>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
@@ -256,10 +275,7 @@ export function ProductShell({
     }
 
     if (sessionStatus !== "authenticated") return;
-    if (
-      previousUserId.current &&
-      currentUserId !== previousUserId.current
-    ) {
+    if (previousUserId.current && currentUserId !== previousUserId.current) {
       queryClient.clear();
     }
     previousUserId.current = currentUserId;
@@ -277,6 +293,24 @@ export function ProductShell({
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [moreNavOpen, setMoreNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    setSidebarCollapsed(
+      window.localStorage.getItem("dctoralia-sidebar-collapsed") === "true",
+    );
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      window.localStorage.setItem(
+        "dctoralia-sidebar-collapsed",
+        String(!current),
+      );
+      return !current;
+    });
+  };
   const { data: unreadCountRes } = api.notifications.unreadCount.useQuery(
     undefined,
     { staleTime: 30_000, refetchInterval: 60_000 },
@@ -314,7 +348,7 @@ export function ProductShell({
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#fafafa] text-[#171717] md:flex">
+    <div className="min-h-[100dvh] bg-[#f6f9f5] text-[#183b30] md:flex">
       <a
         href="#main-content"
         className="sr-only z-50 rounded-md bg-[#171717] px-3 py-2 text-sm text-white focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
@@ -322,28 +356,89 @@ export function ProductShell({
         Saltar al contenido
       </a>
 
-      <aside className="hidden w-[208px] shrink-0 border-r border-[#252525] bg-[#050505] text-[#a1a1aa] md:flex md:flex-col">
-        <div className="border-b border-[#252525] p-2">
+      <motion.aside
+        initial={false}
+        animate={{ width: sidebarCollapsed ? 72 : 220 }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : { type: "spring", stiffness: 420, damping: 42 }
+        }
+        className="hidden shrink-0 overflow-hidden border-r border-[#255343] bg-[#0d2924] text-[#b3d1be] md:flex md:flex-col"
+        aria-label="Barra lateral"
+      >
+        <div
+          className={`flex border-b border-[#285144] p-2 ${sidebarCollapsed ? "flex-col items-center gap-1" : "items-center justify-between gap-2"}`}
+        >
+          <Link
+            href={role === "DOCTOR" ? "/dashboard" : "/patient/dashboard"}
+            className={`flex min-h-10 items-center gap-2 rounded-xl px-2 text-[#effff2] focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none ${sidebarCollapsed ? "justify-center" : ""}`}
+            aria-label="Dctoralia, inicio"
+            title={sidebarCollapsed ? "Dctoralia, inicio" : undefined}
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#b9e9c8] text-[#164932] shadow-[0_4px_14px_rgba(115,221,153,0.18)]">
+              {role === "DOCTOR" ? (
+                <Stethoscope className="size-[17px]" />
+              ) : (
+                <Activity className="size-[17px]" />
+              )}
+            </span>
+            {!sidebarCollapsed && (
+              <span className="text-sm font-semibold tracking-[-0.03em]">
+                Dctoralia<span className="ml-1 text-[#f2b787]">.</span>
+              </span>
+            )}
+          </Link>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={
+              sidebarCollapsed
+                ? "Expandir barra lateral"
+                : "Colapsar barra lateral"
+            }
+            aria-expanded={!sidebarCollapsed}
+            title={
+              sidebarCollapsed
+                ? "Expandir barra lateral"
+                : "Colapsar barra lateral"
+            }
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-[#a5cdb7] transition-colors hover:bg-[#1d4839] hover:text-white focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none"
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="size-[18px]" />
+            ) : (
+              <PanelLeftClose className="size-[18px]" />
+            )}
+          </button>
+        </div>
+        <div className="border-b border-[#285144] p-2">
           {role === "DOCTOR" && workspaceOptions.length > 1 ? (
             <WorkspaceSwitcher
               workspaces={workspaceOptions}
               activeClinicId={activeClinicId}
+              compact={sidebarCollapsed}
             />
           ) : (
             <button
               type="button"
-              className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left transition-colors duration-150 hover:bg-[#161616] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+              className={`flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 text-left transition-colors duration-150 hover:bg-[#193d33] focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none ${sidebarCollapsed ? "justify-center" : ""}`}
               aria-label="Espacio de trabajo"
+              title={sidebarCollapsed ? displayName : undefined}
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#262626] text-[11px] font-medium text-white">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#2f775c] text-[11px] font-semibold text-white">
                 {initial}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
-                {displayName}
-              </span>
-              <span className="rounded border border-[#333] px-1.5 py-0.5 text-[10px] text-[#a1a1aa]">
-                {role === "DOCTOR" ? "Pro" : "Paciente"}
-              </span>
+              {!sidebarCollapsed && (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#f4f4f5]">
+                    {displayName}
+                  </span>
+                  <span className="rounded border border-[#376651] px-1.5 py-0.5 text-[10px] text-[#b9ddc7]">
+                    {role === "DOCTOR" ? "Pro" : "Paciente"}
+                  </span>
+                </>
+              )}
             </button>
           )}
         </div>
@@ -352,14 +447,19 @@ export function ProductShell({
           <button
             type="button"
             onClick={openCommandMenu}
-            className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-md border border-[#262626] bg-[#0b0b0b] px-2.5 text-left text-[13px] text-[#8f8f98] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#f4f4f5] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+            className={`flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-xl border border-[#32634e] bg-[#15372f] px-2.5 text-left text-[13px] text-[#b6d9c4] transition-colors duration-150 hover:border-[#78b591] hover:text-white focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none ${sidebarCollapsed ? "justify-center px-0" : ""}`}
             aria-label="Buscar en Dctoralia"
+            title={sidebarCollapsed ? "Buscar en Dctoralia" : undefined}
           >
-            <Search className="h-3.5 w-3.5" />
-            <span className="flex-1">Buscar</span>
-            <kbd className="rounded border border-[#333] px-1 text-[10px] text-[#8f8f98]">
-              ⌘ K
-            </kbd>
+            <Search className="h-4 w-4" />
+            {!sidebarCollapsed && (
+              <>
+                <span className="flex-1">Buscar</span>
+                <kbd className="rounded border border-[#376651] px-1 text-[10px] text-[#b6d9c4]">
+                  ⌘ K
+                </kbd>
+              </>
+            )}
           </button>
         </div>
 
@@ -373,38 +473,46 @@ export function ProductShell({
               item={item}
               pathname={pathname}
               notificationCount={unreadCount}
+              collapsed={sidebarCollapsed}
             />
           ))}
-          <div className="my-3 border-t border-[#252525]" />
+          <div className="my-3 border-t border-[#285144]" />
           {items.slice(3).map((item) => (
             <NavLink
               key={item.href}
               item={item}
               pathname={pathname}
               notificationCount={unreadCount}
+              collapsed={sidebarCollapsed}
             />
           ))}
         </nav>
 
-        <div className="space-y-1 border-t border-[#252525] p-2">
+        <div className="space-y-1 border-t border-[#285144] p-2">
           <button
             type="button"
-            className="flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-[13px] text-[#a1a1aa] transition-colors duration-150 hover:bg-[#161616] hover:text-[#f4f4f5] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+            className={`flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] text-[#b3d1be] transition-colors duration-150 hover:bg-[#193d33] hover:text-white focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none ${sidebarCollapsed ? "justify-center px-0" : ""}`}
+            aria-label="Ayuda"
+            title={sidebarCollapsed ? "Ayuda" : undefined}
           >
-            <CircleHelp className="h-4 w-4" />
-            Ayuda
+            <CircleHelp className="h-[18px] w-[18px]" />
+            {!sidebarCollapsed && "Ayuda"}
           </button>
-          <div className="flex items-center gap-2 rounded-md px-2 py-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#262626] text-[11px] font-medium text-white">
+          <div
+            className={`flex items-center gap-2 rounded-xl px-2 py-2 ${sidebarCollapsed ? "flex-col" : ""}`}
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#2f775c] text-[11px] font-semibold text-white">
               {initial}
             </span>
-            <span className="min-w-0 flex-1 truncate text-[12px] text-[#d4d4d8]">
-              {displayName}
-            </span>
+            {!sidebarCollapsed && (
+              <span className="min-w-0 flex-1 truncate text-[12px] text-[#d4e9d8]">
+                {displayName}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => void signOut({ callbackUrl: "/" })}
-              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#71717a] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-white focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#99bdab] transition-colors duration-150 hover:bg-[#1d4839] hover:text-white focus-visible:ring-2 focus-visible:ring-[#b7edc9] focus-visible:outline-none"
               aria-label="Cerrar sesión"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -460,23 +568,25 @@ export function ProductShell({
             </DialogContent>
           </Dialog>
         </div>
-      </aside>
+      </motion.aside>
 
       <div className="min-w-0 flex-1">
-        <div className="mobile-shell-header border-b border-[#ebebeb] bg-white md:hidden">
+        <div className="mobile-shell-header border-b border-[#dce9df] bg-[#fbfdfa] md:hidden">
           <div className="flex h-14 items-center justify-between px-4">
             <Link
               href={role === "DOCTOR" ? "/dashboard" : "/patient/dashboard"}
               className="flex items-center gap-2 font-semibold tracking-tight"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#171717] text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1f7257] text-[#f0fff4]">
                 {role === "DOCTOR" ? (
                   <Stethoscope className="h-4 w-4" />
                 ) : (
                   <Activity className="h-4 w-4" />
                 )}
               </span>
-              Dctoralia
+              <span className="text-[#183b30]">
+                Dctoralia<span className="text-[#d78c59]">.</span>
+              </span>
             </Link>
             <div className="flex items-center gap-1">
               {role === "DOCTOR" && workspaceOptions.length > 1 && (
@@ -499,7 +609,7 @@ export function ProductShell({
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#171717] px-1 text-[9px] font-semibold text-white">
+                  <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#1f7257] px-1 text-[9px] font-semibold text-white">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}

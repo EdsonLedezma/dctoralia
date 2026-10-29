@@ -41,6 +41,7 @@ import { LocationDialog } from "./location-dialog";
 import { BillingSettings } from "./billing-settings";
 import { CreateWorkspaceForm } from "./create-workspace-form";
 import { MessagingSettings } from "./messaging-settings";
+import { VoiceAgentSettings } from "./voice-agent-settings";
 
 type Workspace = Exclude<RouterOutputs["workspace"]["getMine"]["result"], null>;
 type WorkspaceMember = Exclude<
@@ -500,6 +501,7 @@ export function WorkspaceView() {
         />
         {workspace.membershipRole === "OWNER" && <BillingSettings />}
         {workspace.membershipRole === "OWNER" && <MessagingSettings />}
+        <VoiceAgentSettings />
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <Card className="overflow-hidden rounded-lg border-[#ebebeb] bg-white shadow-none">

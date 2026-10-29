@@ -61,4 +61,4 @@ Referencias: [SDK](https://docs.sent.dm/sdks/typescript), [firma de webhooks](ht
 - Prueba de integración con Stripe test y Sent sandbox después de configurar variables y aplicar el esquema.
 - E2E autenticado y revisión visual móvil de las nuevas pantallas contra datos de prueba.
 
-Vapi permanece explícitamente en la fase futura del plan.
+Vapi tiene ahora solicitudes de línea por doctor, un webhook autenticado y tres tools de consulta. Su alta operativa, límites y pasos pendientes para CRUD telefónico están en [VAPI_VOZ.md](./VAPI_VOZ.md).
