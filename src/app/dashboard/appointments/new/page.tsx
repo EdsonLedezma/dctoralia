@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { BorderBeam } from "border-beam";
 import {
   AlertCircle,
   CalendarDays,
@@ -23,13 +24,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TimeSlotPicker } from "~/components/ui/time-slot-picker";
 import {
@@ -52,6 +47,16 @@ const appointmentTypes = [
   "Examen Médico",
   "Revisión de Resultados",
 ];
+
+const appointmentTypeKeywords: Record<string, string[]> = {
+  "Consulta General": ["chequeo", "medicina general", "valoracion"],
+  Control: ["revision", "seguimiento", "chequeo"],
+  "Primera Consulta": ["nuevo paciente", "valoracion inicial"],
+  Seguimiento: ["control", "revision", "segunda consulta"],
+  Urgencia: ["urgente", "inmediato", "emergencia"],
+  "Examen Médico": ["certificado", "evaluacion", "chequeo"],
+  "Revisión de Resultados": ["laboratorio", "estudios", "analisis"],
+};
 
 const steps = [
   {
@@ -100,6 +105,7 @@ export default function NewAppointmentPage() {
   const createAppointment = api.appointments.create.useMutation();
   const utils = api.useUtils();
   const [step, setStep] = useState(0);
+  const [confirmFocused, setConfirmFocused] = useState(false);
   const [formData, setFormData] = useState({
     patientId: "",
     serviceId: "",
@@ -112,14 +118,46 @@ export default function NewAppointmentPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const stepContentRef = useRef<HTMLDivElement>(null);
-  const selectedService = useMemo(
-    () => services.find((service) => service.id === formData.serviceId),
-    [services, formData.serviceId],
+  const selectedService = services.find(
+    (service) => service.id === formData.serviceId,
   );
-  const selectedPatient = useMemo(
-    () => patients.find((patient) => patient.id === formData.patientId),
-    [patients, formData.patientId],
+  const selectedPatient = patients.find(
+    (patient) => patient.id === formData.patientId,
   );
+  const patientOptions = patients.map((patient) => ({
+    value: patient.id,
+    label: patient.user.name || patient.id,
+    description: patient.user.email,
+    keywords: [patient.phone],
+  }));
+  const serviceOptions = services.map((service) => ({
+    value: service.id,
+    label: service.name,
+    description: `${service.duration} min${service.description ? ` · ${service.description}` : ""}`,
+    keywords: service.description ? [service.description] : [],
+  }));
+  const locationOptions = [
+    {
+      value: "none",
+      label: "Sin ubicación asignada",
+      keywords: ["ninguna", "remoto"],
+    },
+    ...locations.map((location) => ({
+      value: location.id,
+      label: location.name,
+    })),
+  ];
+  const reasonOptions = appointmentTypes.map((type) => ({
+    value: type,
+    label: type,
+    keywords: appointmentTypeKeywords[type] ?? [],
+  }));
+  const severityOptions = [
+    { value: "LOW", label: "Normal", keywords: ["baja", "rutina"] },
+    { value: "MEDIUM", label: "Media", keywords: ["moderada"] },
+    { value: "HIGH", label: "Alta", keywords: ["prioritaria"] },
+    { value: "CRITICAL", label: "Urgente", keywords: ["critica", "inmediata"] },
+  ];
   const bookingSlotsQuery = api.appointments.bookingSlots.useQuery(
     {
       serviceId: formData.serviceId,
@@ -299,30 +337,24 @@ export default function NewAppointmentPage() {
                             </div>
                           </div>
                           <Label htmlFor="patient">Paciente</Label>
-                          <Select
+                          <SearchableSelect
+                            id="patient"
+                            label="Paciente"
                             value={formData.patientId}
                             onValueChange={(value) =>
                               updateForm("patientId", value)
                             }
+                            options={patientOptions}
                             disabled={loadingPatients}
-                          >
-                            <SelectTrigger id="patient" className="mt-2 h-11">
-                              <SelectValue
-                                placeholder={
-                                  loadingPatients
-                                    ? "Cargando pacientes…"
-                                    : "Buscar paciente en tu lista"
-                                }
-                              />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {patients.map((patient) => (
-                                <SelectItem key={patient.id} value={patient.id}>
-                                  {patient.user.name || patient.id}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder={
+                              loadingPatients
+                                ? "Cargando pacientes…"
+                                : "Buscar paciente en tu lista"
+                            }
+                            searchPlaceholder="Nombre, correo o teléfono"
+                            emptyMessage="No encontramos ese paciente."
+                            className="mt-2"
+                          />
                           {!loadingPatients && patients.length === 0 && (
                             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[#fafafa] px-3 py-3">
                               <p className="text-sm text-[#737373]">
@@ -357,7 +389,9 @@ export default function NewAppointmentPage() {
                             </div>
                           </div>
                           <Label htmlFor="service">Tipo de consulta</Label>
-                          <Select
+                          <SearchableSelect
+                            id="service"
+                            label="Tipo de consulta"
                             value={formData.serviceId}
                             onValueChange={(value) => {
                               setFormData((current) => ({
@@ -367,25 +401,17 @@ export default function NewAppointmentPage() {
                               }));
                               setError(null);
                             }}
+                            options={serviceOptions}
                             disabled={loadingServices || services.length === 0}
-                          >
-                            <SelectTrigger id="service" className="mt-2 h-11">
-                              <SelectValue
-                                placeholder={
-                                  loadingServices
-                                    ? "Cargando servicios…"
-                                    : "Seleccionar servicio"
-                                }
-                              />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {services.map((service) => (
-                                <SelectItem key={service.id} value={service.id}>
-                                  {service.name} · {service.duration} min
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder={
+                              loadingServices
+                                ? "Cargando servicios…"
+                                : "Buscar tipo de consulta"
+                            }
+                            searchPlaceholder="Nombre o descripción del servicio"
+                            emptyMessage="No encontramos ese servicio."
+                            className="mt-2"
+                          />
                           {!loadingServices && services.length === 0 && (
                             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[#fafafa] px-3 py-3">
                               <p className="text-sm text-[#737373]">
@@ -430,7 +456,9 @@ export default function NewAppointmentPage() {
                               Consultorio{" "}
                               <span className="text-[#888]">(opcional)</span>
                             </Label>
-                            <Select
+                            <SearchableSelect
+                              id="appointment-location"
+                              label="Consultorio"
                               value={formData.locationId || "none"}
                               onValueChange={(value) =>
                                 updateForm(
@@ -438,27 +466,11 @@ export default function NewAppointmentPage() {
                                   value === "none" ? "" : value,
                                 )
                               }
-                            >
-                              <SelectTrigger
-                                id="appointment-location"
-                                className="mt-2 h-11"
-                              >
-                                <SelectValue placeholder="Sin ubicación asignada" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">
-                                  Sin ubicación asignada
-                                </SelectItem>
-                                {locations.map((location) => (
-                                  <SelectItem
-                                    key={location.id}
-                                    value={location.id}
-                                  >
-                                    {location.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              options={locationOptions}
+                              placeholder="Sin ubicación asignada"
+                              searchPlaceholder="Buscar consultorio"
+                              className="mt-2"
+                            />
                           </section>
                         )}
                       </>
@@ -572,46 +584,33 @@ export default function NewAppointmentPage() {
                           <div className="space-y-4">
                             <div className="space-y-2">
                               <Label htmlFor="reason">Motivo de la cita</Label>
-                              <Select
+                              <SearchableSelect
+                                id="reason"
+                                label="Motivo de la cita"
                                 value={formData.reason}
                                 onValueChange={(value) =>
                                   updateForm("reason", value)
                                 }
-                              >
-                                <SelectTrigger id="reason" className="h-11">
-                                  <SelectValue placeholder="Seleccionar motivo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {appointmentTypes.map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                      {type}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                options={reasonOptions}
+                                placeholder="Seleccionar motivo"
+                                searchPlaceholder="Ej. control, laboratorio, urgencia"
+                              />
                             </div>
                             <div className="space-y-2">
                               <Label htmlFor="severity">
                                 Prioridad clínica
                               </Label>
-                              <Select
+                              <SearchableSelect
+                                id="severity"
+                                label="Prioridad clínica"
                                 value={formData.severity}
                                 onValueChange={(value) =>
                                   updateForm("severity", value)
                                 }
-                              >
-                                <SelectTrigger id="severity" className="h-11">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="LOW">Normal</SelectItem>
-                                  <SelectItem value="MEDIUM">Media</SelectItem>
-                                  <SelectItem value="HIGH">Alta</SelectItem>
-                                  <SelectItem value="CRITICAL">
-                                    Urgente
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
+                                options={severityOptions}
+                                placeholder="Seleccionar prioridad"
+                                searchPlaceholder="Buscar prioridad"
+                              />
                             </div>
                             <div className="space-y-2">
                               <Label htmlFor="notes">
@@ -704,20 +703,38 @@ export default function NewAppointmentPage() {
                       Continuar <ChevronRight className="ml-1 size-4" />
                     </Button>
                   ) : (
-                    <Button
-                      type="submit"
-                      className="min-h-11"
-                      disabled={
-                        createAppointment.isPending ||
-                        !formData.reason ||
-                        !selectedService
-                      }
+                    <BorderBeam
+                      size="pulse-inner"
+                      colorVariant="ocean"
+                      theme="dark"
+                      strength={0.75}
+                      active={Boolean(
+                        (confirmFocused || createAppointment.isPending) &&
+                          formData.reason &&
+                          selectedService,
+                      )}
+                      className="rounded-lg focus-within:ring-2 focus-within:ring-[#b8dfc9]"
+                      onMouseEnter={() => setConfirmFocused(true)}
+                      onMouseLeave={() => setConfirmFocused(false)}
+                      onFocus={() => setConfirmFocused(true)}
+                      onBlur={() => setConfirmFocused(false)}
                     >
-                      <Clock3 className="mr-2 size-4" />
-                      {createAppointment.isPending
-                        ? "Agendando…"
-                        : "Confirmar cita"}
-                    </Button>
+                      <Button
+                        type="submit"
+                        aria-busy={createAppointment.isPending}
+                        className="min-h-11 w-full rounded-lg bg-[#1f7257] text-white hover:bg-[#185941]"
+                        disabled={
+                          createAppointment.isPending ||
+                          !formData.reason ||
+                          !selectedService
+                        }
+                      >
+                        <Clock3 className="mr-2 size-4" />
+                        {createAppointment.isPending
+                          ? "Agendando…"
+                          : "Confirmar cita"}
+                      </Button>
+                    </BorderBeam>
                   )}
                 </div>
               </footer>
