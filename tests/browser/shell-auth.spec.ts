@@ -91,7 +91,7 @@ test("sidebar retains selection, collapse preference, workspace and section sear
   ).toBeVisible();
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", {
-    name: "Buscar en Dctoralia",
+    name: "Buscar en Dopilot",
     exact: true,
   });
   await dialog
@@ -130,7 +130,7 @@ test("mobile shell exposes patient destinations, theme and search", async ({
     .getByRole("button", { name: "Buscar sección", exact: true })
     .click();
   const search = page.getByRole("dialog", {
-    name: "Buscar en Dctoralia",
+    name: "Buscar en Dopilot",
     exact: true,
   });
   await search

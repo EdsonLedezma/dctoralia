@@ -164,7 +164,7 @@ export function FieldValidation({
           {fieldErrors.map((error, index) => (
             <div
               key={index}
-              className="flex items-center justify-between rounded bg-red-50 p-1 text-xs text-red-600"
+              className="bg-secondary text-destructive flex items-center justify-between rounded p-1 text-xs"
             >
               <span>{error.message}</span>
               <Badge variant="outline" className="h-4 text-xs">

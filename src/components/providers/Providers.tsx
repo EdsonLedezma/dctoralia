@@ -15,7 +15,7 @@ export default function Providers({ children, session }: ProvidersProps) {
   return (
     <ThemeProvider
       attribute="class"
-      storageKey="dctoralia-theme"
+      storageKey="dopilot-theme"
       defaultTheme="light"
       enableSystem
       disableTransitionOnChange

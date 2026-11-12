@@ -97,12 +97,12 @@ export default function LeaveReviewPage() {
 
   return (
     <ProductShell role="PATIENT">
-      <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-2xl">
-          <Card className="border-[#ebebeb] bg-white shadow-none">
-            <CardHeader className="border-b border-[#ebebeb]">
+          <Card className="border-border bg-card shadow-none">
+            <CardHeader className="border-border border-b">
               <CardTitle className="flex items-center gap-2">
-                <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                <Star className="text-foreground h-5 w-5 fill-yellow-400" />
                 <span>
                   {myReview ? "Editar tu reseña" : "Dejar una reseña"}
                   {doctor?.user.name ? ` · ${doctor.user.name}` : ""}
@@ -121,7 +121,7 @@ export default function LeaveReviewPage() {
                     {completedAppointments.map((apt: Appointment) => (
                       <label
                         key={apt.id}
-                        className="flex cursor-pointer items-center rounded-md border border-[#ebebeb] p-3 transition-colors hover:bg-[#fafafa]"
+                        className="border-border hover:bg-background flex cursor-pointer items-center rounded-md border p-3 transition-colors"
                       >
                         <input
                           type="radio"
@@ -144,7 +144,7 @@ export default function LeaveReviewPage() {
                             })}
                             {" a las "} {apt.time}
                           </p>
-                          <p className="text-sm text-[#6b6b6b]">
+                          <p className="text-muted-foreground text-sm">
                             {apt.service?.name}
                           </p>
                         </div>
@@ -156,8 +156,8 @@ export default function LeaveReviewPage() {
               )}
 
               {!myReview && completedAppointments.length === 0 && (
-                <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] p-4">
-                  <p className="text-sm text-[#6b6b6b]">
+                <div className="border-border bg-background rounded-md border p-4">
+                  <p className="text-muted-foreground text-sm">
                     No tienes citas completadas con este doctor aún. Cuando
                     completes una cita, podrás dejar una reseña.
                   </p>
@@ -165,8 +165,8 @@ export default function LeaveReviewPage() {
               )}
 
               {myReview && (
-                <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] p-4">
-                  <p className="text-sm text-[#6b6b6b]">
+                <div className="border-border bg-background rounded-md border p-4">
+                  <p className="text-muted-foreground text-sm">
                     Ya has dejado una reseña para este doctor. Puedes editarla a
                     continuación.
                   </p>
@@ -190,7 +190,7 @@ export default function LeaveReviewPage() {
                         size={40}
                         className={
                           star <= rating
-                            ? "fill-yellow-400 text-yellow-400"
+                            ? "text-foreground fill-yellow-400"
                             : "text-gray-300"
                         }
                       />
@@ -198,7 +198,7 @@ export default function LeaveReviewPage() {
                   ))}
                 </div>
                 {rating > 0 && (
-                  <p className="text-center text-sm text-[#6b6b6b]">
+                  <p className="text-muted-foreground text-center text-sm">
                     {rating === 1 && "Muy insatisfecho"}
                     {rating === 2 && "Insatisfecho"}
                     {rating === 3 && "Neutral"}
@@ -220,7 +220,7 @@ export default function LeaveReviewPage() {
                   rows={6}
                   maxLength={1000}
                 />
-                <p className="mt-1 text-xs text-[#6b6b6b]">
+                <p className="text-muted-foreground mt-1 text-xs">
                   {comment.length}/1000 caracteres
                 </p>
               </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Stethoscope } from "lucide-react";
+import { DopilotBrand } from "~/components/brand/dopilot-brand";
 import { AppearanceSwitcher } from "~/components/shared/appearance-switcher";
 import { Button } from "~/components/ui/button";
 
@@ -17,13 +17,10 @@ export function PublicHeader({
       <div className="mx-auto flex min-h-20 max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-8">
         <Link
           href={homeHref}
-          aria-label="Dctoralia, inicio"
+          aria-label="Dopilot, inicio"
           className="text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center gap-2 rounded-full text-sm font-semibold tracking-tight focus-visible:ring-2"
         >
-          <span className="glass-bubble flex size-9 items-center justify-center">
-            <Stethoscope className="size-4" />
-          </span>
-          Dctoralia
+          <DopilotBrand />
         </Link>
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" className="hidden sm:inline-flex">

@@ -11,8 +11,8 @@ export function safeAuthReturnPath(
     /[\\\u0000-\u001f\u007f]/.test(value)
   )
     return null;
-  const url = new URL(value, "https://dctoralia.local");
-  if (url.origin !== "https://dctoralia.local") return null;
+  const url = new URL(value, "https://dopilot.local");
+  if (url.origin !== "https://dopilot.local") return null;
   const matches = (prefix: string) =>
     url.pathname === prefix || url.pathname.startsWith(`${prefix}/`);
   if (

@@ -1,5 +1,5 @@
-import { DashboardView } from "./_components/dashboard-view";
+import { PatientOverview } from "~/components/operations/patient-overview";
 
 export default function PatientDashboardPage() {
-  return <DashboardView />;
+  return <PatientOverview />;
 }

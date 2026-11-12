@@ -223,7 +223,7 @@ export default function MedicalHistoryPage() {
 
   return (
     <ProductShell role="PATIENT">
-      <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-4 flex justify-end gap-2">
             {!isEditing ? (
@@ -245,7 +245,7 @@ export default function MedicalHistoryPage() {
             )}
           </div>
           <Tabs defaultValue="history" className="space-y-6">
-            <TabsList className="flex w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-[#ebebeb] bg-transparent p-0">
+            <TabsList className="w-full max-w-full justify-start overflow-x-auto">
               <TabsTrigger value="history">Historial</TabsTrigger>
               <TabsTrigger value="personal">Información Personal</TabsTrigger>
               <TabsTrigger value="allergies">Alergias</TabsTrigger>
@@ -255,35 +255,35 @@ export default function MedicalHistoryPage() {
 
             {/* Medical History */}
             <TabsContent value="history" className="space-y-6">
-              <Card className="border-[#dce9df] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>Consultas firmadas por tus doctores</CardTitle>
-                  <p className="text-sm text-[#64766c]">
+                  <p className="text-muted-foreground text-sm">
                     Aquí aparecen los resúmenes que tus doctores compartieron al
                     cerrar cada consulta.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-3 p-5 sm:p-6">
                   {signedRecords.isLoading ? (
-                    <p className="text-sm text-[#64766c]">
+                    <p className="text-muted-foreground text-sm">
                       Cargando registros...
                     </p>
                   ) : signedRecords.error || signedRecords.data?.error ? (
-                    <p className="text-sm text-red-700">
+                    <p className="text-destructive text-sm">
                       No se pudieron cargar tus registros clínicos.
                     </p>
                   ) : professionalRecords?.encounters.length ? (
                     professionalRecords.encounters.map((encounter) => (
                       <article
                         key={encounter.id}
-                        className="rounded-xl border border-[#e3ece5] bg-[#f8faf8] p-4"
+                        className="border-border bg-muted rounded-xl border p-4"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
-                            <h3 className="font-semibold text-[#173b34]">
+                            <h3 className="text-foreground font-semibold">
                               Consulta médica
                             </h3>
-                            <p className="mt-1 text-xs text-[#64766c]">
+                            <p className="text-muted-foreground mt-1 text-xs">
                               {encounter.doctor.user.name} ·{" "}
                               {encounter.doctor.specialty} ·{" "}
                               {encounter.clinic.name}
@@ -291,17 +291,17 @@ export default function MedicalHistoryPage() {
                           </div>
                           <Badge variant="outline">Firmada</Badge>
                         </div>
-                        <p className="mt-2 text-xs text-[#64766c]">
+                        <p className="text-muted-foreground mt-2 text-xs">
                           {new Intl.DateTimeFormat("es-MX", {
                             dateStyle: "long",
                           }).format(new Date(encounter.encounterAt))}
                         </p>
                         {encounter.patientSummary ? (
-                          <p className="mt-3 text-sm leading-6 whitespace-pre-wrap text-[#334b3e]">
+                          <p className="text-foreground mt-3 text-sm leading-6 whitespace-pre-wrap">
                             {encounter.patientSummary}
                           </p>
                         ) : (
-                          <p className="mt-3 text-sm text-[#64766c]">
+                          <p className="text-muted-foreground mt-3 text-sm">
                             Tu doctor no agregó un resumen para compartir en
                             esta consulta.
                           </p>
@@ -309,44 +309,44 @@ export default function MedicalHistoryPage() {
                       </article>
                     ))
                   ) : (
-                    <p className="text-sm text-[#64766c]">
+                    <p className="text-muted-foreground text-sm">
                       Aún no tienes consultas firmadas por un doctor.
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="border-[#dce9df] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>Recetas emitidas</CardTitle>
-                  <p className="text-sm text-[#64766c]">
+                  <p className="text-muted-foreground text-sm">
                     Indicaciones registradas por tu doctor. Los medicamentos que
                     tú reportas aparecen en la pestaña Medicamentos.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-3 p-5 sm:p-6">
                   {signedRecords.isLoading ? (
-                    <p className="text-sm text-[#64766c]">
+                    <p className="text-muted-foreground text-sm">
                       Cargando recetas...
                     </p>
                   ) : signedRecords.error || signedRecords.data?.error ? (
-                    <p className="text-sm text-red-700">
+                    <p className="text-destructive text-sm">
                       No se pudieron cargar tus recetas.
                     </p>
                   ) : professionalRecords?.prescriptions.length ? (
                     professionalRecords.prescriptions.map((prescription) => (
                       <article
                         key={prescription.id}
-                        className={`rounded-xl border p-4 ${prescription.voidedAt ? "border-[#ebebeb] bg-[#fafafa] opacity-70" : "border-[#dce9df] bg-[#f8faf8]"}`}
+                        className={`rounded-xl border p-4 ${prescription.voidedAt ? "border-border bg-background opacity-70" : "border-border bg-muted"}`}
                       >
                         <div className="flex flex-wrap justify-between gap-2">
                           <div>
-                            <p className="text-sm font-semibold text-[#173b34]">
+                            <p className="text-foreground text-sm font-semibold">
                               {prescription.voidedAt
                                 ? "Receta anulada"
                                 : "Receta emitida"}
                             </p>
-                            <p className="mt-1 text-xs text-[#64766c]">
+                            <p className="text-muted-foreground mt-1 text-xs">
                               {prescription.doctor.user.name} ·{" "}
                               {prescription.clinic.name} ·{" "}
                               {new Intl.DateTimeFormat("es-MX", {
@@ -355,7 +355,7 @@ export default function MedicalHistoryPage() {
                             </p>
                           </div>
                           <Pill
-                            className="size-5 text-[#438565]"
+                            className="text-muted-foreground size-5"
                             aria-hidden="true"
                           />
                         </div>
@@ -363,7 +363,7 @@ export default function MedicalHistoryPage() {
                           {prescription.medications.map((medication) => (
                             <li
                               key={medication.id}
-                              className="text-sm text-[#334b3e]"
+                              className="text-foreground text-sm"
                             >
                               <strong>{medication.name}</strong> ·{" "}
                               {medication.dose} · {medication.frequency}
@@ -380,36 +380,36 @@ export default function MedicalHistoryPage() {
                           ))}
                         </ul>
                         {prescription.instructions && (
-                          <p className="mt-3 text-sm whitespace-pre-wrap text-[#334b3e]">
+                          <p className="text-foreground mt-3 text-sm whitespace-pre-wrap">
                             {prescription.instructions}
                           </p>
                         )}
                         {prescription.voidReason && (
-                          <p className="mt-3 text-xs text-red-700">
+                          <p className="text-destructive mt-3 text-xs">
                             Motivo de anulación: {prescription.voidReason}
                           </p>
                         )}
                       </article>
                     ))
                   ) : (
-                    <p className="text-sm text-[#64766c]">
+                    <p className="text-muted-foreground text-sm">
                       Aún no tienes recetas emitidas.
                     </p>
                   )}
                 </CardContent>
               </Card>
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>Permisos para compartir antecedentes</CardTitle>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-muted-foreground text-sm">
                     Controlas qué consultorios pueden consultar tu tipo de
                     sangre, alergias, medicamentos y padecimientos. El permiso
                     es por consultorio y puedes revocarlo cuando quieras.
                   </p>
                 </CardHeader>
-                <CardContent className="divide-y divide-[#ebebeb]">
+                <CardContent className="divide-border divide-y">
                   {sharing.isLoading ? (
-                    <p className="py-5 text-sm text-gray-500">
+                    <p className="text-muted-foreground py-5 text-sm">
                       Cargando consultorios…
                     </p>
                   ) : sharing.data?.result?.length ? (
@@ -419,21 +419,21 @@ export default function MedicalHistoryPage() {
                         className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div>
-                          <p className="text-sm font-medium text-[#171717]">
+                          <p className="text-foreground text-sm font-medium">
                             {clinic.name}
                           </p>
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="text-muted-foreground mt-1 text-xs">
                             {clinic.isGranted
                               ? "Este consultorio tiene permiso para consultar tus antecedentes auto-reportados."
                               : "Este consultorio no puede consultar tus antecedentes auto-reportados."}
                           </p>
                           {clinic.isGranted && clinic.grantedAt ? (
-                            <p className="mt-1 text-[11px] text-gray-400">
+                            <p className="text-muted-foreground mt-1 text-xs">
                               Permiso concedido el{" "}
                               {formatDate(clinic.grantedAt)}
                             </p>
                           ) : clinic.revokedAt ? (
-                            <p className="mt-1 text-[11px] text-gray-400">
+                            <p className="text-muted-foreground mt-1 text-xs">
                               Acceso revocado el {formatDate(clinic.revokedAt)}
                             </p>
                           ) : null}
@@ -456,15 +456,15 @@ export default function MedicalHistoryPage() {
                       </div>
                     ))
                   ) : (
-                    <p className="py-5 text-sm text-gray-500">
+                    <p className="text-muted-foreground py-5 text-sm">
                       No hay consultorios vinculados a tu cuenta.
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle>Historial de Consultas</CardTitle>
@@ -473,24 +473,27 @@ export default function MedicalHistoryPage() {
                 </CardHeader>
                 <CardContent>
                   {completedAppointments.length === 0 ? (
-                    <div className="py-12 text-center text-gray-500">
-                      <FileText className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+                    <div className="text-muted-foreground py-12 text-center">
+                      <FileText className="text-muted-foreground mx-auto mb-2 h-12 w-12" />
                       <p>No tienes historial de consultas completadas</p>
                     </div>
                   ) : (
                     <div className="space-y-6">
                       {completedAppointments.map((record: Appointment) => (
-                        <div key={record.id} className="rounded-lg border p-4">
+                        <div
+                          key={record.id}
+                          className="material-card border-border bg-card rounded-2xl border p-5"
+                        >
                           <div className="mb-4 flex items-start justify-between">
                             <div>
                               <h3 className="text-lg font-semibold">
                                 {record.reason ?? "Consulta"}
                               </h3>
-                              <p className="text-blue-600">
+                              <p className="text-muted-foreground">
                                 {record.doctor?.user?.name ?? "Doctor"} -{" "}
                                 {record.doctor?.specialty ?? "Especialidad"}
                               </p>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-muted-foreground text-sm">
                                 {formatDate(record.date, true)}
                               </p>
                             </div>
@@ -502,7 +505,7 @@ export default function MedicalHistoryPage() {
                               <h4 className="mb-2 font-medium">
                                 Notas de la cita
                               </h4>
-                              <p className="text-sm text-gray-700">
+                              <p className="text-foreground text-sm">
                                 {record.notes}
                               </p>
                             </div>
@@ -511,13 +514,13 @@ export default function MedicalHistoryPage() {
                           <div className="grid gap-4 md:grid-cols-2">
                             <div>
                               <h4 className="mb-2 font-medium">Servicio</h4>
-                              <p className="text-sm text-gray-700">
+                              <p className="text-foreground text-sm">
                                 {record.service?.name ?? "N/A"}
                               </p>
                             </div>
                             <div>
                               <h4 className="mb-2 font-medium">Duración</h4>
-                              <p className="text-sm text-gray-700">
+                              <p className="text-foreground text-sm">
                                 {record.duration ??
                                   record.service?.duration ??
                                   "N/A"}{" "}
@@ -535,15 +538,15 @@ export default function MedicalHistoryPage() {
 
             {/* Personal Information */}
             <TabsContent value="personal" className="space-y-6">
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>Información Personal</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-4">
                       <h3 className="flex items-center text-lg font-semibold">
-                        <Heart className="mr-2 h-5 w-5 text-red-500" />
+                        <Heart className="text-destructive mr-2 h-5 w-5" />
                         Información Médica
                       </h3>
                       <div className="space-y-3">
@@ -648,12 +651,12 @@ export default function MedicalHistoryPage() {
 
             {/* Allergies */}
             <TabsContent value="allergies" className="space-y-6">
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="flex items-center">
-                        <AlertTriangle className="mr-2 h-5 w-5 text-red-500" />
+                        <AlertTriangle className="text-destructive mr-2 h-5 w-5" />
                         Alergias
                       </CardTitle>
                     </div>
@@ -661,8 +664,8 @@ export default function MedicalHistoryPage() {
                 </CardHeader>
                 <CardContent>
                   {formData.allergies.length === 0 ? (
-                    <div className="py-8 text-center text-gray-500">
-                      <AlertTriangle className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+                    <div className="text-muted-foreground py-8 text-center">
+                      <AlertTriangle className="text-muted-foreground mx-auto mb-2 h-12 w-12" />
                       <p>No tienes alergias registradas</p>
                       {isEditing && (
                         <p className="mt-2 text-sm">
@@ -718,12 +721,12 @@ export default function MedicalHistoryPage() {
 
             {/* Medications */}
             <TabsContent value="medications" className="space-y-6">
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="flex items-center">
-                        <Pill className="mr-2 h-5 w-5 text-blue-500" />
+                        <Pill className="text-muted-foreground mr-2 h-5 w-5" />
                         Medicamentos Actuales
                       </CardTitle>
                     </div>
@@ -731,8 +734,8 @@ export default function MedicalHistoryPage() {
                 </CardHeader>
                 <CardContent>
                   {formData.medications.length === 0 ? (
-                    <div className="py-8 text-center text-gray-500">
-                      <Pill className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+                    <div className="text-muted-foreground py-8 text-center">
+                      <Pill className="text-muted-foreground mx-auto mb-2 h-12 w-12" />
                       <p>No tienes medicamentos registrados</p>
                       {isEditing && (
                         <p className="mt-2 text-sm">
@@ -788,13 +791,13 @@ export default function MedicalHistoryPage() {
               </Card>
 
               {/* Chronic Diseases */}
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>Padecimientos Crónicos</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {formData.chronicDiseases.length === 0 ? (
-                    <div className="py-6 text-center text-gray-500">
+                    <div className="text-muted-foreground py-6 text-center">
                       <p>No tienes padecimientos crónicos registrados</p>
                     </div>
                   ) : (
@@ -846,8 +849,8 @@ export default function MedicalHistoryPage() {
 
             {/* Vaccinations */}
             <TabsContent value="vaccinations" className="space-y-6">
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle>Historial de Vacunas</CardTitle>
@@ -856,8 +859,8 @@ export default function MedicalHistoryPage() {
                 </CardHeader>
                 <CardContent>
                   {formData.immunizations.length === 0 ? (
-                    <div className="py-8 text-center text-gray-500">
-                      <FileText className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+                    <div className="text-muted-foreground py-8 text-center">
+                      <FileText className="text-muted-foreground mx-auto mb-2 h-12 w-12" />
                       <p>No tienes vacunas registradas</p>
                       {isEditing && (
                         <p className="mt-2 text-sm">
@@ -914,13 +917,13 @@ export default function MedicalHistoryPage() {
               </Card>
 
               {/* Surgeries */}
-              <Card className="border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="material-card overflow-hidden">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>Cirugías Previas</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {formData.surgeries.length === 0 ? (
-                    <div className="py-6 text-center text-gray-500">
+                    <div className="text-muted-foreground py-6 text-center">
                       <p>No tienes cirugías registradas</p>
                     </div>
                   ) : (

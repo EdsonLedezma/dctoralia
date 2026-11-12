@@ -1,4 +1,5 @@
 "use client";
+import { DopilotBrand } from "~/components/brand/dopilot-brand";
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -29,7 +30,11 @@ const agenda: Record<
   { time: string; name: string; service: string }[]
 > = {
   today: [
-    { time: "09:30", name: "María López", service: "Consulta de seguimiento" },
+    {
+      time: "09:30",
+      name: "María López",
+      service: "Consulta de seguimiento",
+    },
     { time: "10:15", name: "Carlos Ruiz", service: "Primera consulta" },
     { time: "11:00", name: "Ana Torres", service: "Revisión de resultados" },
   ],
@@ -57,7 +62,7 @@ export function DesignPreview() {
             className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold"
           >
             <ArrowLeft className="size-4" />
-            <span>Dctoralia</span>
+            <DopilotBrand />
           </Link>
           <span className="text-muted-foreground hidden text-xs md:inline">
             Estudio de interfaz · Datos de muestra
@@ -80,7 +85,7 @@ export function DesignPreview() {
             </p>
           </div>
           <p className="text-muted-foreground max-w-48 text-xs leading-5">
-            Una vista de diseño para probar la próxima experiencia de Dctoralia.
+            Una vista de diseño para probar la próxima experiencia de Dopilot.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -92,6 +97,11 @@ export function DesignPreview() {
           <Button asChild variant="outline" className="w-fit">
             <Link href="/design-system/discovery">
               Explorar directorio y filtros <ArrowUpRight />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-fit">
+            <Link href="/design-system/operations">
+              Probar operación del consultorio <ArrowUpRight />
             </Link>
           </Button>
         </div>

@@ -97,7 +97,7 @@ export function DoctorsMap({ doctors }: { doctors: MapDoctor[] }) {
                   <button
                     type="button"
                     aria-label={`Ver ubicación de ${doctor.name}`}
-                    className="focus-visible:outline-ring flex size-11 items-center justify-center rounded-full border-2 border-white bg-[#171717] text-[10px] font-semibold text-white shadow-[0_2px_10px_rgba(0,0,0,0.24)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]"
+                    className="focus-visible:outline-ring border-background bg-foreground text-background flex size-11 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-[0_2px_10px_rgba(0,0,0,0.24)] transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]"
                   >
                     {doctor.name
                       .split(" ")

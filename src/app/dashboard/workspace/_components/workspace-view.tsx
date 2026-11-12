@@ -78,21 +78,21 @@ function WorkspaceHeader({
 }) {
   const plan = workspace.subscription?.plan ?? "Sin plan";
   return (
-    <div className="flex flex-col gap-4 border-b border-[#ebebeb] pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div className="border-border flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <div className="mb-2 flex items-center gap-2 text-xs text-[#737373]">
+        <div className="text-muted-foreground mb-2 flex items-center gap-2 text-xs">
           <Building2 className="h-3.5 w-3.5" />
           Workspace
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-[#171717]">
+          <h1 className="text-foreground truncate text-xl font-semibold tracking-tight">
             {workspace.clinic.name}
           </h1>
-          <Badge variant="outline" className="font-mono text-[10px]">
+          <Badge variant="outline" className="font-mono text-xs">
             {plan}
           </Badge>
         </div>
-        <p className="mt-1 text-sm text-[#737373]">
+        <p className="text-muted-foreground mt-1 text-sm">
           {workspace.membershipRole.toLowerCase()} · {workspace.clinic.slug}
         </p>
       </div>
@@ -113,7 +113,7 @@ function MembersTable({
 }) {
   if (members.length === 0) {
     return (
-      <div className="px-5 py-12 text-center text-sm text-[#737373]">
+      <div className="text-muted-foreground px-5 py-12 text-center text-sm">
         Aún no hay miembros en este workspace.
       </div>
     );
@@ -133,16 +133,16 @@ function MembersTable({
           <TableRow key={member.id}>
             <TableCell>
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f5] text-xs font-medium text-[#525252]">
+                <span className="bg-muted text-muted-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium">
                   {(member.user.name ?? member.user.email)
                     .slice(0, 1)
                     .toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-[#262626]">
+                  <p className="text-card-foreground truncate font-medium">
                     {member.user.name ?? "Sin nombre"}
                   </p>
-                  <p className="truncate text-xs text-[#737373]">
+                  <p className="text-muted-foreground truncate text-xs">
                     {member.user.email}
                   </p>
                 </div>
@@ -200,7 +200,7 @@ function InvitationsList({
 }) {
   if (invitations.length === 0) {
     return (
-      <div className="px-5 py-8 text-center text-sm text-[#737373]">
+      <div className="text-muted-foreground px-5 py-8 text-center text-sm">
         No hay invitaciones recientes.
       </div>
     );
@@ -219,12 +219,12 @@ function InvitationsList({
             className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex min-w-0 items-center gap-3">
-              <Mail className="h-4 w-4 shrink-0 text-[#737373]" />
+              <Mail className="text-muted-foreground h-4 w-4 shrink-0" />
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-[#262626]">
+                <p className="text-card-foreground truncate text-sm font-medium">
                   {invitation.email}
                 </p>
-                <p className="text-xs text-[#737373]">
+                <p className="text-muted-foreground text-xs">
                   Expira {formatDate(invitation.expiresAt)}
                 </p>
               </div>
@@ -267,7 +267,7 @@ function LocationsList({
 }) {
   if (locations.length === 0) {
     return (
-      <div className="px-5 py-8 text-center text-sm text-[#737373]">
+      <div className="text-muted-foreground px-5 py-8 text-center text-sm">
         Aún no hay ubicaciones activas.
       </div>
     );
@@ -281,9 +281,9 @@ function LocationsList({
           className="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex min-w-0 items-start gap-3">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+            <MapPin className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-[#262626]">
+              <p className="text-card-foreground truncate text-sm font-medium">
                 {location.name}
                 {!location.isActive && (
                   <span className="text-muted-foreground ml-2 text-xs font-normal">
@@ -291,7 +291,7 @@ function LocationsList({
                   </span>
                 )}
               </p>
-              <p className="truncate text-xs text-[#737373]">
+              <p className="text-muted-foreground truncate text-xs">
                 {location.address ?? "Sin dirección"} ·{" "}
                 {location.timezone ?? "Zona horaria de la clínica"}
               </p>
@@ -307,7 +307,11 @@ function LocationsList({
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-[#737373]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                >
                   Archivar
                 </Button>
               </AlertDialogTrigger>
@@ -466,7 +470,7 @@ export function WorkspaceView() {
 
   if (workspaceQuery.isLoading) {
     return (
-      <div className="min-h-[100dvh] bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="bg-background min-h-[100dvh] px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-5xl space-y-5">
           <Skeleton className="h-8 w-56" />
           <Skeleton className="h-24 w-full rounded-lg" />
@@ -481,9 +485,9 @@ export function WorkspaceView() {
 
   if (!workspace || workspaceQuery.isError || workspaceQuery.data?.error) {
     return (
-      <div className="min-h-[100dvh] bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="bg-background min-h-[100dvh] px-4 py-6 sm:px-8 sm:py-8">
         <div
-          className="mx-auto max-w-5xl border-l-2 border-rose-500 bg-white px-4 py-3 text-sm text-[#525252]"
+          className="border-foreground/50 bg-card text-muted-foreground mx-auto max-w-5xl border-l-2 px-4 py-3 text-sm"
           role="alert"
         >
           No se pudo cargar el workspace.
@@ -493,7 +497,7 @@ export function WorkspaceView() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+    <div className="bg-background min-h-[100dvh] px-4 py-6 sm:px-8 sm:py-8">
       <div className="mx-auto max-w-5xl space-y-5">
         <WorkspaceHeader
           workspace={workspace}
@@ -504,13 +508,13 @@ export function WorkspaceView() {
         <VoiceAgentSettings />
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Card className="overflow-hidden rounded-lg border-[#ebebeb] bg-white shadow-none">
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-4">
+          <Card className="border-border bg-card overflow-hidden rounded-lg shadow-none">
+            <div className="border-border flex items-center justify-between border-b px-5 py-4">
               <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-[#737373]" />
+                <Users className="text-muted-foreground h-4 w-4" />
                 <h2 className="text-sm font-semibold">Miembros</h2>
               </div>
-              <span className="font-mono text-xs text-[#737373]">
+              <span className="text-muted-foreground font-mono text-xs">
                 {membersQuery.data?.result?.length ?? 0}
               </span>
             </div>
@@ -528,13 +532,13 @@ export function WorkspaceView() {
             )}
           </Card>
 
-          <Card className="overflow-hidden rounded-lg border-[#ebebeb] bg-white shadow-none">
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-4">
+          <Card className="border-border bg-card overflow-hidden rounded-lg shadow-none">
+            <div className="border-border flex items-center justify-between border-b px-5 py-4">
               <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-[#737373]" />
+                <Mail className="text-muted-foreground h-4 w-4" />
                 <h2 className="text-sm font-semibold">Invitaciones</h2>
               </div>
-              <span className="font-mono text-xs text-[#737373]">
+              <span className="text-muted-foreground font-mono text-xs">
                 {invitationsQuery.data?.result?.length ?? 0}
               </span>
             </div>
@@ -551,10 +555,10 @@ export function WorkspaceView() {
             )}
           </Card>
 
-          <Card className="overflow-hidden rounded-lg border-[#ebebeb] bg-white shadow-none">
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-4">
+          <Card className="border-border bg-card overflow-hidden rounded-lg shadow-none">
+            <div className="border-border flex items-center justify-between border-b px-5 py-4">
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-[#737373]" />
+                <MapPin className="text-muted-foreground h-4 w-4" />
                 <h2 className="text-sm font-semibold">Ubicaciones</h2>
               </div>
               <Button

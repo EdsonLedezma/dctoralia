@@ -1,7 +1,7 @@
 # Portada
 
 **Reporte técnico: Integración Continua (CI) vinculada al sistema de control de versiones**  
-**Proyecto:** dctoralia  
+**Proyecto:** Dopilot
 **Herramienta CI:** GitHub Actions  
 **Sistema de control de versiones:** Git (repositorio en GitHub)  
 **Fecha:** 13 de marzo de 2026  

@@ -1,3 +1,4 @@
+import { previewPath } from "./preview-path";
 import { expect, test } from "@playwright/test";
 
 test("selects periods with arrow keys and a light lens", async ({ page }) => {
@@ -83,7 +84,7 @@ test("uses a mobile sheet without overflow at 375px", async ({ page }) => {
   await expect(trigger).toContainText("2 nov 2026");
   await expect(trigger).toBeFocused();
   await page.screenshot({
-    path: "test-results/wave1-mobile-light.png",
+    path: previewPath("wave1-mobile-light.png"),
     fullPage: true,
   });
 });
@@ -132,7 +133,7 @@ test("keeps landing calls to action light and semantically navigable", async ({
     ),
   ).toBe(true);
   await page.screenshot({
-    path: "test-results/wave1-landing.png",
+    path: previewPath("wave1-landing.png"),
     fullPage: true,
   });
 });
@@ -171,8 +172,16 @@ test("uses distinct blur presets with legible text on both themes", async ({
     for (const element of [plain, content, media]) {
       const contrast = await element.evaluate((node) => {
         const style = getComputedStyle(node);
-        const color = (value: string) =>
-          (value.match(/[\d.]+/g) ?? []).map(Number);
+        const color = (value: string) => {
+          // Production CSS may serialize custom colors as hex. Resolve them
+          // through the browser before applying the same alpha/contrast math.
+          const probe = document.createElement("span");
+          probe.style.color = value;
+          node.appendChild(probe);
+          const resolved = getComputedStyle(probe).color;
+          probe.remove();
+          return (resolved.match(/[\d.]+/g) ?? []).map(Number);
+        };
         const fg = color(style.color);
         const fill = color(style.getPropertyValue("--material-fill"));
         const gloss = color(style.getPropertyValue("--glass-gloss"));

@@ -1,5 +1,6 @@
 "use client";
 
+import { DopilotBrand } from "~/components/brand/dopilot-brand";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
@@ -19,7 +20,6 @@ import {
   PanelLeftOpen,
   Search,
   Settings,
-  Stethoscope,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -149,7 +149,7 @@ function MobileNavLink({
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      className={`focus-visible:ring-ring active:bg-accent flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 text-[11px] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none ${active ? "glass-bubble text-foreground" : "text-muted-foreground"}`}
+      className={`focus-visible:ring-ring active:bg-accent flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none ${active ? "glass-bubble text-foreground" : "text-muted-foreground"}`}
     >
       <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.2 : 1.8} />
       <span className="max-w-full truncate">
@@ -270,14 +270,14 @@ export function ProductShellView({
   useEffect(() => {
     if (navigator.userAgent.includes("Mac")) setSearchShortcut("⌘ K");
     setSidebarCollapsed(
-      window.localStorage.getItem("dctoralia-sidebar-collapsed") === "true",
+      window.localStorage.getItem("dopilot-sidebar-collapsed") === "true",
     );
   }, []);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((current) => {
       window.localStorage.setItem(
-        "dctoralia-sidebar-collapsed",
+        "dopilot-sidebar-collapsed",
         String(!current),
       );
       return !current;
@@ -340,22 +340,13 @@ export function ProductShellView({
           <Link
             href={role === "DOCTOR" ? "/dashboard" : "/patient/dashboard"}
             className={`text-sidebar-primary-foreground focus-visible:ring-sidebar-ring flex min-h-11 items-center gap-2 rounded-xl px-2 focus-visible:ring-2 focus-visible:outline-none ${sidebarCollapsed ? "justify-center" : ""}`}
-            aria-label="Dctoralia, inicio"
-            title={sidebarCollapsed ? "Dctoralia, inicio" : undefined}
+            aria-label="Dopilot, inicio"
+            title={sidebarCollapsed ? "Dopilot, inicio" : undefined}
           >
-            <span className="bg-sidebar-foreground text-sidebar flex size-8 shrink-0 items-center justify-center rounded-xl shadow-[0_4px_14px_rgba(255,255,255,0.06)]">
-              {role === "DOCTOR" ? (
-                <Stethoscope className="size-[17px]" />
-              ) : (
-                <Activity className="size-[17px]" />
-              )}
-            </span>
-            {!sidebarCollapsed && (
-              <span className="text-sm font-semibold tracking-[-0.03em]">
-                Dctoralia
-                <span className="text-sidebar-foreground/65 ml-1">.</span>
-              </span>
-            )}
+            <DopilotBrand
+              markOnly={sidebarCollapsed}
+              className="text-sidebar-foreground"
+            />
           </Link>
           <button
             type="button"
@@ -489,7 +480,7 @@ export function ProductShellView({
       <div className="min-w-0 flex-1">
         <Dialog open={commandOpen} onOpenChange={setCommandOpen}>
           <DialogContent className="border-border bg-card top-[18%] max-w-xl translate-y-0 gap-0 overflow-hidden rounded-[24px] p-0 shadow-[0_20px_60px_rgba(0,0,0,0.16)] sm:top-[20%]">
-            <DialogTitle className="sr-only">Buscar en Dctoralia</DialogTitle>
+            <DialogTitle className="sr-only">Buscar en Dopilot</DialogTitle>
             <DialogDescription className="sr-only">
               Busca una sección y navega con el teclado.
             </DialogDescription>
@@ -540,16 +531,7 @@ export function ProductShellView({
               href={role === "DOCTOR" ? "/dashboard" : "/patient/dashboard"}
               className="flex items-center gap-2 font-semibold tracking-tight"
             >
-              <span className="bg-sidebar text-sidebar-primary-foreground flex h-8 w-8 items-center justify-center rounded-xl">
-                {role === "DOCTOR" ? (
-                  <Stethoscope className="h-4 w-4" />
-                ) : (
-                  <Activity className="h-4 w-4" />
-                )}
-              </span>
-              <span className="text-foreground">
-                Dctoralia<span className="text-muted-foreground">.</span>
-              </span>
+              <DopilotBrand />
             </Link>
             <div className="flex items-center gap-1">
               {role === "DOCTOR" && workspaceOptions.length > 1 && (
@@ -644,7 +626,7 @@ export function ProductShellView({
             <button
               type="button"
               onClick={() => setMoreNavOpen(true)}
-              className={`focus-visible:ring-ring active:bg-accent flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 text-[11px] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none ${moreNavOpen || secondaryMobileItems.some((item) => isActive(pathname, item.href)) ? "glass-bubble text-foreground" : "text-muted-foreground"}`}
+              className={`focus-visible:ring-ring active:bg-accent flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none ${moreNavOpen || secondaryMobileItems.some((item) => isActive(pathname, item.href)) ? "glass-bubble text-foreground" : "text-muted-foreground"}`}
               aria-haspopup="dialog"
               aria-expanded={moreNavOpen}
             >
@@ -661,7 +643,7 @@ export function ProductShellView({
             </span>
             <span className="text-foreground font-medium">
               {items.find((item) => isActive(pathname, item.href))?.label ??
-                "Dctoralia"}
+                "Dopilot"}
             </span>
           </p>
           <AppearanceSwitcher />

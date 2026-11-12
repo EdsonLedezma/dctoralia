@@ -1,3 +1,4 @@
+import { previewPath } from "./preview-path";
 import { expect, test, type Page } from "@playwright/test";
 import superjson from "superjson";
 import {
@@ -113,11 +114,15 @@ async function mockBooking(page: Page, options: MockOptions = {}) {
 }
 const typedDate = (date: string) => date.split("-").reverse().join("/");
 async function capture(page: Page, name: string, fullPage = true) {
-  await page.screenshot({
-    path: `test-results/discovery-${name}.png`,
-    fullPage,
-    animations: "disabled",
-  });
+  // Chromium on Windows can transiently reject capture while its compositor
+  // settles. Retry the artifact only; all behavior assertions remain unchanged.
+  await expect(async () => {
+    await page.screenshot({
+      path: previewPath(`discovery-${name}.png`),
+      fullPage,
+      animations: "disabled",
+    });
+  }).toPass({ intervals: [100, 250], timeout: 5_000 });
 }
 async function chooseTime(page: Page, time: string) {
   if ((page.viewportSize()?.width ?? 1440) < 640) {
@@ -211,7 +216,7 @@ test("mobile directory supports nested filters, map access and recovery states",
     map.getByRole("heading", { name: "Doctores en el mapa", exact: true }),
   ).toBeVisible();
   await page.screenshot({
-    path: "test-results/discovery-map-mobile.png",
+    path: previewPath("discovery-map-mobile.png"),
     animations: "disabled",
   });
   await map.getByRole("button", { name: "Cerrar", exact: true }).click();

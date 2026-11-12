@@ -1,3 +1,4 @@
+import { previewPath } from "./preview-path";
 import { expect, test } from "@playwright/test";
 
 test("presents real WebGPU frames and releases the device on preference change", async ({
@@ -33,9 +34,9 @@ test("presents real WebGPU frames and releases the device on preference change",
       page.evaluate(() => Number(sessionStorage.getItem("glass-created"))),
     )
     .toBeGreaterThan(0);
-  await artwork.screenshot({ path: "test-results/liquid-glass-gpu.png" });
+  await artwork.screenshot({ path: previewPath("liquid-glass-gpu.png") });
   await page.screenshot({
-    path: "test-results/design-desktop.png",
+    path: previewPath("design-desktop.png"),
     fullPage: true,
   });
   // Force the media preference that must tear down the running GPU scene.
@@ -140,7 +141,7 @@ test("keeps the mobile layout within the viewport with reduced motion", async ({
   await expect(dateTrigger).toContainText("2 nov 2026");
   await page.keyboard.press("Escape");
   await page.screenshot({
-    path: "test-results/design-mobile.png",
+    path: previewPath("design-mobile.png"),
     fullPage: true,
   });
 });
@@ -170,7 +171,7 @@ test("keeps dark dialogs and high contrast materials legible", async ({
     ),
   ).toBe("none");
   await page.screenshot({
-    path: "test-results/design-dark.png",
+    path: previewPath("design-dark.png"),
     fullPage: true,
   });
 });

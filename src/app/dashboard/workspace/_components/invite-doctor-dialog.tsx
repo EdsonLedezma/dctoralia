@@ -53,20 +53,20 @@ export function InviteDoctorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden border-[#ebebeb] bg-white p-0 shadow-[0_20px_60px_rgba(0,0,0,0.14)] sm:max-w-md">
-        <DialogHeader className="border-b border-[#ebebeb] px-5 py-4 text-left">
+      <DialogContent className="border-border bg-card gap-0 overflow-hidden p-0 shadow-[0_20px_60px_rgba(0,0,0,0.14)] sm:max-w-md">
+        <DialogHeader className="border-border border-b px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Mail className="h-4 w-4 text-[#737373]" />
+            <Mail className="text-muted-foreground h-4 w-4" />
             Invitar doctor
           </DialogTitle>
-          <DialogDescription className="text-xs text-[#737373]">
+          <DialogDescription className="text-muted-foreground text-xs">
             El doctor debe aceptar con una cuenta cuyo correo coincida.
           </DialogDescription>
         </DialogHeader>
 
         {inviteToken ? (
           <div className="space-y-4 px-5 py-5">
-            <div className="border-l-2 border-emerald-500 bg-[#fafafa] px-3 py-2 text-sm text-[#404040]">
+            <div className="border-foreground/40 bg-muted text-foreground border-l-2 px-3 py-2 text-sm">
               Invitación creada. Este token sólo se muestra una vez mientras se
               conecta el envío por Sent.
             </div>
@@ -87,7 +87,7 @@ export function InviteDoctorDialog({
                   aria-label="Copiar token"
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
+                    <Check className="text-muted-foreground h-4 w-4" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}

@@ -378,9 +378,9 @@ export default function PatientProfilePage() {
           className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-8"
           aria-label="Cargando perfil"
         >
-          <div className="h-32 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
-          <div className="h-56 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
-          <div className="h-48 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
+          <div className="material-card border-border bg-card h-32 animate-pulse rounded-2xl border motion-reduce:animate-none" />
+          <div className="material-card border-border bg-card h-56 animate-pulse rounded-2xl border motion-reduce:animate-none" />
+          <div className="material-card border-border bg-card h-48 animate-pulse rounded-2xl border motion-reduce:animate-none" />
         </main>
       </ProductShell>
     );
@@ -390,12 +390,12 @@ export default function PatientProfilePage() {
     return (
       <ProductShell role="PATIENT">
         <main className="mx-auto max-w-3xl px-4 py-12 sm:px-8">
-          <Card className="border-[#ebebeb] bg-white shadow-none">
+          <Card className="border-border bg-card shadow-none">
             <CardContent className="p-6 text-center">
               <h1 className="text-lg font-semibold">
                 No pudimos cargar tu perfil
               </h1>
-              <p className="mt-2 text-sm text-[#6b6b6b]">
+              <p className="text-muted-foreground mt-2 text-sm">
                 Intenta de nuevo. Tus cambios guardados siguen protegidos.
               </p>
               <Button className="mt-5" onClick={() => void refetch()}>
@@ -410,16 +410,16 @@ export default function PatientProfilePage() {
 
   return (
     <ProductShell role="PATIENT">
-      <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-5xl space-y-8">
           {/* Profile Header */}
           <MotionList>
-            <Card className="border-[#ebebeb] bg-white shadow-none">
+            <Card className="border-border bg-card shadow-none">
               <CardContent className="p-5 sm:p-6">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                     <div className="relative">
-                      <Avatar className="h-16 w-16 rounded-full border border-[#ebebeb] sm:h-20 sm:w-20">
+                      <Avatar className="border-border h-16 w-16 rounded-full border sm:h-20 sm:w-20">
                         <AvatarImage
                           src={
                             avatarPreview ??
@@ -429,7 +429,7 @@ export default function PatientProfilePage() {
                           }
                           alt=""
                         />
-                        <AvatarFallback className="text-lg font-medium text-[#525252] sm:text-xl">
+                        <AvatarFallback className="text-muted-foreground text-lg font-medium sm:text-xl">
                           {initials || "P"}
                         </AvatarFallback>
                       </Avatar>
@@ -437,7 +437,7 @@ export default function PatientProfilePage() {
                         <label
                           htmlFor="avatarUpload"
                           title="Cambiar foto de perfil"
-                          className="absolute -right-2 -bottom-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#171717] text-white shadow-sm transition-transform duration-150 ease-out hover:scale-105"
+                          className="bg-secondary text-foreground absolute -right-2 -bottom-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full shadow-sm transition-transform duration-150 ease-out hover:scale-105"
                         >
                           <Camera aria-hidden="true" className="h-4 w-4" />
                           <span className="sr-only">
@@ -465,10 +465,10 @@ export default function PatientProfilePage() {
                         {profileData.firstName || "Tu perfil"}{" "}
                         {profileData.lastName}
                       </h1>
-                      <p className="mt-1 text-sm text-[#6b6b6b]">
+                      <p className="text-muted-foreground mt-1 text-sm">
                         {age === null ? "Edad no registrada" : `${age} años`}
                       </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#6b6b6b]">
+                      <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <Mail className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">
@@ -499,7 +499,7 @@ export default function PatientProfilePage() {
                     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                       {hasChanges && (
                         <span
-                          className="px-1 text-xs text-[#737373]"
+                          className="text-muted-foreground px-1 text-xs"
                           aria-live="polite"
                         >
                           Cambios sin guardar
@@ -555,7 +555,7 @@ export default function PatientProfilePage() {
           </MotionList>
 
           {/* Health Summary */}
-          <div className="border-y border-[#ebebeb] bg-white px-4 py-4 sm:px-5">
+          <div className="border-border bg-card border-y px-4 py-4 sm:px-5">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
               {[
                 [
@@ -579,10 +579,10 @@ export default function PatientProfilePage() {
                 ["IMC", calculateBMI(profileData.weight, profileData.height)],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-[11px] font-medium tracking-[0.08em] text-[#737373] uppercase">
+                  <dt className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                     {label}
                   </dt>
-                  <dd className="mt-1 text-sm font-medium text-[#171717]">
+                  <dd className="text-foreground mt-1 text-sm font-medium">
                     {value}
                   </dd>
                 </div>
@@ -591,8 +591,8 @@ export default function PatientProfilePage() {
           </div>
 
           {/* Personal Information */}
-          <Card className="border-[#ebebeb] bg-white shadow-none">
-            <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+          <Card className="border-border bg-card shadow-none">
+            <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
               <CardTitle className="text-base">Información personal</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 p-5 sm:p-6">
@@ -600,7 +600,7 @@ export default function PatientProfilePage() {
                 {isEditing && (
                   <div className="flex flex-wrap items-center gap-3 md:col-span-2">
                     <Label htmlFor="avatarUpload">Foto de perfil</Label>
-                    <span className="text-xs text-[#737373]">
+                    <span className="text-muted-foreground text-xs">
                       JPG, PNG, WebP o AVIF · máximo 5 MB
                     </span>
                     {profileData.imageUrl && (
@@ -618,7 +618,7 @@ export default function PatientProfilePage() {
                     )}
                     {isUploadingAvatar && (
                       <span
-                        className="w-full text-xs text-[#737373]"
+                        className="text-muted-foreground w-full text-xs"
                         aria-live="polite"
                       >
                         Subiendo foto… {Math.round(avatarProgress)}%
@@ -754,10 +754,10 @@ export default function PatientProfilePage() {
           </Card>
 
           {/* Medical Information */}
-          <Card className="border-[#ebebeb] bg-white shadow-none">
-            <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+          <Card className="border-border bg-card shadow-none">
+            <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
               <CardTitle className="flex items-center text-base">
-                <Heart className="mr-2 h-4 w-4 text-[#737373]" />
+                <Heart className="text-muted-foreground mr-2 h-4 w-4" />
                 Información médica
               </CardTitle>
             </CardHeader>
@@ -895,8 +895,8 @@ export default function PatientProfilePage() {
           </Card>
 
           {/* Emergency Contact */}
-          <Card className="border-[#ebebeb] bg-white shadow-none">
-            <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+          <Card className="border-border bg-card shadow-none">
+            <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
               <CardTitle className="text-base">
                 Contacto de emergencia
               </CardTitle>
@@ -957,35 +957,35 @@ export default function PatientProfilePage() {
 
           {/* Appointment reminders */}
           <MotionList>
-            <Card className="border-[#ebebeb] bg-white shadow-none">
-              <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+            <Card className="border-border bg-card shadow-none">
+              <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                 <CardTitle className="flex items-center text-base">
-                  <MessageCircle className="mr-2 h-4 w-4 text-[#737373]" />
+                  <MessageCircle className="text-muted-foreground mr-2 h-4 w-4" />
                   Mensajes de recordatorio
                 </CardTitle>
-                <p className="text-sm text-[#6b6b6b]">
+                <p className="text-muted-foreground text-sm">
                   Elige por separado los avisos de citas y las fechas límite de
                   seguimiento, para cada consultorio y canal.
                 </p>
               </CardHeader>
               <CardContent className="space-y-5 p-5 sm:p-6">
                 {isReminderPreferencesLoading ? (
-                  <div className="h-20 animate-pulse rounded-md bg-[#f5f5f5] motion-reduce:animate-none" />
+                  <div className="bg-muted h-20 animate-pulse rounded-md motion-reduce:animate-none" />
                 ) : isReminderPreferencesError ||
                   reminderPreferencesRes?.error ? (
-                  <p className="text-sm text-[#c50000]" role="alert">
+                  <p className="text-destructive text-sm" role="alert">
                     No pudimos cargar tus preferencias. Actualiza la página e
                     inténtalo de nuevo.
                   </p>
                 ) : reminderPreferences.length === 0 ? (
-                  <p className="rounded-md border border-dashed border-[#d4d4d4] px-4 py-5 text-sm text-[#737373]">
+                  <p className="border-border text-muted-foreground rounded-md border border-dashed px-4 py-5 text-sm">
                     Tus preferencias aparecerán aquí cuando tengas relación con
                     un consultorio.
                   </p>
                 ) : (
                   reminderPreferences.map((clinic) => (
                     <section key={clinic.id} className="space-y-3">
-                      <h3 className="text-sm font-medium text-[#171717]">
+                      <h3 className="text-foreground text-sm font-medium">
                         {clinic.name}
                       </h3>
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -994,18 +994,18 @@ export default function PatientProfilePage() {
                           return (
                             <div
                               key={channel.channel}
-                              className="space-y-3 rounded-lg border border-[#ebebeb] p-4"
+                              className="border-border space-y-3 rounded-lg border p-4"
                             >
                               <div className="flex items-center gap-3">
                                 {isWhatsApp ? (
                                   <MessageCircle
                                     aria-hidden="true"
-                                    className="h-4 w-4 shrink-0 text-[#525252]"
+                                    className="text-muted-foreground h-4 w-4 shrink-0"
                                   />
                                 ) : (
                                   <MessageSquareText
                                     aria-hidden="true"
-                                    className="h-4 w-4 shrink-0 text-[#525252]"
+                                    className="text-muted-foreground h-4 w-4 shrink-0"
                                   />
                                 )}
                                 <div>
@@ -1027,10 +1027,10 @@ export default function PatientProfilePage() {
                                       className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                                     >
                                       <div className="min-w-0">
-                                        <p className="text-xs font-medium text-[#404040]">
+                                        <p className="text-foreground text-xs font-medium">
                                           {label}
                                         </p>
-                                        <p className="mt-0.5 text-[11px] text-[#888]">
+                                        <p className="text-muted-foreground mt-0.5 text-xs">
                                           {purpose.enabled
                                             ? "Activado"
                                             : "Desactivado"}
@@ -1073,7 +1073,7 @@ export default function PatientProfilePage() {
                     </section>
                   ))
                 )}
-                <p className="text-xs leading-5 text-[#737373]">
+                <p className="text-muted-foreground text-xs leading-5">
                   Cada propósito requiere autorización independiente. Los
                   mensajes de seguimiento usan texto neutro: nunca incluyen el
                   título, detalles ni datos clínicos de la tarea. Se programan
@@ -1085,10 +1085,10 @@ export default function PatientProfilePage() {
           </MotionList>
 
           {/* Insurance Information */}
-          <Card className="border-[#ebebeb] bg-white shadow-none">
-            <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+          <Card className="border-border bg-card shadow-none">
+            <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
               <CardTitle className="flex items-center text-base">
-                <Shield className="mr-2 h-4 w-4 text-[#737373]" />
+                <Shield className="text-muted-foreground mr-2 h-4 w-4" />
                 Información del seguro
               </CardTitle>
             </CardHeader>

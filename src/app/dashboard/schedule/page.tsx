@@ -151,12 +151,12 @@ export default function ScheduleManagementPage() {
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
       <ProductShell role="DOCTOR">
-        <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+        <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
           <div className="mx-auto max-w-5xl">
             <div className="mb-6 flex items-end justify-between gap-4">
               <div>
-                <p className="text-sm text-[#6b6b6b]">Operación</p>
-                <h1 className="mt-1 text-xl font-semibold tracking-tight text-[#171717]">
+                <p className="text-muted-foreground text-sm">Operación</p>
+                <h1 className="text-foreground mt-1 text-xl font-semibold tracking-tight">
                   Horarios
                 </h1>
               </div>
@@ -170,14 +170,16 @@ export default function ScheduleManagementPage() {
 
             {/* Create Form */}
             {isCreating && (
-              <Card className="mb-6 border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb]">
-                  <CardTitle className="text-base font-semibold">Configurar Nuevo Horario</CardTitle>
+              <Card className="border-border bg-card mb-6 shadow-none">
+                <CardHeader className="border-border border-b">
+                  <CardTitle className="text-base font-semibold">
+                    Configurar Nuevo Horario
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6">
                   {/* Presets */}
                   <div className="mb-6 space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                    <Label className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                       Plantillas Rápidas
                     </Label>
                     <div className="flex flex-wrap gap-2">
@@ -185,7 +187,7 @@ export default function ScheduleManagementPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="text-xs border-[#ebebeb] bg-[#fafafa] hover:bg-[#171717] hover:text-white"
+                        className="border-border bg-background hover:bg-secondary hover:text-foreground text-xs"
                         onClick={() =>
                           setFormData((prev) => ({
                             ...prev,
@@ -200,7 +202,7 @@ export default function ScheduleManagementPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="text-xs border-[#ebebeb] bg-[#fafafa] hover:bg-[#171717] hover:text-white"
+                        className="border-border bg-background hover:bg-secondary hover:text-foreground text-xs"
                         onClick={() =>
                           setFormData((prev) => ({
                             ...prev,
@@ -215,7 +217,7 @@ export default function ScheduleManagementPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="text-xs border-[#ebebeb] bg-[#fafafa] hover:bg-[#171717] hover:text-white"
+                        className="border-border bg-background hover:bg-secondary hover:text-foreground text-xs"
                         onClick={() =>
                           setFormData((prev) => ({
                             ...prev,
@@ -231,7 +233,7 @@ export default function ScheduleManagementPage() {
 
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
-                      <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                      <Label className="text-muted-foreground mb-2 block text-xs font-semibold tracking-wider uppercase">
                         Día de la Semana
                       </Label>
                       <div className="flex flex-wrap gap-2">
@@ -253,10 +255,10 @@ export default function ScheduleManagementPage() {
                               }
                               className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
                                 isSelected
-                                  ? "border-[#171717] bg-[#171717] text-white"
+                                  ? "border-foreground bg-secondary text-foreground"
                                   : isConfigured
-                                    ? "border-[#ebebeb] bg-[#f5f5f5] text-[#737373] opacity-60"
-                                    : "border-[#ebebeb] bg-white text-[#171717] hover:border-[#171717]"
+                                    ? "border-border bg-muted text-muted-foreground opacity-60"
+                                    : "border-border bg-card text-foreground hover:border-foreground"
                               }`}
                             >
                               {day.label}
@@ -269,7 +271,10 @@ export default function ScheduleManagementPage() {
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <Label htmlFor="startTime" className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                        <Label
+                          htmlFor="startTime"
+                          className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                        >
                           Hora de Inicio
                         </Label>
                         <Select
@@ -291,7 +296,10 @@ export default function ScheduleManagementPage() {
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="endTime" className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
+                        <Label
+                          htmlFor="endTime"
+                          className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+                        >
                           Hora de Fin
                         </Label>
                         <Select
@@ -325,7 +333,9 @@ export default function ScheduleManagementPage() {
                         }
                         className="w-full sm:w-auto"
                       >
-                        {createSchedule.isPending ? "Guardando..." : "Guardar Horario"}
+                        {createSchedule.isPending
+                          ? "Guardando..."
+                          : "Guardar Horario"}
                       </Button>
                       <Button
                         type="button"
@@ -343,7 +353,7 @@ export default function ScheduleManagementPage() {
 
             {/* Schedules List Grouped by Day */}
             {isLoading ? (
-              <Card className="border-[#ebebeb] bg-white shadow-none">
+              <Card className="border-border bg-card shadow-none">
                 <CardContent
                   className="space-y-3 p-6"
                   aria-label="Cargando horarios"
@@ -354,10 +364,10 @@ export default function ScheduleManagementPage() {
                 </CardContent>
               </Card>
             ) : isError || schedulesRes?.error ? (
-              <Card className="border-[#ebebeb] bg-white shadow-none">
+              <Card className="border-border bg-card shadow-none">
                 <CardContent className="p-10 text-center">
                   <p className="font-medium">No pudimos cargar tus horarios.</p>
-                  <p className="mt-2 text-sm text-[#6b6b6b]">
+                  <p className="text-muted-foreground mt-2 text-sm">
                     {schedulesRes?.error
                       ? schedulesRes.message
                       : "Intenta actualizar la página."}
@@ -365,7 +375,7 @@ export default function ScheduleManagementPage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="overflow-hidden border-[#ebebeb] bg-white shadow-none">
+              <Card className="border-border bg-card overflow-hidden shadow-none">
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <Table>
@@ -438,7 +448,7 @@ export default function ScheduleManagementPage() {
                                             : "Activar"}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
-                                          className="text-red-600 focus:text-red-600"
+                                          className="text-destructive focus:text-destructive"
                                           onSelect={() =>
                                             setScheduleToDelete(schedule.id)
                                           }
@@ -457,7 +467,7 @@ export default function ScheduleManagementPage() {
                           <TableRow>
                             <TableCell
                               colSpan={4}
-                              className="h-24 text-center text-sm text-[#737373]"
+                              className="text-muted-foreground h-24 text-center text-sm"
                             >
                               Aún no tienes horarios configurados.
                             </TableCell>
@@ -489,7 +499,7 @@ export default function ScheduleManagementPage() {
                 onClick={() =>
                   scheduleToDelete && void handleDelete(scheduleToDelete)
                 }
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-secondary hover:bg-secondary"
               >
                 Eliminar
               </AlertDialogAction>

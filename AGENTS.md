@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Diseño de Dctoralia
+## Diseño de Dopilot
 
 La fuente vigente para cambios de interfaz es `docs/design/shadcn-apple.md`.
 Leerla antes de cambiar pantallas o componentes. Usar shadcn/Radix existentes,

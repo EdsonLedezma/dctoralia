@@ -70,13 +70,13 @@ export function LocationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden border-[#ebebeb] bg-white p-0 shadow-[0_20px_60px_rgba(0,0,0,0.14)] sm:max-w-md">
-        <DialogHeader className="border-b border-[#ebebeb] px-5 py-4 text-left">
+      <DialogContent className="border-border bg-card gap-0 overflow-hidden p-0 shadow-[0_20px_60px_rgba(0,0,0,0.14)] sm:max-w-md">
+        <DialogHeader className="border-border border-b px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <MapPin className="h-4 w-4 text-[#737373]" />
+            <MapPin className="text-muted-foreground h-4 w-4" />
             {location ? "Editar ubicación" : "Nueva ubicación"}
           </DialogTitle>
-          <DialogDescription className="text-xs text-[#737373]">
+          <DialogDescription className="text-muted-foreground text-xs">
             Define dónde atiende el equipo. Puedes cambiarlo después.
           </DialogDescription>
         </DialogHeader>

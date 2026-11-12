@@ -1,9 +1,12 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const previewUrl = process.env.PLAYWRIGHT_BASE_URL;
 
 export default defineConfig({
   testDir: "./tests/browser",
+  outputDir: join(tmpdir(), "dopilot-playwright-results"),
   timeout: 90_000,
   expect: { timeout: 30_000 },
   workers: 1,

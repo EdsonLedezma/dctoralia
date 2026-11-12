@@ -1,3 +1,4 @@
+import { DopilotBrand } from "~/components/brand/dopilot-brand";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Stethoscope, Users } from "lucide-react";
 import { AppearanceSwitcher } from "~/components/shared/appearance-switcher";
@@ -21,7 +22,7 @@ export function AuthShell({
           className="focus-visible:outline-ring inline-flex min-h-11 items-center gap-2 rounded-full text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4"
         >
           <ArrowLeft className="size-4" />
-          <span>Dctoralia</span>
+          <DopilotBrand />
         </Link>
         <AppearanceSwitcher />
       </header>
@@ -81,7 +82,7 @@ export function AuthShell({
         </Card>
       </main>
       <footer className="text-muted-foreground px-5 py-6 text-center text-xs">
-        Dctoralia · Tu consulta, en calma.
+        Dopilot · Tu consulta, en calma.
       </footer>
     </div>
   );

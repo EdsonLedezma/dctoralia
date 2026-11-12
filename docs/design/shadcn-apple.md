@@ -1,6 +1,6 @@
-# Dctoralia · shadcn + Apple
+# Dopilot · shadcn + Apple
 
-Contrato de diseño vigente · 29 de octubre de 2026 · Revisión 4: descubrimiento, perfil profesional y reserva con cristal neutro.
+Contrato de diseño vigente · 11 de noviembre de 2026 · Revisión 6: identidad Dopilot, SVG oficiales y fondo de marca WebGPU.
 
 ## 1. Dirección
 
@@ -12,7 +12,7 @@ Este archivo reemplaza `vercel-DESIGN.md`, `MASTER.md`, `PLAN_UX_PRODUCTO_CLINIC
 
 ## 2. Fuentes consultadas y qué tomamos
 
-| Fuente | Aplicación en Dctoralia |
+| Fuente | Aplicación en Dopilot |
 | --- | --- |
 | [Apple: Materials](https://developer.apple.com/design/human-interface-guidelines/materials) | Liquid Glass como capa funcional de navegación y controles; material regular para legibilidad; uso selectivo. |
 | [Apple: Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/liquid-glass) | Jerarquía, continuidad entre dispositivos, posiciones predecibles y contenido como protagonista. |
@@ -143,7 +143,7 @@ Próxima consulta como prioridad, con fecha, hora, profesional y acción útil. 
 
 ### Marketing
 
-Promesa breve, demostración creíble del producto y una acción principal. WebGPU puede demostrar el material en una escena aislada. Conservar legibilidad, atribución del ejemplo y alternativa sólida. El logo TypeGPU pertenece a la demostración, no reemplaza la identidad de Dctoralia.
+Promesa breve, demostración creíble del producto y una acción principal. WebGPU puede demostrar el material en una escena aislada. Conservar legibilidad, atribución del ejemplo y alternativa sólida. El logo TypeGPU pertenece a la demostración, no reemplaza la identidad de Dopilot.
 
 ## 10. Movimiento
 
@@ -222,11 +222,11 @@ Se conservan las cinco capturas en `docs/design/references/` para que el plan no
 
 | Referencia | Qué conservar | Adaptación al producto |
 | --- | --- | --- |
-| [Calendario oscuro](references/glass-calendar-dark.png) | Trigger píldora; popover con radio amplio, volumen, borde luminoso y navegación de mes discreta; selección circular. | Español de México, días no disponibles distintos de días fuera del mes, lectura y teclado claros. Selección acromática; el azul de la captura no cambia la paleta acordada. |
-| [Segmented claro](references/glass-segmented-light.png) | Pista translúcida, thumb elevado con luz interior y separación delicada; sensación de lente. | Aplicar a Día/Semana, filtros de periodo, tabs compactos y apariencia. La selección no se convierte en rectángulo negro. |
-| [Sidebar oscuro](references/glass-sidebar-dark.png) | Panel grafito con margen, radio grande, reflejo perimetral y selección plateada translúcida. | Mantener destinos, colapso, roles, cuenta y consultorio; dar más espacio y presencia al estado activo sin añadir colores. |
-| [Selector claro](references/glass-theme-switch-light.png) | Burbuja de control ligera, contorno exterior e interior y halo contenido. | Claro/Oscuro/Sistema con etiquetas accesibles. Los colores azul y amarillo no se incorporan por defecto; se toma la geometría y el material. |
-| [Prototipo actual por corregir](references/current-toolbar-to-replace.png) | El usuario señala la barra de periodo y sus botones. | Quitar el thumb negro, reducir el gris pesado de la pista y construir selección de burbuja. Esta imagen documenta el problema, no el resultado objetivo. |
+| Calendario oscuro (referencia visual revisada) | Trigger píldora; popover con radio amplio, volumen, borde luminoso y navegación de mes discreta; selección circular. | Español de México, días no disponibles distintos de días fuera del mes, lectura y teclado claros. Selección acromática; el azul de la captura no cambia la paleta acordada. |
+| Segmented claro (referencia visual revisada) | Pista translúcida, thumb elevado con luz interior y separación delicada; sensación de lente. | Aplicar a Día/Semana, filtros de periodo, tabs compactos y apariencia. La selección no se convierte en rectángulo negro. |
+| Sidebar oscuro (referencia visual revisada) | Panel grafito con margen, radio grande, reflejo perimetral y selección plateada translúcida. | Mantener destinos, colapso, roles, cuenta y consultorio; dar más espacio y presencia al estado activo sin añadir colores. |
+| Selector claro (referencia visual revisada) | Burbuja de control ligera, contorno exterior e interior y halo contenido. | Claro/Oscuro/Sistema con etiquetas accesibles. Los colores azul y amarillo no se incorporan por defecto; se toma la geometría y el material. |
+| Prototipo actual por corregir (referencia visual revisada) | El usuario señala la barra de periodo y sus botones. | Quitar el thumb negro, reducir el gris pesado de la pista y construir selección de burbuja. Esta imagen documenta el problema, no el resultado objetivo. |
 
 La landing debe seguir la misma familia. Sus CTA “Crear cuenta”, “Comenzar gratis” y las acciones del cierre usan burbuja clara, no el `bg-primary` negro heredado. La prominencia se consigue con tamaño, luz de borde, separación y texto, manteniendo una sola acción dominante.
 
@@ -450,7 +450,7 @@ Validación de cierre de esta entrega:
 - `pnpm test`: 19 archivos y 77 pruebas correctas, incluidas fechas locales, límites y años bisiestos.
 - `pnpm test:design`: 11 pruebas de navegador correctas. Cubren render/cleanup WebGPU, periodos por teclado, fecha escrita inválida/válida, foco y confirmación dentro del diálogo, sheet móvil dentro del diálogo, nacimiento por mes/año, búsqueda de profesionales, tema persistente/sistema, CTA de landing y los tres presets de material.
 - `pnpm build`: compilación de producción correcta. Capturas verificadas en un preview local del build: sesión anónima HTTP 200 y ningún error JavaScript de la UI. Ese proceso temporal usó `AUTH_TRUST_HOST=true` para localhost, sin modificar configuración persistente; el endpoint de Vercel Analytics ausente fuera de Vercel se excluyó del smoke local.
-- Capturas de la implementación en `docs/design/previews/`: [claro](previews/wave-1-light.png), [oscuro](previews/wave-1-dark.png), [móvil 375 px](previews/wave-1-mobile.png) y [calendario oscuro](previews/wave-1-calendar-dark.png). Son evidencia de esta entrega, no sustituyen las referencias objetivo del usuario ni el baseline pendiente del resto de rutas.
+- Capturas de la implementación revisadas localmente (retiradas del repositorio en la revisión 6): claro (referencia visual revisada), oscuro (referencia visual revisada), móvil 375 px (referencia visual revisada) y calendario oscuro (referencia visual revisada). Son evidencia de esta entrega, no sustituyen las referencias objetivo del usuario ni el baseline pendiente del resto de rutas.
 
 El contraste de texto principal de los tres presets se comprueba con composición de opacidad sobre extremos claro/oscuro; esta comprobación no certifica todavía todos los textos, estados o fondos dinámicos de las demás rutas.
 
@@ -461,8 +461,8 @@ Siguiente entrega: C11 y R01–R03 completos — sidebar, navegación móvil, lo
 
 ### Correcciones explícitas del usuario
 
-- Se probó un tinte azul en claro y el usuario lo rechazó. [Captura del tratamiento descartado](references/rejected-blue-controls.png). **No conservar azul como variante ni reintroducirlo para simular cristal.** La paleta sigue siendo blanca, negra y gris; el volumen claro procede de reflejo blanco, borde doble, sombra gris y profundidad interior. El acabado de los botones oscuros se conserva.
-- Se descarta la [cuadrícula de botones de horas](references/rejected-time-button-grid.png). C06 muestra una sola hora en un selector compacto. En escritorio abre una lista con grupos Mañana / Tarde / Noche; en móvil abre un sheet con elección y confirmación. Cancelar conserva la hora anterior. La hora debe seguir existiendo en la disponibilidad actual para poder confirmarse.
+- Se probó un tinte azul en claro y el usuario lo rechazó. Captura del tratamiento descartado (referencia visual revisada). **No conservar azul como variante ni reintroducirlo para simular cristal.** La paleta sigue siendo blanca, negra y gris; el volumen claro procede de reflejo blanco, borde doble, sombra gris y profundidad interior. El acabado de los botones oscuros se conserva.
+- Se descarta la cuadrícula de botones de horas (referencia visual revisada). C06 muestra una sola hora en un selector compacto. En escritorio abre una lista con grupos Mañana / Tarde / Noche; en móvil abre un sheet con elección y confirmación. Cancelar conserva la hora anterior. La hora debe seguir existiendo en la disponibilidad actual para poder confirmarse.
 - Las superficies de lectura siguen siendo estables. Más volumen en un control no significa añadir refracción al texto ni llenar toda la pantalla de burbujas.
 
 ### Implementación de esta revisión
@@ -494,10 +494,10 @@ Capturas de esta revisión (datos ficticios y formularios sin enviar):
 
 | Área | Capturas |
 | --- | --- |
-| Controles / horarios | [Claro](previews/revision-3-light.png), [picker compacto](previews/revision-3-picker.png), [lista de horas](previews/revision-3-hours-list.png), [horas en móvil](previews/revision-3-hours-mobile.png) |
-| Shell | [Doctor](previews/revision-3-shell-doctor.png), [paciente](previews/revision-3-shell-patient.png), [oscuro](previews/revision-3-shell-dark.png), [móvil](previews/revision-3-shell-mobile.png) |
-| Login | [Claro](previews/revision-3-login.png), [oscuro](previews/revision-3-login-dark.png), [móvil](previews/revision-3-login-mobile.png) |
-| Registro | [Doctor](previews/revision-3-register-doctor.png), [paciente](previews/revision-3-register-patient.png) |
+| Controles / horarios | Claro (referencia visual revisada), picker compacto (referencia visual revisada), lista de horas (referencia visual revisada), horas en móvil (referencia visual revisada) |
+| Shell | Doctor (referencia visual revisada), paciente (referencia visual revisada), oscuro (referencia visual revisada), móvil (referencia visual revisada) |
+| Login | Claro (referencia visual revisada), oscuro (referencia visual revisada), móvil (referencia visual revisada) |
+| Registro | Doctor (referencia visual revisada), paciente (referencia visual revisada) |
 
 
 
@@ -538,9 +538,88 @@ Capturas del build con datos ficticios:
 
 | Área | Evidencia |
 | --- | --- |
-| Directorio | [Claro](previews/revision-4-directory-light.png), [oscuro](previews/revision-4-directory-dark.png), [móvil](previews/revision-4-directory-mobile.png), [mapa móvil](previews/revision-4-map-mobile.png) |
-| Perfil | [Perfil profesional](previews/revision-4-profile.png) |
-| Reserva pública | [Servicio](previews/revision-4-booking-service.png), [fecha y hora](previews/revision-4-booking-availability.png), [continuar por login](previews/revision-4-booking-login.png) |
-| Reserva móvil | [Datos de consulta y foco visible](previews/revision-4-booking-details-mobile.png), [conflicto recuperable](previews/revision-4-booking-conflict-mobile.png), [solicitud enviada](previews/revision-4-booking-success-mobile.png) |
+| Directorio | Claro (referencia visual revisada), oscuro (referencia visual revisada), móvil (referencia visual revisada), mapa móvil (referencia visual revisada) |
+| Perfil | Perfil profesional (referencia visual revisada) |
+| Reserva pública | Servicio (referencia visual revisada), fecha y hora (referencia visual revisada), continuar por login (referencia visual revisada) |
+| Reserva móvil | Datos de consulta y foco visible (referencia visual revisada), conflicto recuperable (referencia visual revisada), solicitud enviada (referencia visual revisada) |
 
 Siguiente alcance visual: operación diaria del médico (R07–R11), conservando las verificaciones reales pendientes de las olas anteriores.
+
+## 26. Revisión 5 · Resumen, agenda y pacientes
+
+La dirección confirmada por el usuario es migrar **todas las rutas y vistas**, sin conservar islas de la UI anterior. No se reintroduce azul. El acabado de cristal se aplica a navegación, controles y chrome; los datos clínicos conservan una base de lectura estable. Después de la migración visual se realizará una revisión separada de preparación para los primeros doctores y sus pacientes: terminar diseño no acredita que todos los datos se guarden ni que el producto esté listo para operar.
+
+| Ruta | Implementación de esta entrega |
+| --- | --- |
+| R07 / resumen | Agenda de hoy y seguimientos antes de métricas históricas. Cards con material común, estados neutros con texto, CTA de burbuja, ambos temas y reintentos. El saludo ya no presume que sea de mañana. |
+| R08 / agenda | Tokens neutros, cards y controles de 44 px, selector compartido Día/Semana con lente y teclado, DatePicker para saltar a una fecha, filtros con nombre accesible y recuperación del error de carga. Semana en columnas cuando hay espacio y lista por día en móvil. |
+| R08 / reprogramación | DatePicker y TimeSlotPicker compartidos sustituyen el campo nativo y la cuadrícula de horas. Sólo se puede guardar una hora de la disponibilidad vigente; al fallar se conserva fecha/contexto, se actualiza disponibilidad y se solicita otra hora. Error visible dentro del diálogo. |
+| R09 / nueva cita | Asistente de tres pasos con cristal neutro, fecha y horas comunes, búsqueda de paciente/servicio, ubicación y resumen conservados. Eliminada la confirmación verde con brillo continuo. Rechaza selecciones obsoletas y envíos duplicados; conflicto 409 vuelve al horario conservando los detalles. No permite cerrar mientras envía. |
+| R10 / pacientes | Lista adaptable en lugar de tabla ancha, identidad/contacto y acceso al expediente en una fila completa. Búsqueda tolerante a acentos por nombre, correo, teléfono y domicilio; vacío, sin coincidencias, carga y error con reintento separados. |
+| R11 / alta | Identificación/contacto, DatePicker de nacimiento y contraseña inicial explícita: se elimina la contraseña predecible derivada del nacimiento. Se comprueban ambas respuestas antes de navegar. Si el acceso se creó y falla el perfil, el reintento en la misma vista reutiliza ese acceso y bloquea sus campos de identidad. Acciones al final del formulario para no tapar campos. |
+
+La comprobación sobre el build detectó dos problemas adicionales que no aparecían de manera consistente en desarrollo. El paso Continuar y la confirmación ahora tienen identidades distintas, se cancela la acción nativa del clic al avanzar y el envío exige estar en el paso final; así se evita que un clic para avanzar termine enviando al reutilizar el botón. En CSS se escribe el prefijo de backdrop antes de la propiedad estándar: el optimizador estaba conservando sólo `-webkit-backdrop-filter`, que Chromium no aplicaba. Se comprueban los valores reales de blur en la versión de producción, además de las preferencias que reducen transparencia.
+
+Las páginas son composición delgada. Los módulos de `components/operations/` se reutilizan en las rutas reales y en `/design-system/operations`; no hay una segunda versión dibujada para las capturas. El laboratorio usa cliente de datos en memoria y contexto de muestra locales: no hace peticiones tRPC al servidor, no crea una sesión real, no escribe en la base de datos y no cambia la autorización del layout médico. Sus destinos privados siguen protegidos. Los originales y la adaptación GPU no se modifican.
+
+### Hallazgos que condicionan la revisión de producto posterior
+
+- El formulario anterior pedía contacto de emergencia, antecedentes, alergias, medicación y seguro, pero **no enviaba esos campos**. Se retiran de este alta hasta contar con su flujo autorizado de guardado. No se borra información existente. El alta declara qué guarda; la cobertura de esos datos se revisará en expediente y perfil, sin asumir que ya esté completa.
+- El contrato actual separa crear acceso y crear perfil. Se recupera el fallo conocido del segundo paso mientras la vista permanece abierta; todavía falta un alta atómica o recuperación durable para recarga, cierre y respuestas de red ambiguas. Es un pendiente de preparación, no una garantía resuelta por esta UI.
+- Se mantienen endpoints, alcance por consultorio, permisos y contratos de fechas. No se amplían permisos clínicos desde el formulario ni se ejecutan operaciones de base de datos desde el agente.
+- La siguiente auditoría deberá demostrar por campo: captura → validación → guardado → recarga → edición autorizada → consulta/exportación. Incluir identificación, contactos, antecedentes, alergias, medicamentos, inmunizaciones, crónicos/cirugías, mediciones, episodios/notas, diagnósticos, recetas, estudios/documentos, resultados, tareas y seguimiento. Incluir pérdida de conexión, conflictos, permisos entre consultorios, respaldo y recuperación. El conjunto final se definirá contra el código y las necesidades de los primeros doctores; no se promete guardar información ilimitada sin verificar sus contratos.
+
+El resto del inventario sigue abierto: R12–R13 (expediente y seguimiento), R14–R18 (configuración y avisos), R19/R21/R22/R24–R27 (portal paciente) y revisión completa de landing. Las validaciones reales de sesión, consultorio y reservas de las olas previas continúan pendientes. Ninguna ruta sin revisar se declara migrada.
+
+## 27. Inicio del paciente · Corrección adelantada de R19
+
+El usuario rechazó el banner principal verde del dashboard del paciente y señaló que sus cards aún conservaban el estilo anterior. Referencia del tratamiento rechazado (referencia visual revisada). Se adelanta esta ruta por su petición expresa, sin declarar migrado el resto del portal.
+
+- Se elimina el banner completo, incluidos sus círculos, franja animada y mensajes promocionales. No se sustituye por otro hero dominante. Próximas citas aparece directamente después del saludo y la acción Agendar consulta.
+- Las cinco cards —próximas citas, consultas recientes, doctores, receta e información de medicamentos declarada— usan perímetro y cabecera de cristal neutro; el cuerpo conserva una superficie de lectura estable. Enlaces, iconos, fechas y estados dejan de usar tintes verdes. Ambos temas utilizan los tokens comunes.
+- La información reportada por el paciente continúa separada de las recetas emitidas por el médico. No se mezclan procedencias ni se cambia el contrato de datos. Consultas recientes se ordena por fecha y hora descendentes.
+- Se elimina el botón anidado en el enlace de Agendar consulta. Los enlaces de cabecera tienen objetivo de 44 px; errores de carga ofrecen reintento y la card de doctores distingue error de lista vacía.
+- La misma implementación vive en la ruta protegida y en la vista explícita `/design-system/operations?view=patient-overview`, con datos ficticios y cliente local aislado. El layout real del paciente mantiene sus controles de acceso.
+
+Esta entrega cubre la UI del inicio del paciente. No acredita todavía guardado/recuperación de información clínica, permisos de expedientes ni el resto de rutas del paciente. Continúa la revisión completa de diseño y después la evaluación de preparación para doctores/pacientes reales descrita en §26.
+
+## 28. Validación y capturas · Revisión 5
+
+- `pnpm check`: TypeScript y lint sin errores; permanecen las mismas 14 advertencias previas fuera del alcance. Lint de los módulos nuevos y pruebas modificadas sin advertencias. Formato Prettier correcto.
+- `pnpm test`: 21 archivos / 84 pruebas correctas en la ejecución final.
+- `pnpm build`: correcto, incluidas las seis rutas de producto migradas y el nuevo laboratorio de operación. Los layouts protegidos permanecen sin modificaciones.
+- `pnpm test:design`: **32 de 32 casos correctos en una ejecución completa contra el build final de producción**. Incluye las nueve pruebas nuevas de operación/paciente y la regresión de descubrimiento, reserva, shell, acceso, materiales, WebGPU y limpieza del dispositivo.
+- Casos nuevos: prioridad de agenda sobre análisis, tema claro/oscuro, filtros y selector por teclado, reprogramación con conflicto, búsqueda de pacientes con acentos y reintento, nueva cita con pickers anidados y recuperación de detalles, ausencia de envío implícito al avanzar, recuperación parcial del alta sin duplicar el acceso conocido, acciones móviles visibles y rutas privadas anónimas redirigidas a login. Inicio paciente sin banner, cards neutras, móvil sin desbordamiento, errores recuperables y vacío.
+- El cálculo de contraste normaliza los colores a través del navegador antes de componerlos: el optimizador de producción puede serializar los tokens en hexadecimal. Se comprueban blur real de 12/24/30 px y contraste de los presets; esto no certifica automáticamente todos los textos/fondos de todas las rutas pendientes.
+- El único reintento agregado para capturas atiende un rechazo transitorio del compositor de Chromium en Windows. Repite la captura durante un máximo de cinco segundos; no repite acciones ni sustituye las comprobaciones de comportamiento.
+- Las pruebas nuevas utilizan datos ficticios en memoria. No se crearon cuentas, citas ni pacientes reales, ni se ejecutaron operaciones de base de datos. Continúan pendientes las verificaciones autenticadas contra un entorno autorizado y dispositivos reales.
+- Los originales `typegpu-liquid-glass/index.tsx` y `renderer.ts` conservan sus SHA-256 verificados. Esta revisión no modifica el render ni la liberación de recursos GPU.
+
+Capturas del build final con datos ficticios:
+
+| Área | Evidencia |
+| --- | --- |
+| Resumen doctor | Claro (referencia visual revisada), oscuro (referencia visual revisada) |
+| Agenda | Semana (referencia visual revisada), reprogramación con picker (referencia visual revisada), nueva cita móvil (referencia visual revisada) |
+| Pacientes del doctor | Directorio móvil (referencia visual revisada), alta (referencia visual revisada), alta móvil y acciones (referencia visual revisada) |
+| Inicio paciente | Claro sin banner (referencia visual revisada), oscuro (referencia visual revisada), móvil sin desbordamiento (referencia visual revisada) |
+
+Siguiente bloque: expediente y seguimiento (R12–R13); después configuración/avisos y el resto del portal paciente. La revisión completa de landing y las verificaciones reales anteriores siguen abiertas. El objetivo de eliminar toda la UI antigua permanece vigente hasta recorrer el inventario completo.
+
+
+## 29. Revisión 6 · Dopilot y landing
+
+La marca vigente es **Dopilot**. Usar únicamente `public/dopilot-logo.svg` para el logo completo y `public/dopilot-icono.svg` para el símbolo. No reemplazar esos archivos por dibujos parecidos, iconos de pulso/estetoscopio ni renders del logo TypeGPU. Los símbolos funcionales de navegación conservan su significado.
+
+`DopilotBrand` utiliza la geometría alfa de los SVG oficiales con el color de tinta de cada superficie. Así responde al tema manual Claro/Oscuro/Sistema, independientemente del tema del sistema operativo. El sidebar grafito conserva tinta clara para que la marca siempre sea legible sobre su fondo oscuro. Metadatos, favicon, encabezados públicos, acceso, shell, laboratorio y textos del producto usan la nueva identidad.
+
+Se elimina la card de demostración GPU de la landing, su logo ajeno y el enlace técnico. La parte superior incorpora el símbolo oficial como fondo decorativo WebGPU mediante vgpu 0.6.0: una textura temporal procede directamente del SVG, y un efecto WGSL aplica relieve, brillo y refracción sutil con tinta acromática adaptada al tema. No se crea ningún PNG ni se modifica la geometría oficial. La librería óptica existente sigue en la capa GlassSurface del encabezado de la sección; los textos están fuera de la distorsión. El ejemplo TypeGPU original se conserva sin modificaciones en su carpeta y en el laboratorio técnico, con sus atribuciones.
+
+La escena de marca se detiene y libera recursos al salir del viewport, ocultar la pestaña, cambiar preferencias o desmontar. La silueta SVG sigue disponible cuando no se ejecuta la escena. En la landing hay un solo control de apariencia: botón discreto en la esquina superior derecha, con Claro/Oscuro/Sistema en su menú. El footer no tiene selector.
+
+Por petición del usuario se eliminan las capturas y PNG de referencia/QA del repositorio, además del favicon antiguo y la imagen de dashboard de muestra sin uso. Los registros históricos anteriores describen revisiones ya realizadas; sus imágenes se han retirado, no son enlaces pendientes de restaurar. Las nuevas capturas y trazas se escriben exclusivamente en carpetas temporales externas al proyecto (`dopilot-ui-previews` y `dopilot-playwright-results`). No volver a copiar capturas a `docs/design/previews`, `docs/design/references` ni otra carpeta de Git. Esas rutas quedan ignoradas como protección adicional.
+
+La migración de las demás rutas y la revisión de preparación clínica descritas en §26 continúan abiertas.
+
+
+Validación de esta revisión: `pnpm check` sin errores (14 advertencias previas), 84 pruebas unitarias correctas, build de producción correcto y **34/34 pruebas de navegador correctas contra ese build**. Las nuevas pruebas verifican el logo oficial con frames WebGPU, ambos temas manuales, ausencia de la card TypeGPU, un único selector arriba, logo en acceso y móvil de 375 px, y liberación de dispositivos por preferencias y salida del viewport. Las capturas resultantes permanecen fuera del repositorio. La búsqueda de la marca anterior en los archivos de producto/documentación y el inventario de PNG del workspace (excluyendo dependencias, Git y caché de Next) no devuelven resultados. Los originales verificados mantienen sus hashes. No se modificaron datos ni configuraciones de infraestructura externas para realizar el cambio de marca.

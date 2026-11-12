@@ -36,7 +36,7 @@ function getLimiter(policy: RateLimitPolicy) {
   const limiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(config.requests, config.window),
-    prefix: `dctoralia:security:${policy}`,
+    prefix: `dopilot:security:${policy}`,
     ephemeralCache: false,
     // Never allow the SDK's timeout fallback to turn a failed security check
     // into an allowed request. Redis calls are aborted after three seconds.
