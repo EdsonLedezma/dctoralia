@@ -1,22 +1,31 @@
-"use client"
+"use client";
 
-import { SessionProvider } from "next-auth/react"
-import { TRPCReactProvider } from "../../trpc/react"
-import type { Session } from "next-auth"
-import { Toaster } from "~/components/ui/sonner"
+import { SessionProvider } from "next-auth/react";
+import { TRPCReactProvider } from "../../trpc/react";
+import type { Session } from "next-auth";
+import { Toaster } from "~/components/ui/sonner";
+import { ThemeProvider } from "next-themes";
 
 interface ProvidersProps {
-  children: React.ReactNode
-  session?: Session | null
+  children: React.ReactNode;
+  session?: Session | null;
 }
 
 export default function Providers({ children, session }: ProvidersProps) {
   return (
-    <SessionProvider session={session}>
-      <TRPCReactProvider>
-        {children}
-        <Toaster richColors closeButton />
-      </TRPCReactProvider>
-    </SessionProvider>
-  )
-} 
+    <ThemeProvider
+      attribute="class"
+      storageKey="dctoralia-theme"
+      defaultTheme="light"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <SessionProvider session={session}>
+        <TRPCReactProvider>
+          {children}
+          <Toaster closeButton />
+        </TRPCReactProvider>
+      </SessionProvider>
+    </ThemeProvider>
+  );
+}

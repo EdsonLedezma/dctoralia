@@ -36,7 +36,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es-MX" className={`${geist.variable} ${geistMono.variable}`}>
+    <html
+      lang="es-MX"
+      suppressHydrationWarning
+      className={`${geist.variable} ${geistMono.variable}`}
+    >
       <body>
         <Providers>{children}</Providers>
         <Analytics />

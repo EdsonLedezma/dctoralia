@@ -59,15 +59,15 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "data-[state=closed]:animate-out data-[state=open]:animate-in fixed z-50 flex flex-col gap-4 overflow-y-auto overscroll-contain bg-white/95 text-[#171717] shadow-[0_1px_1px_rgba(0,0,0,0.02),0_8px_16px_-4px_rgba(0,0,0,0.05),0_24px_32px_-8px_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.9)] backdrop-blur-2xl transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:duration-150 data-[state=open]:duration-200",
+          "data-[state=closed]:animate-out data-[state=open]:animate-in bg-popover text-popover-foreground fixed z-50 flex flex-col gap-4 overflow-y-auto overscroll-contain shadow-[0_1px_1px_rgba(0,0,0,0.02),0_8px_16px_-4px_rgba(0,0,0,0.05),0_24px_32px_-8px_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.9)] backdrop-blur-2xl transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:duration-150 data-[state=open]:duration-200",
           side === "right" &&
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-[88vw] max-w-[420px] border-l border-[#ebebeb]",
+            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right border-border inset-y-0 right-0 h-full w-[88vw] max-w-[420px] border-l",
           side === "left" &&
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-[88vw] max-w-[420px] border-r border-[#ebebeb]",
+            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left border-border inset-y-0 left-0 h-full w-[88vw] max-w-[420px] border-r",
           side === "top" &&
-            "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto rounded-b-xl border-b border-[#ebebeb]",
+            "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top border-border inset-x-0 top-0 h-auto rounded-b-xl border-b",
           side === "bottom" &&
-            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 max-h-[85dvh] rounded-t-xl border-t border-[#ebebeb]",
+            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom border-border inset-x-0 bottom-0 max-h-[85dvh] rounded-t-xl border-t",
           className,
         )}
         {...props}
@@ -76,7 +76,7 @@ function SheetContent({
         {showCloseButton && (
           <SheetPrimitive.Close
             aria-label="Cerrar"
-            className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-md text-[#737373] transition-[background-color,color,transform] duration-150 hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.96] disabled:pointer-events-none"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring absolute top-3 right-3 flex size-11 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.96] disabled:pointer-events-none"
           >
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>

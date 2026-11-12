@@ -3,10 +3,22 @@
  * for Docker builds.
  */
 import "./src/env.js";
+import typegpuPlugin from "unplugin-typegpu/webpack";
 
 /** @type {import("next").NextConfig} */
 const config = {
   poweredByHeader: false,
+  webpack(webpackConfig) {
+    webpackConfig.plugins.push(
+      typegpuPlugin({ include: /(?:typegpu-renderer|renderer)\.ts$/ }),
+    );
+    webpackConfig.module.rules.push({
+      test: /\.wgsl$/,
+      loader: "@vgpu/wgsl/loader-webpack",
+      options: { minify: true },
+    });
+    return webpackConfig;
+  },
   async headers() {
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },

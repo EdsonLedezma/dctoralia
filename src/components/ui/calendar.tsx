@@ -11,6 +11,9 @@ import {
   DayPicker,
   getDefaultClassNames,
   type DayButton,
+  type RootProps,
+  type ChevronProps,
+  type WeekNumberProps,
 } from "react-day-picker";
 import { es } from "date-fns/locale";
 
@@ -25,6 +28,7 @@ function Calendar({
   captionLayout = "label",
   buttonVariant = "ghost",
   formatters,
+  labels,
   components,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
@@ -38,12 +42,22 @@ function Calendar({
       animate={animate}
       locale={locale}
       className={cn(
-        "group/calendar bg-background p-3 [--cell-size:--spacing(8)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
+        "glass-calendar group/calendar max-w-full bg-transparent p-3 [--cell-size:2.75rem]",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className,
       )}
       captionLayout={captionLayout}
+      labels={{
+        labelNext: () => "Mes siguiente",
+        labelPrevious: () => "Mes anterior",
+        labelMonthDropdown: () => "Mes",
+        labelYearDropdown: () => "Año",
+        labelNav: () => "Navegación del calendario",
+        labelDayButton: (date, modifiers) =>
+          `${new Intl.DateTimeFormat("es-MX", { dateStyle: "full" }).format(date)}${modifiers.selected ? ", seleccionado" : ""}${modifiers.today ? ", hoy" : ""}`,
+        ...labels,
+      }}
       formatters={{
         formatMonthDropdown: (date) =>
           date.toLocaleString("es-MX", { month: "short" }),
@@ -57,7 +71,7 @@ function Calendar({
         ),
         month: cn("flex w-full flex-col gap-4", defaultClassNames.month),
         nav: cn(
-          "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
+          "absolute top-0 right-0 flex items-center gap-1",
           defaultClassNames.nav,
         ),
         button_previous: cn(
@@ -71,7 +85,7 @@ function Calendar({
           defaultClassNames.button_next,
         ),
         month_caption: cn(
-          "flex h-(--cell-size) w-full items-center justify-center px-(--cell-size)",
+          "flex h-(--cell-size) w-full items-center justify-start pr-24 pl-1",
           defaultClassNames.month_caption,
         ),
         dropdowns: cn(
@@ -122,7 +136,7 @@ function Calendar({
         range_middle: cn("rounded-none", defaultClassNames.range_middle),
         range_end: cn("rounded-r-md bg-accent", defaultClassNames.range_end),
         today: cn(
-          "rounded-md bg-accent text-accent-foreground data-[selected=true]:rounded-none",
+          "rounded-full font-semibold text-foreground",
           defaultClassNames.today,
         ),
         outside: cn(
@@ -145,50 +159,49 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: ({ className, rootRef, ...props }) => {
-          return (
-            <div
-              data-slot="calendar"
-              ref={rootRef}
-              className={cn(className)}
-              {...props}
-            />
-          );
-        },
-        Chevron: ({ className, orientation, ...props }) => {
-          if (orientation === "left") {
-            return (
-              <ChevronLeftIcon className={cn("size-4", className)} {...props} />
-            );
-          }
-
-          if (orientation === "right") {
-            return (
-              <ChevronRightIcon
-                className={cn("size-4", className)}
-                {...props}
-              />
-            );
-          }
-
-          return (
-            <ChevronDownIcon className={cn("size-4", className)} {...props} />
-          );
-        },
+        Root: CalendarRoot,
+        Chevron: CalendarChevron,
         DayButton: CalendarDayButton,
-        WeekNumber: ({ children, ...props }) => {
-          return (
-            <td {...props}>
-              <div className="flex size-(--cell-size) items-center justify-center text-center">
-                {children}
-              </div>
-            </td>
-          );
-        },
+        WeekNumber: CalendarWeekNumber,
         ...components,
       }}
       {...props}
     />
+  );
+}
+
+function CalendarRoot({ className, rootRef, ...props }: RootProps) {
+  return (
+    <div
+      data-slot="calendar"
+      ref={rootRef}
+      className={cn(className)}
+      {...props}
+    />
+  );
+}
+
+function CalendarChevron({ className, orientation, ...props }: ChevronProps) {
+  const Icon =
+    orientation === "left"
+      ? ChevronLeftIcon
+      : orientation === "right"
+        ? ChevronRightIcon
+        : ChevronDownIcon;
+  return <Icon className={cn("size-4", className)} {...props} />;
+}
+
+function CalendarWeekNumber({
+  children,
+  week: _week,
+  ...props
+}: WeekNumberProps) {
+  return (
+    <td {...props}>
+      <div className="flex size-(--cell-size) items-center justify-center text-center">
+        {children}
+      </div>
+    </td>
   );
 }
 
@@ -221,7 +234,7 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 rounded-md leading-none font-normal transition-[background-color,color,transform] duration-150 group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-[#171717] group-data-[focused=true]/day:ring-2 group-data-[focused=true]/day:ring-[#171717]/20 hover:bg-[#f5f5f5] focus-visible:ring-2 focus-visible:ring-[#171717]/25 focus-visible:outline-none active:scale-[0.94] data-[range-end=true]:rounded-md data-[range-end=true]:bg-[#171717] data-[range-end=true]:text-white data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-[#f5f5f5] data-[range-middle=true]:text-[#171717] data-[range-start=true]:rounded-md data-[range-start=true]:bg-[#171717] data-[range-start=true]:text-white data-[selected-single=true]:bg-[#171717] data-[selected-single=true]:text-white [&>span]:text-xs [&>span]:opacity-70",
+        "hover:bg-accent focus-visible:ring-ring/70 flex aspect-square size-auto min-h-11 w-full min-w-(--cell-size) flex-col gap-1 rounded-full leading-none font-normal transition-[background-color,color,transform] duration-150 group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 focus-visible:ring-2 focus-visible:outline-none active:scale-[0.96] [&>span]:text-xs [&>span]:opacity-70",
         defaultClassNames.day,
         className,
       )}

@@ -44,9 +44,6 @@ export function SearchableSelect({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
-    null,
-  );
   const selected = options.find((option) => option.value === value);
   const matches = useMemo(() => rankOptions(options, query), [options, query]);
 
@@ -54,13 +51,6 @@ export function SearchableSelect({
     <Popover
       open={open}
       onOpenChange={(nextOpen) => {
-        setPortalContainer(
-          nextOpen
-            ? (document
-                .getElementById(id)
-                ?.closest<HTMLElement>('[data-slot="dialog-content"]') ?? null)
-            : null,
-        );
         setOpen(nextOpen);
         if (!nextOpen) setQuery("");
       }}
@@ -76,28 +66,30 @@ export function SearchableSelect({
           aria-haspopup="listbox"
           disabled={disabled}
           className={cn(
-            "flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-[#d7e5dc] bg-white px-3.5 text-left text-sm text-[#173d32] shadow-[0_1px_2px_rgba(25,63,48,0.03)] transition-[border-color,box-shadow,background-color] duration-150 hover:border-[#83b59e] hover:bg-[#fbfefb] focus-visible:border-[#328267] focus-visible:ring-2 focus-visible:ring-[#b8dfc9] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+            "glass-bubble flex h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-full border px-3.5 text-left text-sm transition-[box-shadow,background-color] duration-150 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45",
             className,
           )}
         >
           <span
-            className={cn("min-w-0 truncate", !selected && "text-[#75887d]")}
+            className={cn(
+              "min-w-0 truncate",
+              !selected && "text-muted-foreground",
+            )}
           >
             {selected?.label ?? placeholder}
           </span>
           <ChevronsUpDown
-            className="size-4 shrink-0 text-[#5e8d78]"
+            className="text-muted-foreground size-4 shrink-0"
             aria-hidden="true"
           />
         </button>
       </PopoverTrigger>
       <PopoverContent
-        container={portalContainer}
         align="start"
         sideOffset={6}
-        className="w-(--radix-popover-trigger-width) min-w-64 overflow-hidden rounded-xl border-[#d7e5dc] p-0 shadow-[0_18px_50px_-18px_rgba(21,71,51,0.24)]"
+        className="w-(--radix-popover-trigger-width) min-w-64 overflow-hidden p-0"
       >
-        <Command shouldFilter={false} className="rounded-xl">
+        <Command shouldFilter={false} className="rounded-[24px] bg-transparent">
           <CommandInput
             autoFocus
             value={query}
@@ -108,7 +100,7 @@ export function SearchableSelect({
           />
           <CommandList id={`${id}-suggestions`} className="max-h-64 p-1">
             {matches.length === 0 ? (
-              <p className="px-3 py-7 text-center text-sm text-[#71877a]">
+              <p className="text-muted-foreground px-3 py-7 text-center text-sm">
                 {emptyMessage}
               </p>
             ) : (
@@ -121,21 +113,21 @@ export function SearchableSelect({
                     setOpen(false);
                     setQuery("");
                   }}
-                  className="min-h-11 gap-3 rounded-lg px-3 py-2 data-[selected=true]:bg-[#edf7f0] data-[selected=true]:text-[#173d32]"
+                  className="data-[selected=true]:bg-accent data-[selected=true]:text-foreground min-h-11 gap-3 rounded-xl px-3 py-2"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">
                       {option.label}
                     </span>
                     {option.description && (
-                      <span className="mt-0.5 block truncate text-xs text-[#71877a]">
+                      <span className="text-muted-foreground mt-0.5 block truncate text-xs">
                         {option.description}
                       </span>
                     )}
                   </span>
                   {option.value === value && (
                     <Check
-                      className="size-4 shrink-0 text-[#328267]"
+                      className="text-foreground size-4 shrink-0"
                       aria-hidden="true"
                     />
                   )}
