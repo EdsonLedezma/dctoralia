@@ -20,6 +20,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProductShell } from "~/components/shell/product-shell";
+import { TermsSettingsCard } from "~/components/legal/terms-settings-card";
 import { MotionList } from "~/components/shared/motion-list";
 import { unwrapTrpcResult } from "~/types/trpc-response";
 import { avatarUrl } from "~/lib/avatar-url";
@@ -866,6 +867,8 @@ export default function DoctorProfilePage() {
               </p>
             </section>
           )}
+
+          {!isEditing && <TermsSettingsCard />}
         </div>
       </div>
     </ProductShell>

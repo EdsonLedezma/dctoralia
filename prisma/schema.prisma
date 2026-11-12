@@ -34,16 +34,19 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String
-  phone         String?
-  emailVerified DateTime?
-  image         String?
-  role          Role      @default(PATIENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  password        String
+  phone           String?
+  emailVerified   DateTime?
+  image           String?
+  role            Role      @default(PATIENT)
+  /// Versión aceptada de Términos y Aviso de Privacidad (ver src/lib/legal/company.ts).
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   accounts                     Account[]
   sessions                     Session[]
