@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
+import { TermsAcceptanceDialog } from "~/components/legal/terms-acceptance-dialog";
+import { TERMS_VERSION } from "~/lib/legal/terms";
 import { auth } from "~/server/auth";
+import { db } from "~/server/db";
 
 export default async function PatientLayout({
   children,
@@ -10,5 +13,14 @@ export default async function PatientLayout({
   if (!session) redirect("/login");
   if (session.user.role !== "PATIENT")
     redirect(session.user.role === "DOCTOR" ? "/dashboard" : "/");
-  return children;
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { termsVersion: true },
+  });
+  return (
+    <>
+      {children}
+      {user?.termsVersion !== TERMS_VERSION && <TermsAcceptanceDialog />}
+    </>
+  );
 }
