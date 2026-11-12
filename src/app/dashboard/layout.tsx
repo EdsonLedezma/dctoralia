@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { TermsAcceptanceDialog } from "~/components/legal/terms-acceptance-dialog";
-import { TERMS_VERSION } from "~/lib/legal/terms";
+import { LEGAL_VERSION } from "~/lib/legal/company";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 
@@ -20,7 +20,7 @@ export default async function DoctorLayout({
   return (
     <>
       {children}
-      {user?.termsVersion !== TERMS_VERSION && <TermsAcceptanceDialog />}
+      {user?.termsVersion !== LEGAL_VERSION && <TermsAcceptanceDialog />}
     </>
   );
 }

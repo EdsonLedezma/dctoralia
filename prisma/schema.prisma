@@ -42,7 +42,7 @@ model User {
   emailVerified   DateTime?
   image           String?
   role            Role      @default(PATIENT)
-  /// Versión de Términos y Condiciones aceptada (ver src/lib/legal/terms.ts).
+  /// Versión aceptada de Términos y Aviso de Privacidad (ver src/lib/legal/company.ts).
   termsVersion    String?
   termsAcceptedAt DateTime?
   createdAt       DateTime  @default(now())

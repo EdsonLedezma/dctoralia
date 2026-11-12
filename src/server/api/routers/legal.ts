@@ -1,5 +1,5 @@
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { TERMS_VERSION } from "~/lib/legal/terms";
+import { LEGAL_VERSION } from "~/lib/legal/company";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 
 export const legalRouter = createTRPCRouter({
@@ -11,10 +11,10 @@ export const legalRouter = createTRPCRouter({
       });
       return trpcSuccess(
         {
-          currentVersion: TERMS_VERSION,
+          currentVersion: LEGAL_VERSION,
           acceptedVersion: user?.termsVersion ?? null,
           acceptedAt: user?.termsAcceptedAt ?? null,
-          isCurrent: user?.termsVersion === TERMS_VERSION,
+          isCurrent: user?.termsVersion === LEGAL_VERSION,
         },
         "Estado de términos",
       );
@@ -31,7 +31,7 @@ export const legalRouter = createTRPCRouter({
     try {
       const user = await ctx.db.user.update({
         where: { id: ctx.session.user.id },
-        data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() },
+        data: { termsVersion: LEGAL_VERSION, termsAcceptedAt: new Date() },
         select: { termsVersion: true, termsAcceptedAt: true },
       });
       return trpcSuccess(
