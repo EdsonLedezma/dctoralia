@@ -276,7 +276,7 @@ export async function generateClinicalExport(
   const generatedAt = new Date().toISOString();
   const { medicalHistory, ...sections } = snapshot;
   const payload = {
-    format: "dctoralia-clinical-export-v1",
+    format: "dopilot-clinical-export-v1",
     generatedAt,
     scope: { clinicId: actor.clinicId, doctorId: actor.doctorId },
     patient,

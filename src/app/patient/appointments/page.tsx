@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,6 +27,8 @@ import { unwrapTrpcResult } from "~/types/trpc-response";
 import DashboardWrapper from "~/components/auth/DashboardWrapper";
 import { ProductShell } from "~/components/shell/product-shell";
 import { MotionList } from "~/components/shared/motion-list";
+import { DatePicker } from "~/components/ui/date-picker";
+import { TimeSlotPicker } from "~/components/ui/time-slot-picker";
 
 function mexicoDateKey(value: Date) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -206,11 +207,11 @@ export default function PatientAppointmentsPage() {
   return (
     <DashboardWrapper allowedRoles={["PATIENT"]}>
       <ProductShell role="PATIENT">
-        <div className="min-h-screen bg-[#fafafa]">
+        <div className="bg-background min-h-screen">
           <div className="mx-auto max-w-5xl px-4 py-6 sm:px-8 sm:py-8">
-            <div className="mb-5 flex flex-col gap-4 border-b border-[#ebebeb] pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="border-border mb-5 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+                <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                   Agenda personal
                 </p>
                 <h1 className="mt-1 text-xl font-semibold tracking-tight">
@@ -226,20 +227,20 @@ export default function PatientAppointmentsPage() {
             </div>
 
             {/* Filters */}
-            <div className="mb-6 flex flex-col gap-3 border-b border-[#ebebeb] pb-4 sm:flex-row sm:items-center">
+            <div className="border-border mb-6 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1">
-                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[#737373]" />
+                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <Input
                   aria-label="Buscar citas"
                   placeholder="Buscar por doctor o servicio"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-9 border-[#e5e5e5] bg-white pl-9 text-sm shadow-none focus-visible:border-[#a3a3a3] focus-visible:ring-1 focus-visible:ring-[#d4d4d4]"
+                  className="border-border bg-card focus-visible:border-border focus-visible:ring-ring h-11 pl-9 text-base shadow-none focus-visible:ring-1"
                 />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-full border-[#e5e5e5] bg-white text-sm shadow-none sm:w-44">
-                  <Filter className="mr-2 h-3.5 w-3.5 text-[#737373]" />
+                <SelectTrigger className="border-border bg-card h-11 w-full text-sm shadow-none sm:w-44">
+                  <Filter className="text-muted-foreground mr-2 h-3.5 w-3.5" />
                   <SelectValue placeholder="Estado" />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,14 +258,14 @@ export default function PatientAppointmentsPage() {
                     setSearchTerm("");
                     setStatusFilter("all");
                   }}
-                  className="min-h-9 text-left text-xs font-medium text-[#737373] hover:text-[#171717] sm:px-2"
+                  className="text-muted-foreground hover:text-foreground min-h-9 text-left text-xs font-medium sm:px-2"
                 >
                   Limpiar
                 </button>
               )}
             </div>
 
-            <div className="mb-3 flex items-center justify-between text-xs text-[#737373]">
+            <div className="text-muted-foreground mb-3 flex items-center justify-between text-xs">
               <span>{filteredAppointments.length} citas</span>
               <span>Actualizadas recientemente</span>
             </div>
@@ -272,14 +273,14 @@ export default function PatientAppointmentsPage() {
             {/* Appointments List */}
             {isError ? (
               <div
-                className="border-y border-[#ebebeb] bg-white px-5 py-8 text-sm text-[#525252]"
+                className="material-card border-border bg-card text-muted-foreground rounded-2xl border px-5 py-8 text-sm"
                 role="alert"
               >
                 No pudimos cargar tus citas.
               </div>
             ) : isLoading ? (
               <div
-                className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white"
+                className="material-card border-border bg-card divide-border divide-y rounded-2xl border"
                 aria-label="Cargando citas"
               >
                 {[0, 1, 2].map((item) => (
@@ -287,12 +288,12 @@ export default function PatientAppointmentsPage() {
                 ))}
               </div>
             ) : filteredAppointments.length === 0 ? (
-              <div className="border-y border-[#ebebeb] bg-white px-5 py-12 text-center">
-                <Calendar className="mx-auto h-7 w-7 text-[#737373]" />
+              <div className="material-card border-border bg-card rounded-2xl border px-5 py-12 text-center">
+                <Calendar className="text-muted-foreground mx-auto h-7 w-7" />
                 <p className="mt-4 text-sm font-medium">
                   No hay citas para mostrar
                 </p>
-                <p className="mt-1 text-xs text-[#737373]">
+                <p className="text-muted-foreground mt-1 text-xs">
                   {searchTerm || statusFilter !== "all"
                     ? "Prueba con otros filtros."
                     : "Agenda una consulta cuando lo necesites."}
@@ -307,11 +308,11 @@ export default function PatientAppointmentsPage() {
                 )}
               </div>
             ) : (
-              <MotionList className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white">
+              <MotionList className="material-card border-border bg-card divide-border divide-y rounded-2xl border">
                 {filteredAppointments.map((appointment) => (
                   <div
                     key={appointment.id}
-                    className="px-4 py-5 transition-colors hover:bg-[#fafafa] sm:px-5"
+                    className="hover:bg-muted/50 px-4 py-5 transition-colors sm:px-6 sm:py-6"
                   >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
@@ -319,30 +320,30 @@ export default function PatientAppointmentsPage() {
                           <h2 className="truncate text-sm font-medium">
                             {appointment.doctor}
                           </h2>
-                          <Badge className="border border-[#e5e5e5] bg-[#fafafa] text-xs font-normal text-[#525252]">
+                          <Badge className="border-border bg-background text-muted-foreground border text-xs font-normal">
                             {getStatusText(appointment.status)}
                           </Badge>
                         </div>
-                        <p className="mt-1 truncate text-xs text-[#737373]">
+                        <p className="text-muted-foreground mt-1 truncate text-xs">
                           {appointment.specialty ||
                             "Especialidad no registrada"}{" "}
                           · {appointment.type}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-3 text-xs text-[#525252] sm:text-right">
+                      <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs sm:text-right">
                         <span className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-[#737373]" />
+                          <Calendar className="text-muted-foreground h-3.5 w-3.5" />
                           {formatDate(appointment.date)}
                         </span>
                         <span className="flex items-center gap-1.5 font-mono">
-                          <Clock className="h-3.5 w-3.5 text-[#737373]" />
+                          <Clock className="text-muted-foreground h-3.5 w-3.5" />
                           {appointment.time}
                         </span>
                       </div>
                     </div>
 
                     {appointment.diagnosis && (
-                      <p className="mt-3 border-l-2 border-[#d4d4d4] pl-3 text-xs leading-5 text-[#525252]">
+                      <p className="border-border text-muted-foreground mt-3 border-l-2 pl-3 text-xs leading-5">
                         {appointment.diagnosis}
                       </p>
                     )}
@@ -413,55 +414,39 @@ export default function PatientAppointmentsPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                <DatePicker
+                  value={rescheduleData.date}
+                  label="Nueva fecha"
+                  onValueChange={(date) =>
+                    setRescheduleData({ date, time: "" })
+                  }
+                  min={mexicoDateKey(new Date())}
+                />
                 <div className="space-y-2">
-                  <Label htmlFor="reschedule-date">Nueva Fecha</Label>
-                  <Input
-                    id="reschedule-date"
-                    type="date"
-                    value={rescheduleData.date}
-                    onChange={(e) =>
-                      setRescheduleData({ date: e.target.value, time: "" })
-                    }
-                    min={mexicoDateKey(new Date())}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Horarios disponibles</Label>
                   {availableSlots.isLoading ? (
-                    <p className="text-sm text-[#737373]">
+                    <p className="text-muted-foreground text-sm">
                       Consultando horarios…
                     </p>
                   ) : availableSlots.error || availableSlots.data?.error ? (
-                    <p className="text-sm text-red-700" role="alert">
+                    <p className="text-destructive text-sm" role="alert">
                       No pudimos consultar los horarios. Elige otra fecha o
                       intenta de nuevo.
                     </p>
                   ) : availableTimes.length === 0 ? (
-                    <p className="text-sm text-[#737373]">
+                    <p className="text-muted-foreground text-sm">
                       No hay horarios libres para esta fecha.
                     </p>
                   ) : (
-                    <div
-                      className="grid max-h-48 grid-cols-3 gap-2 overflow-y-auto pr-1"
-                      aria-label="Horarios disponibles"
-                    >
-                      {availableTimes.map((time) => (
-                        <button
-                          key={time}
-                          type="button"
-                          aria-pressed={rescheduleData.time === time}
-                          onClick={() =>
-                            setRescheduleData((current) => ({
-                              ...current,
-                              time,
-                            }))
-                          }
-                          className={`min-h-11 rounded-lg border text-sm font-medium transition-colors ${rescheduleData.time === time ? "border-[#238a69] bg-[#238a69] text-white" : "border-[#dedede] hover:border-[#238a69]"}`}
-                        >
-                          {time}
-                        </button>
-                      ))}
-                    </div>
+                    <TimeSlotPicker
+                      slots={availableTimes}
+                      selectedTime={rescheduleData.time || null}
+                      onSelectTime={(time) =>
+                        setRescheduleData((current) => ({
+                          ...current,
+                          time,
+                        }))
+                      }
+                    />
                   )}
                 </div>
               </div>

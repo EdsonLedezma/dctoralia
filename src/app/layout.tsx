@@ -6,9 +6,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Providers from "~/components/providers/Providers";
 
 export const metadata: Metadata = {
-  title: "Dctoralia",
+  title: "Dopilot",
+  applicationName: "Dopilot",
   description: "Agenda y automatiza tu consultorio médico",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  icons: [{ rel: "icon", url: "/dopilot-icono.svg" }],
 };
 
 export const viewport: Viewport = {
@@ -36,7 +37,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es-MX" className={`${geist.variable} ${geistMono.variable}`}>
+    <html
+      lang="es-MX"
+      suppressHydrationWarning
+      className={`${geist.variable} ${geistMono.variable}`}
+    >
       <body>
         <Providers>{children}</Providers>
         <Analytics />

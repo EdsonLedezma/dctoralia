@@ -55,9 +55,11 @@ function priorityLabel(priority: string) {
 }
 
 function priorityClass(priority: string) {
-  if (priority === "URGENT") return "border-red-200 bg-red-50 text-red-700";
-  if (priority === "HIGH") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-[#ebebeb] bg-white text-[#737373]";
+  if (priority === "URGENT")
+    return "border-foreground/35 bg-secondary text-foreground";
+  if (priority === "HIGH")
+    return "border-foreground/25 bg-muted text-foreground";
+  return "border-border bg-card text-muted-foreground";
 }
 
 function reminderStatusLabel(status: string) {
@@ -76,12 +78,12 @@ function reminderStatusLabel(status: string) {
 
 function reminderStatusClass(status: string) {
   if (status === "DELIVERED" || status === "READ")
-    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    return "border-border bg-secondary text-foreground";
   if (status === "FAILED" || status === "DEAD_LETTER")
-    return "border-red-200 bg-red-50 text-red-700";
+    return "border-foreground/40 bg-muted text-foreground";
   if (status === "CANCELLED")
-    return "border-[#ebebeb] bg-[#fafafa] text-[#737373]";
-  return "border-blue-200 bg-blue-50 text-blue-800";
+    return "border-border bg-background text-muted-foreground";
+  return "border-border bg-card text-muted-foreground";
 }
 
 export default function FollowUpsPage() {
@@ -146,23 +148,23 @@ export default function FollowUpsPage() {
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
       <ProductShell role="DOCTOR">
-        <main className="min-h-[calc(100dvh-3.5rem)] bg-[#fafafa] px-4 py-8 sm:px-8">
+        <main className="bg-background text-foreground min-h-[calc(100dvh-3.5rem)] px-4 py-8 sm:px-8">
           <div className="mx-auto max-w-6xl space-y-8">
             <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="mb-2 font-mono text-[11px] tracking-[0.08em] text-[#888] uppercase">
+                <p className="text-muted-foreground mb-2 text-xs tracking-wide">
                   Operación clínica
                 </p>
-                <h1 className="text-[26px] leading-8 font-semibold tracking-[-0.8px] text-[#171717]">
+                <h1 className="text-foreground text-3xl leading-tight font-semibold tracking-[-0.8px]">
                   Seguimiento
                 </h1>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-[#6b6b6b]">
+                <p className="text-muted-foreground mt-2 max-w-xl text-sm leading-6">
                   Atiende pendientes, revisa resultados y mantén cada plan en
                   movimiento entre consultas.
                 </p>
               </div>
               <Link href="/dashboard/patients">
-                <Button variant="outline" className="h-9 rounded-md">
+                <Button variant="outline" className="min-h-11">
                   Abrir pacientes
                   <ArrowUpRight className="ml-1.5 h-4 w-4" />
                 </Button>
@@ -171,7 +173,7 @@ export default function FollowUpsPage() {
 
             <section
               aria-label="Resumen operativo de los últimos 30 días"
-              className="grid overflow-hidden rounded-lg border border-[#ebebeb] bg-white sm:grid-cols-2 lg:grid-cols-4"
+              className="material-card border-border bg-card grid overflow-hidden rounded-2xl border sm:grid-cols-2 lg:grid-cols-4"
             >
               <Metric
                 label="Citas en periodo"
@@ -214,18 +216,18 @@ export default function FollowUpsPage() {
               />
             </section>
 
-            <section className="rounded-lg border border-[#ebebeb] bg-white px-5 py-4">
+            <section className="material-card border-border bg-card rounded-2xl border px-5 py-5">
               <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-[#171717]">
+                  <h2 className="text-foreground text-base font-semibold">
                     Actividad registrada en el periodo
                   </h2>
-                  <p className="mt-1 text-xs text-[#737373]">
+                  <p className="text-muted-foreground mt-1 text-sm">
                     Cambios de estado capturados desde que se habilitó el
                     registro.
                   </p>
                 </div>
-                <span className="font-mono text-[10px] text-[#888]">
+                <span className="text-muted-foreground text-xs">
                   Ventana móvil de 30 días
                 </span>
               </div>
@@ -260,7 +262,7 @@ export default function FollowUpsPage() {
                 />
                 <EventMetric label="Tareas vencidas" value={overdueCount} />
               </div>
-              <p className="mt-4 border-t border-[#ebebeb] pt-3 text-[11px] text-[#737373]">
+              <p className="border-border text-muted-foreground mt-4 border-t pt-3 text-xs leading-5">
                 Cierre de tareas con vencimiento en el periodo:{" "}
                 {summary?.followUps.completionRate == null
                   ? "—"
@@ -270,13 +272,13 @@ export default function FollowUpsPage() {
               </p>
             </section>
 
-            <section className="overflow-hidden rounded-lg border border-[#ebebeb] bg-white">
-              <div className="flex flex-col gap-2 border-b border-[#ebebeb] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <section className="material-card border-border bg-card overflow-hidden rounded-2xl border">
+              <div className="border-border flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-[#171717]">
+                  <h2 className="text-foreground text-base font-semibold">
                     Tareas de seguimiento
                   </h2>
-                  <p className="mt-1 text-xs text-[#737373]">
+                  <p className="text-muted-foreground mt-1 text-sm">
                     {isLoading
                       ? "Cargando tareas…"
                       : filter === "COMPLETED"
@@ -288,7 +290,7 @@ export default function FollowUpsPage() {
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-8"
+                  className="min-h-11"
                   disabled={isFetching}
                   onClick={() => void refetch()}
                 >
@@ -299,22 +301,22 @@ export default function FollowUpsPage() {
                 </Button>
               </div>
 
-              <div className="flex flex-col gap-2 border-b border-[#ebebeb] px-5 py-3 sm:flex-row sm:items-center">
+              <div className="border-border flex flex-col gap-2 border-b px-5 py-3 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1 sm:max-w-sm">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#a3a3a3]" />
+                  <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Buscar paciente o tarea"
                     aria-label="Buscar paciente o tarea"
-                    className="h-9 pl-9 text-sm"
+                    className="h-11 pl-9 text-sm"
                   />
                 </div>
                 <Select
                   value={filter}
                   onValueChange={(value) => setFilter(value as typeof filter)}
                 >
-                  <SelectTrigger className="h-9 w-full sm:w-48">
+                  <SelectTrigger className="h-11 w-full sm:w-48">
                     <SelectValue aria-label="Filtrar tareas" />
                   </SelectTrigger>
                   <SelectContent>
@@ -327,9 +329,8 @@ export default function FollowUpsPage() {
               </div>
 
               {error || data?.error ? (
-                <div className="p-6 text-sm text-red-700" role="alert">
-                  No se pudo cargar el seguimiento. Actualiza la página e
-                  inténtalo de nuevo.
+                <div className="text-foreground p-6 text-sm" role="alert">
+                  No se pudo cargar el seguimiento. Inténtalo de nuevo.
                 </div>
               ) : isLoading ? (
                 <div
@@ -342,10 +343,10 @@ export default function FollowUpsPage() {
                 </div>
               ) : visibleTasks.length === 0 ? (
                 <div className="px-5 py-16 text-center">
-                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[#ebebeb] bg-[#fafafa]">
-                    <ListTodo className="h-4 w-4 text-[#737373]" />
+                  <div className="border-border bg-background mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full border">
+                    <ListTodo className="text-muted-foreground h-4 w-4" />
                   </div>
-                  <p className="text-sm font-medium text-[#171717]">
+                  <p className="text-foreground text-base font-medium">
                     {search
                       ? "No encontramos tareas con esa búsqueda."
                       : filter === "OVERDUE"
@@ -354,14 +355,14 @@ export default function FollowUpsPage() {
                           ? "Aún no has completado seguimientos."
                           : "No tienes seguimientos pendientes."}
                   </p>
-                  <p className="mt-1 text-sm text-[#737373]">
+                  <p className="text-muted-foreground mt-1 text-sm">
                     {search
                       ? "Prueba con otro nombre de paciente o título."
                       : "Puedes crear el siguiente paso desde la ficha de un paciente."}
                   </p>
                 </div>
               ) : (
-                <ul className="divide-y divide-[#ebebeb]">
+                <ul className="divide-border divide-y">
                   {visibleTasks.map((task) => {
                     const overdue = isOverdue(task.dueAt, task.status);
                     const active =
@@ -369,17 +370,17 @@ export default function FollowUpsPage() {
                     return (
                       <li
                         key={task.id}
-                        className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <Link
                               href={`/dashboard/patients/${task.patientId}`}
-                              className="truncate text-sm font-medium text-[#171717] hover:underline"
+                              className="text-foreground truncate text-sm font-semibold hover:underline"
                             >
                               {task.patient.user.name}
                             </Link>
-                            <span className="rounded border border-[#ebebeb] px-1.5 py-0.5 font-mono text-[10px] text-[#737373]">
+                            <span className="border-border text-muted-foreground rounded border px-1.5 py-0.5 font-mono text-xs">
                               {task.status === "IN_PROGRESS"
                                 ? "En curso"
                                 : task.status === "COMPLETED"
@@ -389,25 +390,25 @@ export default function FollowUpsPage() {
                                     : "Pendiente"}
                             </span>
                             {overdue && (
-                              <span className="font-mono text-[10px] text-[#b42318]">
+                              <span className="border-foreground/30 bg-secondary text-foreground rounded border px-1.5 py-0.5 text-xs font-medium">
                                 Vencida
                               </span>
                             )}
                             <span
-                              className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${priorityClass(task.priority)}`}
+                              className={`rounded border px-1.5 py-0.5 font-mono text-xs ${priorityClass(task.priority)}`}
                             >
                               {priorityLabel(task.priority)}
                             </span>
                           </div>
-                          <p className="mt-1 text-sm text-[#404040]">
+                          <p className="text-foreground mt-1 text-sm font-medium">
                             {task.title}
                           </p>
                           {task.details && (
-                            <p className="mt-1 line-clamp-2 max-w-3xl text-xs leading-5 text-[#737373]">
+                            <p className="text-muted-foreground mt-1 line-clamp-2 max-w-3xl text-xs leading-5">
                               {task.details}
                             </p>
                           )}
-                          <p className="mt-1 font-mono text-[10px] text-[#888]">
+                          <p className="text-muted-foreground mt-2 text-xs">
                             {formatDate(task.dueAt)} ·{" "}
                             {task.type
                               .replaceAll("_", " ")
@@ -419,7 +420,7 @@ export default function FollowUpsPage() {
                                 task.reminderStatuses.map((reminder) => (
                                   <span
                                     key={reminder.channel}
-                                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${reminderStatusClass(reminder.status)}`}
+                                    className={`rounded border px-1.5 py-0.5 font-mono text-xs ${reminderStatusClass(reminder.status)}`}
                                   >
                                     {reminder.channel === "WHATSAPP"
                                       ? "WhatsApp"
@@ -428,7 +429,7 @@ export default function FollowUpsPage() {
                                   </span>
                                 ))
                               ) : (
-                                <span className="text-[10px] text-[#888]">
+                                <span className="text-muted-foreground text-xs">
                                   Sin mensaje programado
                                 </span>
                               )}
@@ -442,7 +443,7 @@ export default function FollowUpsPage() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-8"
+                                className="min-h-11"
                                 disabled={updateStatus.isPending}
                                 onClick={() =>
                                   updateStatus.mutate({
@@ -457,7 +458,7 @@ export default function FollowUpsPage() {
                             <Button
                               type="button"
                               size="sm"
-                              className="h-8"
+                              className="min-h-11"
                               disabled={updateStatus.isPending}
                               onClick={() =>
                                 updateStatus.mutate({
@@ -472,7 +473,7 @@ export default function FollowUpsPage() {
                           </div>
                         )}
                         {active && !task.canUpdate && (
-                          <span className="shrink-0 text-xs text-[#737373]">
+                          <span className="text-muted-foreground shrink-0 text-xs">
                             Asignada a otro médico
                           </span>
                         )}
@@ -483,7 +484,7 @@ export default function FollowUpsPage() {
               )}
             </section>
 
-            <p className="text-xs leading-5 text-[#888]">
+            <p className="text-muted-foreground text-xs leading-5">
               El resumen muestra estados actuales de citas programadas y tareas
               del periodo. Las mediciones se presentan por instrumento y
               versión; un cambio numérico no significa por sí mismo mejoría.
@@ -509,17 +510,17 @@ function Metric({
   danger?: boolean;
 }) {
   return (
-    <div className="flex min-h-28 items-start justify-between border-b border-[#ebebeb] px-4 py-4 sm:border-r sm:last:border-r-0 lg:border-b-0">
+    <div className="border-border flex min-h-28 items-start justify-between border-b px-5 py-5 sm:border-r sm:last:border-r-0 lg:border-b-0">
       <div>
-        <p className="text-xs text-[#737373]">{label}</p>
+        <p className="text-muted-foreground text-xs">{label}</p>
         <p
-          className={`mt-2 font-mono text-2xl font-medium tracking-[-0.06em] ${danger ? "text-[#b42318]" : "text-[#171717]"}`}
+          className={`mt-2 font-mono text-2xl font-medium tracking-[-0.06em] ${danger ? "text-foreground" : "text-foreground"}`}
         >
           {value === undefined ? "—" : value.toLocaleString("es-MX")}
         </p>
-        <p className="mt-1 text-[11px] text-[#888]">{detail}</p>
+        <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
       </div>
-      <Icon className="h-4 w-4 text-[#a3a3a3]" />
+      <Icon className="text-muted-foreground h-4 w-4" />
     </div>
   );
 }
@@ -533,10 +534,10 @@ function EventMetric({
 }) {
   return (
     <div>
-      <p className="font-mono text-xl font-medium tracking-[-0.05em] text-[#171717]">
+      <p className="text-foreground font-mono text-2xl font-medium tracking-[-0.05em]">
         {value === undefined ? "—" : value.toLocaleString("es-MX")}
       </p>
-      <p className="mt-1 text-[11px] text-[#737373]">{label}</p>
+      <p className="text-muted-foreground mt-1 text-xs">{label}</p>
     </div>
   );
 }

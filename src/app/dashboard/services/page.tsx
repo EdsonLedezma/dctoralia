@@ -136,11 +136,11 @@ export default function ServicesManagementPage() {
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
       <ProductShell role="DOCTOR">
-        <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+        <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
           <div className="mx-auto max-w-5xl">
-            <div className="mb-5 flex flex-col gap-4 border-b border-[#ebebeb] pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="border-border mb-5 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+                <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                   Operación
                 </p>
                 <h1 className="mt-1 text-xl font-semibold tracking-tight">
@@ -162,8 +162,8 @@ export default function ServicesManagementPage() {
 
             {/* Create/Edit Form */}
             {isCreating && (
-              <Card className="mb-6 border-[#ebebeb] bg-white shadow-none">
-                <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+              <Card className="border-border bg-card mb-6 shadow-none">
+                <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                   <CardTitle>
                     {editingId ? "Editar Servicio" : "Crear Nuevo Servicio"}
                   </CardTitle>
@@ -265,17 +265,17 @@ export default function ServicesManagementPage() {
                 {[1, 2, 3].map((item) => (
                   <div
                     key={item}
-                    className="h-32 animate-pulse rounded-lg border border-[#ebebeb] bg-white"
+                    className="material-card border-border bg-card h-32 animate-pulse rounded-2xl border"
                   />
                 ))}
               </div>
             ) : isError || servicesRes?.error ? (
-              <Card className="border-[#ebebeb] bg-white shadow-none">
+              <Card className="border-border bg-card shadow-none">
                 <CardContent className="p-10 text-center">
                   <p className="font-medium">
                     No pudimos cargar tus servicios.
                   </p>
-                  <p className="mt-2 text-sm text-[#6b6b6b]">
+                  <p className="text-muted-foreground mt-2 text-sm">
                     {servicesRes?.error
                       ? servicesRes.message
                       : "Intenta actualizar la página."}
@@ -285,7 +285,7 @@ export default function ServicesManagementPage() {
             ) : (
               <MotionList className="grid gap-4">
                 {services.length === 0 ? (
-                  <Card className="border-[#ebebeb] bg-white shadow-none">
+                  <Card className="border-border bg-card shadow-none">
                     <CardContent className="p-12 text-center">
                       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
                         <Plus className="h-8 w-8 text-gray-400" />
@@ -307,7 +307,7 @@ export default function ServicesManagementPage() {
                   services.map((service) => (
                     <Card
                       key={service.id}
-                      className={`border-[#ebebeb] bg-white shadow-none ${!service.isActive ? "opacity-60" : ""}`}
+                      className={`border-border bg-card shadow-none ${!service.isActive ? "opacity-60" : ""}`}
                     >
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
@@ -329,13 +329,13 @@ export default function ServicesManagementPage() {
                             </p>
                             <div className="flex items-center space-x-6 text-sm">
                               <div className="flex items-center space-x-2">
-                                <DollarSign className="h-4 w-4 text-green-600" />
-                                <span className="font-semibold text-green-600">
+                                <DollarSign className="text-muted-foreground h-4 w-4" />
+                                <span className="text-muted-foreground font-semibold">
                                   ${service.price} MXN
                                 </span>
                               </div>
                               <div className="flex items-center space-x-2">
-                                <Clock className="h-4 w-4 text-blue-600" />
+                                <Clock className="text-muted-foreground h-4 w-4" />
                                 <span className="text-gray-700">
                                   {service.duration} minutos
                                 </span>

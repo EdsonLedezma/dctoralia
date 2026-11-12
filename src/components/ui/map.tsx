@@ -647,7 +647,7 @@ function MarkerContent({ children, className }: MarkerContentProps) {
 
 function DefaultMarkerIcon() {
   return (
-    <div className="relative h-4 w-4 rounded-full border-2 border-white bg-blue-500 shadow-lg" />
+    <div className="border-background bg-foreground relative h-4 w-4 rounded-full border-2 shadow-lg" />
   );
 }
 

@@ -2,246 +2,463 @@ import Link from "next/link";
 import {
   Activity,
   ArrowRight,
-  BarChart3,
-  Calendar,
-  Clock3,
+  CalendarDays,
+  Check,
+  ClipboardList,
+  FileHeart,
+  FileText,
+  HeartPulse,
+  LogIn,
   MessageSquareText,
   ShieldCheck,
+  Stethoscope,
   Users,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
+import { DopilotBrand } from "~/components/brand/dopilot-brand";
+import { DopilotHeroBackground } from "~/components/liquid-glass/dopilot-hero-background";
+import { GlassSurface } from "~/components/liquid-glass/glass-surface";
+import { LandingReveal } from "~/components/marketing/landing-reveal";
+import { AppearanceMenu } from "~/components/shared/appearance-menu";
 import { Button } from "~/components/ui/button";
 import {
   Card,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { LandingReveal } from "~/components/marketing/landing-reveal";
 
-const features = [
+const capabilities = [
   {
-    icon: Calendar,
-    title: "Agenda que entiende tu jornada",
+    icon: CalendarDays,
+    eyebrow: "01 · Agenda",
+    title: "Tu jornada, siempre clara.",
     description:
-      "Servicios, duración y horarios se coordinan para evitar dobles reservas.",
+      "Organiza servicios, horarios y citas desde una agenda pensada para el trabajo diario del consultorio.",
+    points: ["Vista por día o semana", "Disponibilidad por servicio"],
   },
   {
-    icon: MessageSquareText,
-    title: "Automatizaciones que sí ayudan",
+    icon: FileHeart,
+    eyebrow: "02 · Expediente",
+    title: "Cada consulta con contexto.",
     description:
-      "Confirmaciones y recordatorios listos para conectarse con Sent cuando decidas activarlos.",
+      "Reúne notas profesionales, episodios, recetas, documentos y mediciones en el recorrido clínico de cada paciente.",
+    points: ["Notas y recetas vinculadas", "Documentos y resultados"],
+  },
+  {
+    icon: ClipboardList,
+    eyebrow: "03 · Seguimiento",
+    title: "El siguiente paso no se pierde.",
+    description:
+      "Convierte una indicación en una tarea con responsable y fecha para mantener continuidad entre consultas.",
+    points: ["Pendientes por paciente", "Fechas y estado visibles"],
   },
   {
     icon: Users,
-    title: "Pacientes en contexto",
+    eyebrow: "04 · Consultorio",
+    title: "Un equipo en el mismo espacio.",
     description:
-      "Una vista clara de citas, notas y seguimiento para que la consulta empiece mejor.",
+      "Administra profesionales, ubicaciones y servicios desde un espacio de trabajo compartido.",
+    points: ["Miembros y permisos", "Servicios y ubicaciones"],
   },
 ];
 
-const darkMetrics: Array<{ icon: LucideIcon; label: string; detail: string }> =
-  [
-    { icon: Clock3, label: "Horarios", detail: "Disponibilidad real" },
-    { icon: ShieldCheck, label: "Confianza", detail: "Acceso por rol" },
-    { icon: BarChart3, label: "Claridad", detail: "Métricas accionables" },
-  ];
+const workflow = [
+  {
+    number: "01",
+    icon: CalendarDays,
+    title: "Prepara la consulta",
+    description:
+      "Consulta la agenda, revisa quién viene y abre su expediente desde la cita.",
+  },
+  {
+    number: "02",
+    icon: FileText,
+    title: "Documenta con calma",
+    description:
+      "Registra la consulta y deja diferenciados los borradores, las notas firmadas y las recetas.",
+  },
+  {
+    number: "03",
+    icon: Check,
+    title: "Mantén la continuidad",
+    description:
+      "Deja tareas de seguimiento y encuentra después su estado en la ficha del paciente.",
+  },
+];
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#171717]">
-      <header className="sticky top-0 z-20 border-b border-[#ebebeb] bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2"
-            aria-label="Dctoralia, inicio"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#171717] text-white">
-              <Activity className="h-4 w-4" />
-            </span>
-            <span className="font-semibold tracking-[-0.03em]">Dctoralia</span>
+    <div className="bg-background text-foreground min-h-dvh">
+      <header className="border-border bg-background/85 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-30 border-b backdrop-blur-2xl">
+        <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+          <Link href="/" className="flex items-center" aria-label="Dopilot, inicio">
+            <DopilotBrand />
           </Link>
           <nav
-            className="flex items-center gap-2"
+            className="flex items-center gap-1.5 sm:gap-2"
             aria-label="Navegación principal"
           >
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
-                Iniciar sesión
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm">Crear cuenta</Button>
-            </Link>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="size-11 px-0 sm:w-auto sm:px-3"
+            >
+              <Link href="/login" aria-label="Iniciar sesión">
+                <LogIn className="size-4 sm:hidden" />
+                <span className="hidden sm:inline">Iniciar sesión</span>
+              </Link>
+            </Button>
+            <Button asChild size="sm" backdrop="content">
+              <Link href="/register">Crear cuenta</Link>
+            </Button>
+            <AppearanceMenu />
           </nav>
         </div>
       </header>
 
       <main>
         <LandingReveal>
-          <section className="relative isolate overflow-hidden border-b border-[#ebebeb] bg-white px-6 py-24 sm:py-32">
+          <section className="border-border bg-background relative isolate overflow-hidden border-b px-5 pt-8 pb-20 sm:px-6 sm:pt-10 sm:pb-28">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] opacity-70 [background:radial-gradient(circle_at_20%_10%,#dbeafe,transparent_34%),radial-gradient(circle_at_75%_0%,#ede9fe,transparent_32%),radial-gradient(circle_at_55%_45%,#fce7f3,transparent_28%)]"
+              className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[640px] bg-[radial-gradient(ellipse_at_50%_20%,var(--muted),transparent_68%)] opacity-70"
             />
-            <div className="mx-auto max-w-4xl text-center">
-              <p
-                data-reveal="hero"
-                className="mb-5 font-mono text-[11px] tracking-[0.14em] text-[#6b6b6b] uppercase"
+            <DopilotHeroBackground />
+            <div className="relative z-10 mx-auto max-w-4xl text-center">
+              <GlassSurface
+                backdrop="content"
+                className="mx-auto mb-6 w-fit"
+                contentClassName="px-4 py-2 text-xs font-medium"
               >
-                Plataforma operativa para consultorios.
-              </p>
+                Tecnología para cuidar mejor tu consulta.
+              </GlassSurface>
               <h1
                 data-reveal="hero"
-                className="text-5xl font-semibold tracking-[-0.065em] text-balance sm:text-7xl"
+                className="text-4xl leading-[1.02] font-semibold tracking-[-0.065em] text-balance sm:text-6xl md:text-7xl"
               >
-                Menos coordinación. Más tiempo para cuidar.
+                Menos coordinación.
+                <br className="hidden sm:block" /> Más tiempo para cuidar.
               </h1>
               <p
                 data-reveal="hero"
-                className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#4d4d4d] sm:text-xl"
+                className="text-muted-foreground mx-auto mt-6 max-w-2xl text-base leading-7 text-balance sm:text-lg sm:leading-8"
               >
-                Dctoralia reúne agenda, pacientes y automatizaciones en una
-                experiencia precisa para tu consultorio.
+                Agenda, expediente clínico y seguimiento conectados en un mismo
+                lugar para que tu consultorio avance con claridad.
               </p>
               <div
                 data-reveal="hero"
-                className="mt-9 flex flex-col justify-center gap-3 sm:flex-row"
+                className="mt-8 flex flex-col justify-center gap-3 sm:flex-row"
               >
-                <Link href="/register">
-                  <Button size="lg" className="group h-12 rounded-full px-7">
+                <Button asChild size="lg" className="group h-12 px-7">
+                  <Link href="/register">
                     Comenzar gratis
-                    <ArrowRight className="h-4 w-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
-                  </Button>
-                </Link>
-                <Link href="/patient/doctors">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="h-12 rounded-full px-7"
-                  >
-                    Explorar un perfil
-                  </Button>
-                </Link>
+                    <ArrowRight className="size-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="h-12 px-7">
+                  <Link href="/patient/doctors">Explorar doctores</Link>
+                </Button>
               </div>
               <p
                 data-reveal="hero"
-                className="mt-4 font-mono text-xs text-[#888]"
+                className="text-muted-foreground mt-4 text-xs"
               >
-                Sin tarjeta · Configuración en minutos
+                Agenda · pacientes · continuidad clínica
               </p>
             </div>
+            <a
+              href="#funcionalidades"
+              className="text-muted-foreground hover:text-foreground mx-auto mt-10 flex min-h-11 w-fit items-center gap-2 text-sm transition-colors"
+            >
+              Conoce Dopilot <ArrowRight className="size-4 rotate-90" />
+            </a>
           </section>
 
-          <section className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
-            <div className="mb-10 max-w-2xl">
+          <section
+            id="funcionalidades"
+            className="mx-auto max-w-6xl scroll-mt-24 px-5 py-20 sm:px-6 sm:py-28"
+          >
+            <div className="mb-10 grid gap-4 md:mb-12 md:grid-cols-[1fr_0.7fr] md:items-end">
+              <div className="max-w-2xl">
+                <p data-reveal className="text-muted-foreground text-sm">
+                  Todo el consultorio, conectado
+                </p>
+                <h2
+                  data-reveal
+                  className="mt-3 text-3xl leading-tight font-semibold tracking-[-0.05em] text-balance sm:text-4xl"
+                >
+                  Lo importante de tu práctica, en su lugar.
+                </h2>
+              </div>
               <p
                 data-reveal
-                className="font-mono text-[11px] tracking-[0.14em] text-[#888] uppercase"
+                className="text-muted-foreground max-w-lg leading-7 md:justify-self-end"
               >
-                El sistema completo.
+                De la primera cita al seguimiento posterior: cada herramienta
+                está cerca del momento en que la necesitas.
               </p>
-              <h2
-                data-reveal
-                className="mt-3 text-3xl font-semibold tracking-[-0.045em] sm:text-4xl"
-              >
-                Cada parte de tu operación, en una sola vista.
-              </h2>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {features.map(({ icon: Icon, title, description }) => (
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {capabilities.map(({ icon: Icon, eyebrow, title, description, points }) => (
                 <Card
-                  key={title}
+                  key={eyebrow}
                   data-reveal
-                  className="gap-4 border-[#ebebeb] p-2 transition-[border-color,transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:border-[#d4d4d4] hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+                  className="border-border gap-0 rounded-[24px] p-0 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-foreground/25 hover:shadow-lg"
                 >
-                  <CardHeader className="gap-4 p-5">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#f5f5f5]">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <CardTitle className="text-lg tracking-[-0.025em]">
-                      {title}
-                    </CardTitle>
-                    <CardDescription className="text-sm leading-6">
-                      {description}
-                    </CardDescription>
+                  <CardHeader className="gap-5 p-5 sm:p-7">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="bg-muted flex size-11 items-center justify-center rounded-2xl">
+                        <Icon className="size-5" aria-hidden="true" />
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {eyebrow}
+                      </span>
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl tracking-[-0.035em] sm:text-2xl">
+                        {title}
+                      </CardTitle>
+                      <CardDescription className="mt-2 max-w-lg text-sm leading-6">
+                        {description}
+                      </CardDescription>
+                    </div>
                   </CardHeader>
+                  <CardContent className="border-border text-muted-foreground flex flex-wrap gap-x-5 gap-y-2 border-t px-5 py-4 text-xs sm:px-7">
+                    {points.map((point) => (
+                      <span key={point} className="inline-flex items-center gap-2">
+                        <span className="bg-foreground size-1 rounded-full" />
+                        {point}
+                      </span>
+                    ))}
+                  </CardContent>
                 </Card>
               ))}
             </div>
           </section>
 
-          <section className="border-y border-[#ebebeb] bg-[#171717] px-6 py-20 text-white sm:py-24">
-            <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+          <section className="border-border border-y bg-foreground text-background px-5 py-20 sm:px-6 sm:py-28">
+            <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-16">
               <div>
-                <p
-                  data-reveal
-                  className="font-mono text-[11px] tracking-[0.14em] text-[#a3a3a3] uppercase"
-                >
-                  Diseñado para crecer.
+                <p data-reveal className="text-background/65 text-sm">
+                  Un recorrido, sin perder el hilo
                 </p>
                 <h2
                   data-reveal
-                  className="mt-3 text-3xl font-semibold tracking-[-0.045em] sm:text-4xl"
+                  className="mt-3 text-3xl leading-tight font-semibold tracking-[-0.05em] text-balance sm:text-4xl"
                 >
-                  Automatiza lo repetitivo sin perder el control.
+                  De la agenda al seguimiento, con contexto.
                 </h2>
                 <p
                   data-reveal
-                  className="mt-5 max-w-xl leading-7 text-[#b8b8b8]"
+                  className="text-background/75 mt-5 max-w-lg leading-7"
                 >
-                  Empieza con agenda y confirmaciones. Más adelante, Sent y los
-                  agentes de voz podrán operar sobre las mismas reglas seguras.
+                  La información y las herramientas acompañan el trabajo del
+                  profesional antes, durante y después de cada consulta.
                 </p>
               </div>
               <div
                 data-reveal
-                className="grid gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-3"
+                className="border-background/15 bg-background/5 overflow-hidden rounded-[28px] border p-4 sm:p-6"
               >
-                {darkMetrics.map(({ icon: Icon, label, detail }) => (
-                  <div key={label} className="bg-[#202020] p-5">
-                    <Icon className="mb-8 h-4 w-4 text-[#c7c7c7]" />
-                    <p className="font-medium">{label}</p>
-                    <p className="mt-1 text-sm text-[#929292]">{detail}</p>
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-background/60 text-xs">
+                      Vista ilustrativa
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold tracking-tight">
+                      Una jornada en orden
+                    </h3>
                   </div>
-                ))}
+                  <CalendarDays className="text-background/75 size-5" />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch">
+                  <div className="border-background/15 bg-background/10 rounded-2xl border p-4">
+                    <p className="text-background/65 text-xs">Agenda de hoy</p>
+                    <div className="mt-4 space-y-3">
+                      <PreviewAppointment time="09:00" label="Consulta" />
+                      <PreviewAppointment time="10:30" label="Seguimiento" />
+                      <PreviewAppointment time="12:00" label="Consulta" />
+                    </div>
+                  </div>
+                  <div className="text-background/50 hidden items-center sm:flex">
+                    <ArrowRight className="size-5" />
+                  </div>
+                  <div className="border-background/15 bg-background/10 rounded-2xl border p-4">
+                    <p className="text-background/65 text-xs">Continuidad</p>
+                    <div className="mt-4 space-y-3">
+                      <PreviewTask icon={FileText} label="Nota de consulta" />
+                      <PreviewTask icon={MessageSquareText} label="Seguimiento" />
+                      <PreviewTask icon={ShieldCheck} label="Acceso autorizado" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-background/55 mt-4 text-xs leading-5">
+                  La ilustración muestra el recorrido del producto; no contiene
+                  información de pacientes.
+                </p>
               </div>
             </div>
           </section>
 
-          <section className="px-6 py-20 text-center sm:py-24">
-            <h2
-              data-reveal
-              className="text-3xl font-semibold tracking-[-0.045em] sm:text-4xl"
-            >
-              Tu siguiente cita puede empezar aquí.
-            </h2>
-            <p data-reveal className="mx-auto mt-4 max-w-xl text-[#6b6b6b]">
-              Construye una operación más tranquila para ti y más clara para tus
-              pacientes.
-            </p>
-            <div data-reveal className="mt-7">
-              <Link href="/register">
-                <Button size="lg" className="group h-12 rounded-full px-7">
-                  Crear mi consultorio
-                  <ArrowRight className="h-4 w-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
+          <section className="mx-auto max-w-6xl px-5 py-20 sm:px-6 sm:py-28">
+            <div className="mb-10 max-w-2xl">
+              <p data-reveal className="text-muted-foreground text-sm">
+                Para quienes participan en la atención
+              </p>
+              <h2
+                data-reveal
+                className="mt-3 text-3xl leading-tight font-semibold tracking-[-0.05em] text-balance sm:text-4xl"
+              >
+                Una experiencia clara para el equipo y sus pacientes.
+              </h2>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card data-reveal className="border-border rounded-[24px] p-0">
+                <CardHeader className="gap-5 p-6 sm:p-8">
+                  <span className="bg-muted flex size-12 items-center justify-center rounded-2xl">
+                    <Stethoscope className="size-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-xl tracking-tight">
+                      Para el profesional
+                    </CardTitle>
+                    <CardDescription className="mt-2 text-sm leading-6">
+                      Administra la agenda, abre expedientes, documenta consultas,
+                      emite recetas y organiza las tareas que siguen.
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="border-border text-muted-foreground grid gap-3 border-t px-6 py-5 text-sm sm:grid-cols-2 sm:px-8">
+                  <CapabilityLine icon={CalendarDays} text="Agenda y servicios" />
+                  <CapabilityLine icon={FileHeart} text="Expedientes clínicos" />
+                  <CapabilityLine icon={ClipboardList} text="Tareas de seguimiento" />
+                  <CapabilityLine icon={Activity} text="Mediciones y resultados" />
+                </CardContent>
+              </Card>
+              <Card data-reveal className="border-border rounded-[24px] p-0">
+                <CardHeader className="gap-5 p-6 sm:p-8">
+                  <span className="bg-muted flex size-12 items-center justify-center rounded-2xl">
+                    <HeartPulse className="size-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-xl tracking-tight">
+                      Para el paciente
+                    </CardTitle>
+                    <CardDescription className="mt-2 text-sm leading-6">
+                      Encuentra profesionales, administra sus citas y consulta la
+                      información clínica que el equipo comparte.
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="border-border text-muted-foreground grid gap-3 border-t px-6 py-5 text-sm sm:grid-cols-2 sm:px-8">
+                  <CapabilityLine icon={Users} text="Buscar profesionales" />
+                  <CapabilityLine icon={CalendarDays} text="Consultar sus citas" />
+                  <CapabilityLine icon={FileText} text="Historial compartido" />
+                  <CapabilityLine icon={MessageSquareText} text="Avisos y preferencias" />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          <section className="border-border border-t px-5 py-20 text-center sm:px-6 sm:py-28">
+            <div className="mx-auto max-w-2xl">
+              <GlassSurface
+                backdrop="content"
+                className="mx-auto mb-6 w-fit"
+                contentClassName="px-4 py-2 text-xs font-medium"
+              >
+                Una práctica más ordenada empieza aquí.
+              </GlassSurface>
+              <h2
+                data-reveal
+                className="text-3xl leading-tight font-semibold tracking-[-0.05em] text-balance sm:text-4xl"
+              >
+                Más claridad para tu equipo. Más continuidad para tus pacientes.
+              </h2>
+              <p
+                data-reveal
+                className="text-muted-foreground mx-auto mt-4 max-w-xl leading-7"
+              >
+                Crea el espacio de tu consultorio y conoce una manera más
+                tranquila de organizar la atención.
+              </p>
+              <div data-reveal className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+                <Button asChild size="lg" className="group h-12 px-7">
+                  <Link href="/register">
+                    Crear mi consultorio
+                    <ArrowRight className="size-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
+                  </Link>
                 </Button>
-              </Link>
+                <Button asChild variant="outline" size="lg" className="h-12 px-7">
+                  <Link href="/patient/doctors">Buscar un doctor</Link>
+                </Button>
+              </div>
             </div>
           </section>
         </LandingReveal>
       </main>
 
-      <footer className="border-t border-[#ebebeb] bg-white px-6 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 text-sm text-[#6b6b6b] sm:flex-row sm:items-center sm:justify-between">
-          <span>© 2026 Dctoralia</span>
-          <span className="font-mono text-xs">
-            Agenda · Pacientes · Automatizaciones
-          </span>
+      <footer className="border-border bg-card border-t px-5 py-7 sm:px-6">
+        <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col gap-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 Dopilot</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+            <span>Agenda</span>
+            <span>Expedientes</span>
+            <span>Seguimiento</span>
+          </div>
+          <Link href="/login" className="min-h-11 inline-flex items-center hover:text-foreground">
+            Iniciar sesión
+          </Link>
         </div>
       </footer>
     </div>
+  );
+}
+
+function PreviewAppointment({ time, label }: { time: string; label: string }) {
+  return (
+    <div className="border-background/10 flex items-center gap-3 border-b pb-3 last:border-0 last:pb-0">
+      <span className="text-background/75 w-12 font-mono text-xs tabular-nums">
+        {time}
+      </span>
+      <span className="bg-background/15 size-1.5 rounded-full" />
+      <span className="text-sm">{label}</span>
+    </div>
+  );
+}
+
+function PreviewTask({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof FileText;
+  label: string;
+}) {
+  return (
+    <div className="border-background/10 flex items-center gap-3 rounded-xl border px-3 py-2.5">
+      <Icon className="text-background/70 size-4 shrink-0" aria-hidden="true" />
+      <span className="text-sm">{label}</span>
+      <Check className="text-background/55 ml-auto size-3.5" aria-hidden="true" />
+    </div>
+  );
+}
+
+function CapabilityLine({
+  icon: Icon,
+  text,
+}: {
+  icon: typeof FileText;
+  text: string;
+}) {
+  return (
+    <span className="flex min-h-10 items-center gap-2.5">
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      {text}
+    </span>
   );
 }

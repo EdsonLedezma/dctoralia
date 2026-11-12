@@ -2,9 +2,9 @@ import { Skeleton } from "~/components/ui/skeleton";
 
 export default function DoctorProfileLoading() {
   return (
-    <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+    <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center gap-4 border-b border-[#ebebeb] pb-5">
+        <div className="border-border flex items-center gap-4 border-b pb-5">
           <Skeleton className="h-14 w-14 rounded-full" />
           <div className="space-y-2">
             <Skeleton className="h-6 w-48" />

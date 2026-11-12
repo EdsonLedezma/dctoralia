@@ -121,17 +121,17 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
   };
 
   return (
-    <div className="min-h-[calc(100dvh-3.5rem)] bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+    <div className="bg-background min-h-[calc(100dvh-3.5rem)] px-4 py-6 sm:px-8 sm:py-8">
       <div className="mx-auto max-w-4xl">
-        <header className="mb-5 flex flex-col gap-4 border-b border-[#ebebeb] pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <header className="border-border mb-5 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+            <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
               Centro de avisos
             </p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
               Notificaciones
             </h1>
-            <p className="mt-1 text-sm text-[#737373]">
+            <p className="text-muted-foreground mt-1 text-sm">
               Cambios importantes de tus citas y actividad de tu cuenta.
             </p>
           </div>
@@ -159,7 +159,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
               setFilter("ALL");
               setVisibleLimit(8);
             }}
-            className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors ${filter === "ALL" ? "bg-[#171717] text-white" : "text-[#525252] hover:bg-[#f0f0f0]"}`}
+            className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors ${filter === "ALL" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}
           >
             Todas{" "}
             <span className="ml-1 opacity-70">{notifications.length}</span>
@@ -171,7 +171,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
               setFilter("UNREAD");
               setVisibleLimit(8);
             }}
-            className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors ${filter === "UNREAD" ? "bg-[#171717] text-white" : "text-[#525252] hover:bg-[#f0f0f0]"}`}
+            className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors ${filter === "UNREAD" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}
           >
             Sin leer <span className="ml-1 opacity-70">{unreadCount}</span>
           </button>
@@ -182,27 +182,27 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
             {[0, 1, 2].map((item) => (
               <div
                 key={item}
-                className="h-28 animate-pulse rounded-lg border border-[#ebebeb] bg-white"
+                className="material-card border-border bg-card h-28 animate-pulse rounded-2xl border"
               />
             ))}
             <span className="sr-only">Cargando avisos</span>
           </div>
         ) : isError || notificationsRes?.error ? (
-          <Card className="border-[#ebebeb] bg-white shadow-none">
-            <CardContent className="p-6 text-sm text-red-700" role="alert">
+          <Card className="border-border bg-card shadow-none">
+            <CardContent className="text-destructive p-6 text-sm" role="alert">
               No se pudieron cargar tus avisos. Intenta nuevamente.
             </CardContent>
           </Card>
         ) : visibleNotifications.length === 0 ? (
-          <Card className="border-[#ebebeb] bg-white shadow-none">
+          <Card className="border-border bg-card shadow-none">
             <CardContent className="py-12 text-center">
-              <Bell className="mx-auto mb-4 h-10 w-10 text-[#a3a3a3]" />
+              <Bell className="text-muted-foreground mx-auto mb-4 h-10 w-10" />
               <h2 className="mb-2 text-base font-semibold">
                 {filter === "UNREAD"
                   ? "Ya estás al día"
                   : "Aún no tienes avisos"}
               </h2>
-              <p className="mx-auto max-w-sm text-sm text-[#737373]">
+              <p className="text-muted-foreground mx-auto max-w-sm text-sm">
                 {filter === "UNREAD"
                   ? "Los avisos pendientes aparecerán aquí."
                   : role === "DOCTOR"
@@ -228,30 +228,30 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
               return (
                 <Card
                   key={notification.id}
-                  className={`border-[#ebebeb] bg-white shadow-none transition-[opacity,box-shadow] duration-200 ${notification.isRead ? "opacity-70" : "border-l-2 border-l-[#171717]"}`}
+                  className={`border-border bg-card shadow-none transition-[opacity,box-shadow] duration-200 ${notification.isRead ? "opacity-70" : "border-l-2 border-l-[#171717]"}`}
                 >
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-start gap-3 sm:gap-4">
                       <div
-                        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${notification.isRead ? "bg-[#f5f5f5] text-[#737373]" : "bg-[#f1f1f1] text-[#171717]"}`}
+                        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${notification.isRead ? "bg-muted text-muted-foreground" : "bg-muted text-foreground"}`}
                       >
                         <NotificationIcon type={notification.type} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-sm font-semibold text-[#171717]">
+                          <h2 className="text-foreground text-sm font-semibold">
                             {notification.title}
                           </h2>
                           {!notification.isRead && (
-                            <Badge className="bg-[#171717] text-white">
+                            <Badge className="bg-secondary text-foreground">
                               Nuevo
                             </Badge>
                           )}
                         </div>
-                        <p className="mt-1.5 text-sm leading-5 text-[#525252]">
+                        <p className="text-muted-foreground mt-1.5 text-sm leading-5">
                           {notification.message}
                         </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#737373]">
+                        <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <span>{formatCreatedAt(notification.createdAt)}</span>
                           {counterpart && (
                             <span>
@@ -264,7 +264,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
                           {actionHref && (
                             <Link
                               href={actionHref}
-                              className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-[#404040] transition-colors hover:bg-[#f5f5f5] hover:text-black focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none"
+                              className="text-foreground hover:bg-muted inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:text-black focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none"
                             >
                               {notification.followUpTaskId
                                 ? "Ver seguimiento"

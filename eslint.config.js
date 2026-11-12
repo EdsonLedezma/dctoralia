@@ -3,7 +3,12 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 const config = [
   ...nextVitals,
   {
-    ignores: [".next"],
+    ignores: [
+      ".next",
+      "typegpu-liquid-glass/**",
+      "test-results/**",
+      "playwright-report/**",
+    ],
   },
   {
     files: ["**/*.ts", "**/*.tsx"],

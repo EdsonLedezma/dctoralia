@@ -1,5 +1,5 @@
 {
-  "name": "dctoralia",
+  "name": "dopilot",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,6 +20,7 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:design": "playwright test",
     "demo:preview": "tsx scripts/demo/seed-demo.ts",
     "demo:seed": "tsx scripts/demo/seed-demo.ts --apply",
     "vapi:activate": "tsx scripts/vapi/activate-line.ts",
@@ -27,6 +28,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@developer-hub/liquid-glass": "^1.2.3",
     "@gsap/react": "^2.1.2",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "^7.10.0",
@@ -48,6 +50,7 @@
     "@upstash/redis": "^1.39.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/blob": "^2.8.1",
+    "@vgpu/wgsl": "0.6.0",
     "argon2": "^0.43.0",
     "border-beam": "^1.4.1",
     "class-variance-authority": "^0.7.1",
@@ -72,17 +75,21 @@
     "stripe": "^22.6.2",
     "superjson": "^2.2.1",
     "tailwind-merge": "^3.3.0",
+    "typegpu": "0.12.9",
+    "vgpu": "^0.6.0",
     "zod": "^3.25.48"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@next/env": "16.4.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@webgpu/types": "^0.1.74",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.3",
     "postcss": "^8.5.29",
@@ -94,6 +101,7 @@
     "tw-animate-css": "^1.3.3",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0",
+    "unplugin-typegpu": "0.12.7",
     "vite": "^8.3.4",
     "vitest": "^4.1.11"
   },

@@ -176,16 +176,16 @@ export function ObservationPanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#ebebeb] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#ebebeb] px-5 py-4">
+    <section className="material-card border-border bg-card overflow-hidden rounded-2xl border">
+      <div className="border-border flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
         <div>
           <div className="flex items-center gap-2">
             <Activity aria-hidden="true" className="size-4 text-[#525252]" />
-            <h2 className="text-sm font-semibold text-[#171717]">
+            <h2 className="text-foreground text-sm font-semibold">
               Mediciones clínicas
             </h2>
           </div>
-          <p className="mt-1 text-xs leading-5 text-[#737373]">
+          <p className="text-muted-foreground mt-1 text-xs leading-5">
             Valores registrados por el equipo médico, con fecha y unidad.
           </p>
         </div>
@@ -223,21 +223,21 @@ export function ObservationPanel({
               </SelectContent>
             </Select>
           </div>
-          <div className="rounded-lg border border-[#ebebeb] bg-[#fafafa] p-4">
-            <p className="text-[11px] font-medium tracking-wide text-[#737373] uppercase">
+          <div className="border-border bg-background rounded-2xl border p-4">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               Último registro
             </p>
             {latest ? (
               <>
-                <p className="mt-2 text-3xl font-semibold tracking-tight text-[#171717]">
+                <p className="text-foreground mt-2 text-3xl font-semibold tracking-tight">
                   {latest.value.toLocaleString("es-MX", {
                     maximumFractionDigits: 3,
                   })}
-                  <span className="ml-2 text-sm font-normal text-[#737373]">
+                  <span className="text-muted-foreground ml-2 text-sm font-normal">
                     {latest.unit}
                   </span>
                 </p>
-                <p className="mt-2 text-xs text-[#737373]">
+                <p className="text-muted-foreground mt-2 text-xs">
                   {observedDate(latest.measuredAt)}
                 </p>
                 <p className="mt-1 text-xs text-[#525252]">
@@ -275,12 +275,12 @@ export function ObservationPanel({
                 )}
               </>
             ) : (
-              <p className="mt-2 text-sm text-[#737373]">
+              <p className="text-muted-foreground mt-2 text-sm">
                 Aún no hay valores de {catalogItem.label.toLowerCase()}.
               </p>
             )}
           </div>
-          <p className="text-[11px] leading-5 text-[#888]">
+          <p className="text-muted-foreground text-xs leading-5">
             La variación es descriptiva. El sistema no interpreta si un cambio
             es favorable.
           </p>
@@ -290,7 +290,7 @@ export function ObservationPanel({
             Historial · {catalogItem.unit}
           </h3>
           {history.length ? (
-            <ol className="max-h-72 divide-y divide-[#f0f0f0] overflow-y-auto rounded-lg border border-[#ebebeb]">
+            <ol className="border-border max-h-72 divide-y divide-[#f0f0f0] overflow-y-auto rounded-lg border">
               {history.map((item, index) => (
                 <motion.li
                   key={item.id}
@@ -307,14 +307,14 @@ export function ObservationPanel({
                 >
                   <div className="min-w-0">
                     <p
-                      className={`text-sm font-medium tabular-nums ${item.voidedAt ? "text-[#888] line-through" : "text-[#171717]"}`}
+                      className={`text-sm font-medium tabular-nums ${item.voidedAt ? "text-muted-foreground line-through" : "text-foreground"}`}
                     >
                       {item.value}{" "}
-                      <span className="font-normal text-[#737373]">
+                      <span className="text-muted-foreground font-normal">
                         {item.unit}
                       </span>
                     </p>
-                    <p className="mt-0.5 text-[11px] text-[#737373]">
+                    <p className="text-muted-foreground mt-0.5 text-xs">
                       {observedDate(item.measuredAt)} · {item.recordedBy.name}
                     </p>
                     {item.context && (
@@ -323,7 +323,7 @@ export function ObservationPanel({
                       </p>
                     )}
                     {item.voidedAt && (
-                      <p className="mt-1 text-xs text-[#737373]">
+                      <p className="text-muted-foreground mt-1 text-xs">
                         Anulada · {item.voidReason}
                       </p>
                     )}
@@ -332,7 +332,7 @@ export function ObservationPanel({
                     <button
                       type="button"
                       onClick={() => setVoidTarget(item)}
-                      className="min-h-11 shrink-0 rounded-md px-2 text-xs text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:ring-2 focus-visible:ring-[#171717] sm:min-h-9"
+                      className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring min-h-11 shrink-0 rounded-md px-2 text-xs focus-visible:ring-2 sm:min-h-9"
                       aria-label={`Corregir medición de ${observedDate(item.measuredAt)}`}
                     >
                       <RotateCcw aria-hidden="true" className="size-3.5" />
@@ -342,7 +342,7 @@ export function ObservationPanel({
               ))}
             </ol>
           ) : (
-            <div className="flex min-h-36 items-center justify-center rounded-lg border border-dashed border-[#dedede] px-5 text-center text-sm text-[#888]">
+            <div className="text-muted-foreground flex min-h-36 items-center justify-center rounded-lg border border-dashed border-[#dedede] px-5 text-center text-sm">
               Registra el primer valor para comenzar la evolución.
             </div>
           )}

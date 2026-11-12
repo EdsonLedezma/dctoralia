@@ -96,9 +96,11 @@ function followUpPriorityLabel(priority: string) {
 }
 
 function followUpPriorityClass(priority: string) {
-  if (priority === "URGENT") return "border-red-200 bg-red-50 text-red-700";
-  if (priority === "HIGH") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-[#ebebeb] bg-white text-[#525252]";
+  if (priority === "URGENT")
+    return "border-foreground/35 bg-secondary text-foreground";
+  if (priority === "HIGH")
+    return "border-foreground/25 bg-muted text-foreground";
+  return "border-border bg-card text-muted-foreground";
 }
 
 export default function ClinicalPatientPage({ params }: Props) {
@@ -468,11 +470,11 @@ export default function ClinicalPatientPage({ params }: Props) {
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
       <ProductShell role="DOCTOR">
-        <main className="min-h-[calc(100dvh-3.5rem)] bg-[#fafafa] px-4 py-8 sm:px-8">
+        <main className="bg-background text-foreground min-h-[calc(100dvh-3.5rem)] px-4 py-8 sm:px-8">
           <div className="mx-auto max-w-6xl space-y-7">
             <Link
               href="/dashboard/patients"
-              className="inline-flex items-center gap-2 text-xs text-[#737373] hover:text-[#171717]"
+              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-xs"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Pacientes
             </Link>
@@ -484,26 +486,26 @@ export default function ClinicalPatientPage({ params }: Props) {
                 <Skeleton className="h-60 w-full" />
               </div>
             ) : timeline.error || timeline.data?.error || !result ? (
-              <section className="rounded-lg border border-[#ebebeb] bg-white p-8">
-                <h1 className="text-lg font-semibold text-[#171717]">
+              <section className="material-card border-border bg-card rounded-2xl border p-8">
+                <h1 className="text-foreground text-lg font-semibold">
                   No se pudo abrir la ficha clínica
                 </h1>
-                <p className="mt-2 text-sm text-[#737373]">
+                <p className="text-muted-foreground mt-2 text-sm">
                   Confirma que el paciente pertenece a tu seguimiento y vuelve a
                   intentarlo.
                 </p>
               </section>
             ) : (
               <>
-                <header className="flex flex-col gap-3 border-b border-[#ebebeb] pb-6 sm:flex-row sm:items-end sm:justify-between">
+                <header className="border-border flex flex-col gap-3 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <p className="mb-2 font-mono text-[11px] tracking-[0.08em] text-[#888] uppercase">
+                    <p className="text-muted-foreground mb-2 font-mono text-xs tracking-[0.08em] uppercase">
                       Expediente de seguimiento
                     </p>
-                    <h1 className="text-[26px] leading-8 font-semibold tracking-[-0.8px] text-[#171717]">
+                    <h1 className="text-foreground text-[26px] leading-8 font-semibold tracking-[-0.8px]">
                       {result.patient.user.name}
                     </h1>
-                    <p className="mt-2 text-sm text-[#737373]">
+                    <p className="text-muted-foreground mt-2 text-sm">
                       {result.patient.birthDate
                         ? `Nacimiento ${new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(new Date(result.patient.birthDate))}`
                         : "Fecha de nacimiento no registrada"}
@@ -524,7 +526,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                       <Download className="mr-1.5 h-3.5 w-3.5" />
                       {exportingRecord ? "Preparando…" : "Exportar expediente"}
                     </Button>
-                    <span className="rounded border border-[#ebebeb] bg-white px-2.5 py-1.5 text-[#525252]">
+                    <span className="border-border bg-card text-muted-foreground rounded border px-2.5 py-1.5">
                       {
                         result.episodes.filter(
                           (episode) => episode.status === "ACTIVE",
@@ -532,7 +534,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                       }{" "}
                       episodios activos
                     </span>
-                    <span className="rounded border border-[#ebebeb] bg-white px-2.5 py-1.5 text-[#525252]">
+                    <span className="border-border bg-card text-muted-foreground rounded border px-2.5 py-1.5">
                       {
                         result.followUpTasks.filter(
                           (task) =>
@@ -545,16 +547,16 @@ export default function ClinicalPatientPage({ params }: Props) {
                   </div>
                 </header>
 
-                <section className="rounded-lg border border-[#ebebeb] bg-white">
-                  <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <section className="material-card border-border bg-card rounded-2xl border">
+                  <div className="border-border flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <Paperclip className="h-4 w-4 text-[#737373]" />
-                        <h2 className="text-sm font-semibold text-[#171717]">
+                        <Paperclip className="text-muted-foreground h-4 w-4" />
+                        <h2 className="text-foreground text-sm font-semibold">
                           Documentos del expediente
                         </h2>
                       </div>
-                      <p className="mt-1 text-xs text-[#737373]">
+                      <p className="text-muted-foreground mt-1 text-xs">
                         Archivos privados visibles sólo para el equipo clínico
                         autorizado.
                       </p>
@@ -566,7 +568,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                         onChange={(event) =>
                           setFileCategory(event.target.value)
                         }
-                        className="h-9 rounded-md border border-[#ebebeb] bg-white px-3 text-xs text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                        className="border-border bg-card text-foreground h-9 rounded-md border px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
                       >
                         <option value="OTHER">Otro documento</option>
                         <option value="LAB_RESULT">
@@ -577,7 +579,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                         <option value="REFERRAL">Referencia</option>
                         <option value="CONSENT">Consentimiento</option>
                       </select>
-                      <label className="inline-flex h-9 cursor-pointer items-center rounded-md bg-[#171717] px-3 text-xs font-medium text-white transition-colors hover:bg-[#333] has-[:disabled]:cursor-wait has-[:disabled]:opacity-60">
+                      <label className="glass-bubble inline-flex min-h-11 cursor-pointer items-center px-4 text-sm font-medium transition-opacity has-[:disabled]:cursor-wait has-[:disabled]:opacity-60">
                         <input
                           type="file"
                           accept="application/pdf,image/jpeg,image/png,image/webp"
@@ -603,10 +605,10 @@ export default function ClinicalPatientPage({ params }: Props) {
                           className="flex items-center justify-between gap-4 py-3"
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[#262626]">
+                            <p className="text-card-foreground truncate text-sm font-medium">
                               {file.originalFilename}
                             </p>
-                            <p className="mt-1 text-[11px] text-[#888]">
+                            <p className="text-muted-foreground mt-1 text-xs">
                               {clinicalFileCategoryLabel(file.category)}
                               {" · "}
                               {new Intl.DateTimeFormat("es-MX", {
@@ -618,7 +620,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                           </div>
                           <a
                             href={`/api/clinical/files/${file.id}`}
-                            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#ebebeb] px-2.5 text-xs text-[#525252] transition-colors hover:bg-[#fafafa] hover:text-[#171717]"
+                            className="border-border text-muted-foreground hover:bg-background hover:text-foreground inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors"
                           >
                             <Download className="h-3.5 w-3.5" /> Descargar
                           </a>
@@ -626,7 +628,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="px-5 py-6 text-sm text-[#737373]">
+                    <p className="text-muted-foreground px-5 py-6 text-sm">
                       Todavía no hay documentos adjuntos.
                     </p>
                   )}
@@ -634,11 +636,11 @@ export default function ClinicalPatientPage({ params }: Props) {
 
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
                   <div className="space-y-6">
-                    <section className="rounded-lg border border-[#ebebeb] bg-white">
-                      <div className="border-b border-[#ebebeb] px-5 py-4">
+                    <section className="material-card border-border bg-card rounded-2xl border">
+                      <div className="border-border border-b px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <FolderPlus className="h-4 w-4 text-[#737373]" />
-                          <h2 className="text-sm font-semibold text-[#171717]">
+                          <FolderPlus className="text-muted-foreground h-4 w-4" />
+                          <h2 className="text-foreground text-sm font-semibold">
                             Episodios de atención
                           </h2>
                         </div>
@@ -648,7 +650,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                           (episode) => episode.status === "ACTIVE",
                         ) && (
                           <label className="block max-w-lg">
-                            <span className="mb-1.5 block text-xs text-[#737373]">
+                            <span className="text-muted-foreground mb-1.5 block text-xs">
                               Episodio activo
                             </span>
                             <select
@@ -656,7 +658,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                               onChange={(event) =>
                                 setEpisodeId(event.target.value)
                               }
-                              className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                              className="border-border bg-card text-foreground h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
                             >
                               {result.episodes
                                 .filter(
@@ -702,18 +704,18 @@ export default function ClinicalPatientPage({ params }: Props) {
 
                     <section
                       id="encounter-form"
-                      className="scroll-mt-8 rounded-lg border border-[#ebebeb] bg-white"
+                      className="material-card border-border bg-card scroll-mt-8 rounded-2xl border"
                     >
-                      <div className="border-b border-[#ebebeb] px-5 py-4">
+                      <div className="border-border border-b px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <FilePlus2 className="h-4 w-4 text-[#737373]" />
-                          <h2 className="text-sm font-semibold text-[#171717]">
+                          <FilePlus2 className="text-muted-foreground h-4 w-4" />
+                          <h2 className="text-foreground text-sm font-semibold">
                             {encounterId
                               ? "Editar borrador clínico"
                               : "Registrar consulta"}
                           </h2>
                         </div>
-                        <p className="mt-1 text-xs text-[#737373]">
+                        <p className="text-muted-foreground mt-1 text-xs">
                           El borrador sólo queda firmado cuando confirmas la
                           acción.
                         </p>
@@ -797,7 +799,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                             maxLength={12_000}
                             placeholder="Indicaciones y próximos pasos en lenguaje claro"
                           />
-                          <p className="mt-1 text-xs text-[#737373]">
+                          <p className="text-muted-foreground mt-1 text-xs">
                             Visible para el paciente al firmar la consulta. Las
                             demás notas clínicas permanecen en el expediente
                             profesional.
@@ -831,12 +833,12 @@ export default function ClinicalPatientPage({ params }: Props) {
                       </form>
                     </section>
 
-                    <section className="rounded-lg border border-[#ebebeb] bg-white">
-                      <div className="border-b border-[#ebebeb] px-5 py-4">
-                        <h2 className="text-sm font-semibold text-[#171717]">
+                    <section className="material-card border-border bg-card rounded-2xl border">
+                      <div className="border-border border-b px-5 py-4">
+                        <h2 className="text-foreground text-sm font-semibold">
                           Línea de tiempo
                         </h2>
-                        <p className="mt-1 text-xs text-[#737373]">
+                        <p className="text-muted-foreground mt-1 text-xs">
                           Consultas profesionales, tareas y mediciones
                           registradas.
                         </p>
@@ -845,12 +847,12 @@ export default function ClinicalPatientPage({ params }: Props) {
                         {result.appointmentIntakes.map((intake) => (
                           <article
                             key={intake.id}
-                            className="bg-[#f6f8f7] px-5 py-4"
+                            className="bg-muted px-5 py-4"
                           >
-                            <p className="text-sm font-semibold text-[#173b34]">
+                            <p className="text-foreground text-sm font-semibold">
                               Brief previo a la consulta
                             </p>
-                            <p className="mt-1 text-xs text-[#60736d]">
+                            <p className="text-muted-foreground mt-1 text-xs">
                               {formatAppointmentDate(intake.date)} ·{" "}
                               {intake.time} ·{" "}
                               {intake.status === "PENDING"
@@ -860,19 +862,19 @@ export default function ClinicalPatientPage({ params }: Props) {
                             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                               <div>
                                 <dt className="font-medium">Síntomas</dt>
-                                <dd className="whitespace-pre-wrap text-[#525252]">
+                                <dd className="text-muted-foreground whitespace-pre-wrap">
                                   {intake.intakeSymptoms}
                                 </dd>
                               </div>
                               <div>
                                 <dt className="font-medium">Alergias</dt>
-                                <dd className="whitespace-pre-wrap text-[#525252]">
+                                <dd className="text-muted-foreground whitespace-pre-wrap">
                                   {intake.intakeAllergies || "No reportadas"}
                                 </dd>
                               </div>
                               <div>
                                 <dt className="font-medium">Medicamentos</dt>
-                                <dd className="whitespace-pre-wrap text-[#525252]">
+                                <dd className="text-muted-foreground whitespace-pre-wrap">
                                   {intake.intakeMedications || "No reportados"}
                                 </dd>
                               </div>
@@ -881,7 +883,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                   <dt className="font-medium">
                                     Contexto adicional
                                   </dt>
-                                  <dd className="whitespace-pre-wrap text-[#525252]">
+                                  <dd className="text-muted-foreground whitespace-pre-wrap">
                                     {intake.intakeContext}
                                   </dd>
                                 </div>
@@ -893,10 +895,10 @@ export default function ClinicalPatientPage({ params }: Props) {
                           <article key={encounter.id} className="px-5 py-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div>
-                                <p className="text-sm font-medium text-[#171717]">
+                                <p className="text-foreground text-sm font-medium">
                                   {encounter.chiefComplaint || "Consulta"}
                                 </p>
-                                <p className="mt-1 font-mono text-[10px] text-[#888]">
+                                <p className="text-muted-foreground mt-1 font-mono text-xs">
                                   {formatDate(encounter.encounterAt)} ·{" "}
                                   {encounter.status === "SIGNED"
                                     ? "Firmada"
@@ -931,33 +933,33 @@ export default function ClinicalPatientPage({ params }: Props) {
                               )}
                             </div>
                             {encounter.assessment && (
-                              <p className="mt-3 text-sm leading-6 text-[#404040]">
-                                <strong className="font-medium text-[#171717]">
+                              <p className="text-foreground mt-3 text-sm leading-6">
+                                <strong className="text-foreground font-medium">
                                   Evaluación:
                                 </strong>{" "}
                                 {encounter.assessment}
                               </p>
                             )}
                             {encounter.plan && (
-                              <p className="mt-2 text-sm leading-6 text-[#404040]">
-                                <strong className="font-medium text-[#171717]">
+                              <p className="text-foreground mt-2 text-sm leading-6">
+                                <strong className="text-foreground font-medium">
                                   Plan:
                                 </strong>{" "}
                                 {encounter.plan}
                               </p>
                             )}
                             {encounter.patientSummary && (
-                              <p className="mt-2 text-sm leading-6 text-[#404040]">
-                                <strong className="font-medium text-[#171717]">
+                              <p className="text-foreground mt-2 text-sm leading-6">
+                                <strong className="text-foreground font-medium">
                                   Resumen para el paciente:
                                 </strong>{" "}
                                 {encounter.patientSummary}
                               </p>
                             )}
                             {encounter.status === "SIGNED" && (
-                              <div className="mt-4 rounded-lg border border-[#dce9df] bg-[#f7faf7] p-4">
+                              <div className="border-border bg-muted mt-4 rounded-lg border p-4">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <p className="text-sm font-semibold text-[#173b34]">
+                                  <p className="text-foreground text-sm font-semibold">
                                     Recetas emitidas
                                   </p>
                                   <Button
@@ -977,7 +979,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                   </Button>
                                 </div>
                                 {encounter.prescriptions.length === 0 ? (
-                                  <p className="mt-2 text-xs text-[#60736d]">
+                                  <p className="text-muted-foreground mt-2 text-xs">
                                     No hay recetas emitidas para esta consulta.
                                   </p>
                                 ) : (
@@ -985,7 +987,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                     (prescription) => (
                                       <div
                                         key={prescription.id}
-                                        className="mt-3 border-t border-[#dce9df] pt-3 text-sm"
+                                        className="border-border mt-3 border-t pt-3 text-sm"
                                       >
                                         <p className="font-medium">
                                           {prescription.voidedAt
@@ -997,7 +999,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                           (medication) => (
                                             <p
                                               key={medication.id}
-                                              className="mt-1 text-[#525252]"
+                                              className="text-muted-foreground mt-1"
                                             >
                                               {medication.name} ·{" "}
                                               {medication.dose} ·{" "}
@@ -1009,7 +1011,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                           ),
                                         )}
                                         {prescription.voidReason && (
-                                          <p className="mt-1 text-xs text-red-700">
+                                          <p className="text-destructive mt-1 text-xs">
                                             Motivo de anulación:{" "}
                                             {prescription.voidReason}
                                           </p>
@@ -1019,7 +1021,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                             type="button"
                                             size="sm"
                                             variant="ghost"
-                                            className="mt-2 text-red-700"
+                                            className="text-destructive mt-2"
                                             onClick={() => {
                                               setVoidingPrescriptionId(
                                                 prescription.id,
@@ -1089,7 +1091,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                 )}
                                 {prescriptionEncounterId === encounter.id && (
                                   <form
-                                    className="mt-4 grid gap-3 border-t border-[#dce9df] pt-4 sm:grid-cols-2"
+                                    className="border-border mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2"
                                     onSubmit={(event) => {
                                       event.preventDefault();
                                       issuePrescription.mutate({
@@ -1203,7 +1205,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                             {encounter.amendments.map((amendment) => (
                               <div
                                 key={amendment.id}
-                                className="mt-3 border-l-2 border-[#b8b8b8] pl-3 text-xs leading-5 text-[#737373]"
+                                className="border-border text-muted-foreground mt-3 border-l-2 pl-3 text-xs leading-5"
                               >
                                 Enmienda del {formatDate(amendment.createdAt)}:{" "}
                                 {amendment.reason}
@@ -1211,7 +1213,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                   ([field, value]) => (
                                     <p
                                       key={field}
-                                      className="mt-1 text-[#525252]"
+                                      className="text-muted-foreground mt-1"
                                     >
                                       {field}: {value}
                                     </p>
@@ -1221,7 +1223,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                             ))}
                             {amendingEncounterId === encounter.id && (
                               <form
-                                className="mt-4 space-y-3 rounded-md border border-[#ebebeb] bg-[#fafafa] p-4"
+                                className="border-border bg-background mt-4 space-y-3 rounded-md border p-4"
                                 onSubmit={(event) => {
                                   event.preventDefault();
                                   const changes = {
@@ -1257,7 +1259,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                   });
                                 }}
                               >
-                                <p className="text-xs leading-5 text-[#737373]">
+                                <p className="text-muted-foreground text-xs leading-5">
                                   La nota firmada se conserva. La corrección
                                   quedará como un registro separado con autor y
                                   fecha.
@@ -1355,12 +1357,12 @@ export default function ClinicalPatientPage({ params }: Props) {
                             key={task.id}
                             className="flex items-start gap-3 px-5 py-4"
                           >
-                            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+                            <CalendarClock className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
                             <div>
-                              <p className="text-sm font-medium text-[#171717]">
+                              <p className="text-foreground text-sm font-medium">
                                 {task.title}
                               </p>
-                              <p className="mt-1 text-xs text-[#737373]">
+                              <p className="text-muted-foreground mt-1 text-xs">
                                 {task.dueAt
                                   ? `Fecha límite ${formatDate(task.dueAt)}`
                                   : "Sin fecha límite"}{" "}
@@ -1372,18 +1374,18 @@ export default function ClinicalPatientPage({ params }: Props) {
                                     : "Pendiente"}
                               </p>
                               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                <span className="rounded border border-[#ebebeb] bg-white px-2 py-0.5 text-[10px] text-[#525252]">
+                                <span className="border-border bg-card text-muted-foreground rounded border px-2 py-0.5 text-xs">
                                   {followUpTaskTypeLabel(task.type)}
                                 </span>
                                 <span
-                                  className={`rounded border px-2 py-0.5 text-[10px] ${followUpPriorityClass(task.priority)}`}
+                                  className={`rounded border px-2 py-0.5 text-xs ${followUpPriorityClass(task.priority)}`}
                                 >
                                   Prioridad{" "}
                                   {followUpPriorityLabel(task.priority)}
                                 </span>
                               </div>
                               {task.details && (
-                                <p className="mt-2 text-sm leading-6 text-[#525252]">
+                                <p className="text-muted-foreground mt-2 text-sm leading-6">
                                   {task.details}
                                 </p>
                               )}
@@ -1395,13 +1397,13 @@ export default function ClinicalPatientPage({ params }: Props) {
                             key={assessment.id}
                             className="flex items-start gap-3 px-5 py-4"
                           >
-                            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+                            <Activity className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
                             <div>
-                              <p className="text-sm font-medium text-[#171717]">
+                              <p className="text-foreground text-sm font-medium">
                                 {assessment.instrumentCode} · versión{" "}
                                 {assessment.instrumentVersion}
                               </p>
-                              <p className="mt-1 text-xs text-[#737373]">
+                              <p className="text-muted-foreground mt-1 text-xs">
                                 Puntuación{" "}
                                 {assessment.score ?? "sin puntuación"} ·{" "}
                                 {formatDate(assessment.measuredAt)}
@@ -1416,14 +1418,14 @@ export default function ClinicalPatientPage({ params }: Props) {
                               key={observation.id}
                               className="flex items-start gap-3 px-5 py-4"
                             >
-                              <Activity className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+                              <Activity className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
                               <div>
-                                <p className="text-sm font-medium text-[#171717]">
+                                <p className="text-foreground text-sm font-medium">
                                   {clinicalObservationCatalog[
                                     observation.code as ClinicalObservationCode
                                   ]?.label ?? observation.code}
                                 </p>
-                                <p className="mt-1 text-xs text-[#737373]">
+                                <p className="text-muted-foreground mt-1 text-xs">
                                   {observation.value} {observation.unit} ·{" "}
                                   {formatDate(observation.measuredAt)}
                                 </p>
@@ -1436,7 +1438,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                           result.outcomeAssessments.length +
                           result.clinicalObservations.length ===
                           0 && (
-                          <p className="px-5 py-10 text-center text-sm text-[#737373]">
+                          <p className="text-muted-foreground px-5 py-10 text-center text-sm">
                             Aún no hay actividad clínica registrada.
                           </p>
                         )}
@@ -1455,12 +1457,12 @@ export default function ClinicalPatientPage({ params }: Props) {
                   </div>
 
                   <aside className="space-y-6">
-                    <section className="rounded-lg border border-[#ebebeb] bg-white">
-                      <div className="border-b border-[#ebebeb] px-5 py-4">
-                        <h2 className="text-sm font-semibold text-[#171717]">
+                    <section className="material-card border-border bg-card rounded-2xl border">
+                      <div className="border-border border-b px-5 py-4">
+                        <h2 className="text-foreground text-sm font-semibold">
                           Siguiente paso
                         </h2>
-                        <p className="mt-1 text-xs text-[#737373]">
+                        <p className="text-muted-foreground mt-1 text-xs">
                           Crea una tarea concreta con responsable y fecha.
                         </p>
                       </div>
@@ -1489,7 +1491,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                   event.target.value as FollowUpTaskType,
                                 )
                               }
-                              className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                              className="border-border bg-card text-foreground h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
                             >
                               {followUpTypes.map((type) => (
                                 <option key={type.value} value={type.value}>
@@ -1510,7 +1512,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                                   event.target.value as FollowUpTaskPriority,
                                 )
                               }
-                              className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+                              className="border-border bg-card text-foreground h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
                             >
                               {followUpPriorities.map((priority) => (
                                 <option
@@ -1534,7 +1536,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                               setTaskAssigneeId(event.target.value)
                             }
                             disabled={membersQuery.isLoading}
-                            className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20 disabled:cursor-wait disabled:opacity-60"
+                            className="border-border bg-card text-foreground h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20 disabled:cursor-wait disabled:opacity-60"
                           >
                             <option value="">Yo</option>
                             {teamDoctors.map((member) => (
@@ -1543,7 +1545,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                               </option>
                             ))}
                           </select>
-                          <p className="text-[11px] text-[#888]">
+                          <p className="text-muted-foreground text-xs">
                             Si eliges a otra persona del equipo, el seguimiento
                             aparecerá en su bandeja.
                           </p>
@@ -1588,12 +1590,12 @@ export default function ClinicalPatientPage({ params }: Props) {
                       </form>
                     </section>
 
-                    <section className="rounded-lg border border-[#ebebeb] bg-white">
-                      <div className="border-b border-[#ebebeb] px-5 py-4">
-                        <h2 className="text-sm font-semibold text-[#171717]">
+                    <section className="material-card border-border bg-card rounded-2xl border">
+                      <div className="border-border border-b px-5 py-4">
+                        <h2 className="text-foreground text-sm font-semibold">
                           Registrar medición
                         </h2>
-                        <p className="mt-1 text-xs leading-5 text-[#737373]">
+                        <p className="text-muted-foreground mt-1 text-xs leading-5">
                           Captura el mismo instrumento y versión para comparar
                           su trayectoria.
                         </p>
@@ -1664,7 +1666,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                             />
                           </div>
                         </div>
-                        <p className="text-[11px] leading-5 text-[#888]">
+                        <p className="text-muted-foreground text-xs leading-5">
                           El sistema sólo compara puntuaciones del mismo código
                           y versión; no determina si el cambio es clínicamente
                           favorable.
@@ -1681,11 +1683,11 @@ export default function ClinicalPatientPage({ params }: Props) {
                       </form>
                     </section>
 
-                    <section className="rounded-lg border border-[#ebebeb] bg-[#fafafa] p-5">
-                      <p className="text-xs font-medium text-[#404040]">
+                    <section className="border-border bg-background rounded-lg border p-5">
+                      <p className="text-foreground text-xs font-medium">
                         Antecedentes informados por el paciente
                       </p>
-                      <p className="mt-1 text-[11px] text-[#888]">
+                      <p className="text-muted-foreground mt-1 text-xs">
                         Esta ficha es independiente de las notas profesionales.
                         {result.medicalHistoryAccess
                           ? "Última actualización: "
@@ -1700,9 +1702,9 @@ export default function ClinicalPatientPage({ params }: Props) {
                         {result.medicalHistoryAccess ? "." : null}
                       </p>
                       {result.patient.medicalHistory ? (
-                        <div className="mt-3 space-y-2 text-xs leading-5 text-[#525252]">
+                        <div className="text-muted-foreground mt-3 space-y-2 text-xs leading-5">
                           <p>
-                            <strong className="font-medium text-[#171717]">
+                            <strong className="text-foreground font-medium">
                               Alergias:
                             </strong>{" "}
                             {result.patient.medicalHistory.allergies.join(
@@ -1710,7 +1712,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                             ) || "No informadas"}
                           </p>
                           <p>
-                            <strong className="font-medium text-[#171717]">
+                            <strong className="text-foreground font-medium">
                               Medicamentos:
                             </strong>{" "}
                             {result.patient.medicalHistory.medications.join(
@@ -1718,7 +1720,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                             ) || "No informados"}
                           </p>
                           <p>
-                            <strong className="font-medium text-[#171717]">
+                            <strong className="text-foreground font-medium">
                               Padecimientos:
                             </strong>{" "}
                             {result.patient.medicalHistory.chronicDiseases.join(
@@ -1727,7 +1729,7 @@ export default function ClinicalPatientPage({ params }: Props) {
                           </p>
                         </div>
                       ) : (
-                        <p className="mt-3 text-xs text-[#737373]">
+                        <p className="text-muted-foreground mt-3 text-xs">
                           No hay antecedentes capturados.
                         </p>
                       )}
@@ -1851,29 +1853,29 @@ function OutcomeTrendPanel({
     .join(" ");
 
   return (
-    <section className="rounded-lg border border-[#ebebeb] bg-white">
-      <div className="border-b border-[#ebebeb] px-5 py-4">
-        <h2 className="text-sm font-semibold text-[#171717]">
+    <section className="material-card border-border bg-card rounded-2xl border">
+      <div className="border-border border-b px-5 py-4">
+        <h2 className="text-foreground text-sm font-semibold">
           Trayectoria de resultados
         </h2>
-        <p className="mt-1 text-xs leading-5 text-[#737373]">
+        <p className="text-muted-foreground mt-1 text-xs leading-5">
           Compara mediciones del mismo instrumento y versión.
         </p>
       </div>
       {instruments.length === 0 ? (
-        <p className="px-5 py-8 text-sm text-[#737373]">
+        <p className="text-muted-foreground px-5 py-8 text-sm">
           Registra mediciones para ver su evolución.
         </p>
       ) : (
         <div className="space-y-4 p-5">
           <label className="block max-w-sm">
-            <span className="mb-1.5 block text-xs text-[#737373]">
+            <span className="text-muted-foreground mb-1.5 block text-xs">
               Instrumento
             </span>
             <select
               value={selected?.key ?? ""}
               onChange={(event) => setSelectedKey(event.target.value)}
-              className="h-9 w-full rounded-md border border-[#ebebeb] bg-white px-3 text-sm text-[#171717] outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+              className="border-border bg-card text-foreground h-9 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/20"
             >
               {instruments.map((instrument) => (
                 <option key={instrument.key} value={instrument.key}>
@@ -1885,12 +1887,12 @@ function OutcomeTrendPanel({
           {trend.isLoading ? (
             <Skeleton className="h-20 w-full" />
           ) : points.length === 0 ? (
-            <p className="text-sm text-[#737373]">
+            <p className="text-muted-foreground text-sm">
               No hay puntuaciones completas para comparar.
             </p>
           ) : (
             <>
-              <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] px-3 py-2">
+              <div className="border-border bg-background rounded-md border px-3 py-2">
                 <svg
                   viewBox="0 0 100 40"
                   role="img"
@@ -1905,7 +1907,7 @@ function OutcomeTrendPanel({
                       stroke="currentColor"
                       strokeWidth="1.5"
                       vectorEffect="non-scaling-stroke"
-                      className="text-[#525252]"
+                      className="text-muted-foreground"
                     />
                   )}
                   {points.map((point, index) => {
@@ -1926,7 +1928,7 @@ function OutcomeTrendPanel({
                     );
                   })}
                 </svg>
-                <div className="flex justify-between font-mono text-[10px] text-[#888]">
+                <div className="text-muted-foreground flex justify-between font-mono text-xs">
                   <span>
                     {new Intl.DateTimeFormat("es-MX", {
                       dateStyle: "medium",
@@ -1941,20 +1943,20 @@ function OutcomeTrendPanel({
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div>
-                  <p className="text-[#888]">Inicial</p>
-                  <p className="mt-1 font-mono text-sm text-[#171717]">
+                  <p className="text-muted-foreground">Inicial</p>
+                  <p className="text-foreground mt-1 font-mono text-sm">
                     {trend.data?.result?.baselineScore ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[#888]">Actual</p>
-                  <p className="mt-1 font-mono text-sm text-[#171717]">
+                  <p className="text-muted-foreground">Actual</p>
+                  <p className="text-foreground mt-1 font-mono text-sm">
                     {trend.data?.result?.latestScore ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[#888]">Cambio</p>
-                  <p className="mt-1 font-mono text-sm text-[#171717]">
+                  <p className="text-muted-foreground">Cambio</p>
+                  <p className="text-foreground mt-1 font-mono text-sm">
                     {trend.data?.result?.changeFromBaseline === null ||
                     trend.data?.result?.changeFromBaseline === undefined
                       ? "—"
@@ -1962,7 +1964,7 @@ function OutcomeTrendPanel({
                   </p>
                 </div>
               </div>
-              <p className="text-[11px] leading-5 text-[#888]">
+              <p className="text-muted-foreground text-xs leading-5">
                 La gráfica muestra la variación numérica; el sentido clínico
                 depende del instrumento y del criterio del profesional.
               </p>

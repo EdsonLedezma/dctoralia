@@ -32,11 +32,11 @@ const statusLabels: Record<Appointment["status"], string> = {
 };
 
 const statusClasses: Record<Appointment["status"], string> = {
-  PENDING: "border-[#e5e5e5] bg-[#fafafa] text-[#525252]",
-  CONFIRMED: "border-[#d4d4d4] bg-white text-[#171717]",
-  COMPLETED: "border-[#d4d4d4] bg-[#f5f5f5] text-[#525252]",
-  CANCELLED: "border-[#e5e5e5] bg-[#fafafa] text-[#737373]",
-  NO_SHOW: "border-[#e5e5e5] bg-[#fafafa] text-[#737373]",
+  PENDING: "border-border bg-background text-muted-foreground",
+  CONFIRMED: "border-border bg-card text-foreground",
+  COMPLETED: "border-border bg-muted text-muted-foreground",
+  CANCELLED: "border-border bg-background text-muted-foreground",
+  NO_SHOW: "border-border bg-background text-muted-foreground",
 };
 
 function formatDate(value: Date | string) {
@@ -62,11 +62,11 @@ export default function PatientAppointmentDetailPage() {
   return (
     <DashboardWrapper allowedRoles={["PATIENT"]}>
       <ProductShell role="PATIENT">
-        <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+        <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
           <div className="mx-auto max-w-3xl space-y-6">
             <Link
               href="/patient/appointments"
-              className="inline-flex min-h-11 items-center gap-2 text-sm text-[#525252] transition-colors hover:text-[#171717] focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none"
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-2 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none"
             >
               <ArrowLeft className="h-4 w-4" />
               Volver a mis citas
@@ -77,12 +77,12 @@ export default function PatientAppointmentDetailPage() {
             {(isError ||
               Boolean(data?.error) ||
               (!isLoading && !appointment)) && (
-              <section className="border-y border-[#ebebeb] bg-white px-5 py-12 text-center">
-                <Stethoscope className="mx-auto h-8 w-8 text-[#737373]" />
+              <section className="border-border bg-card border-y px-5 py-12 text-center">
+                <Stethoscope className="text-muted-foreground mx-auto h-8 w-8" />
                 <h1 className="mt-4 text-xl font-semibold tracking-tight">
                   Cita no disponible
                 </h1>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#737373]">
+                <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm leading-6">
                   No pudimos encontrar esta cita o ya no tienes acceso a ella.
                 </p>
                 <Link href="/patient/appointments" className="mt-5 inline-flex">
@@ -106,16 +106,18 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
 
   return (
     <MotionList className="space-y-6">
-      <section className="border-y border-[#ebebeb] bg-white px-5 py-6 sm:px-7 sm:py-8">
+      <section className="border-border bg-card border-y px-5 py-6 sm:px-7 sm:py-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+            <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
               Detalle de cita
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">
               {appointment.service?.name ?? appointment.reason ?? "Consulta"}
             </h1>
-            <p className="mt-1 text-sm text-[#525252]">con {doctorName}</p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              con {doctorName}
+            </p>
           </div>
           <Badge className={statusClasses[appointment.status]}>
             {statusLabels[appointment.status]}
@@ -134,21 +136,21 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
 
         <InfoSection title="Profesional">
           <InfoRow icon={Stethoscope}>{doctorName}</InfoRow>
-          <p className="pl-6 text-xs text-[#737373]">
+          <p className="text-muted-foreground pl-6 text-xs">
             {appointment.doctor?.specialty ?? "Especialidad no registrada"}
           </p>
         </InfoSection>
       </div>
 
       <InfoSection title="Motivo y notas">
-        <div className="flex items-start gap-2 text-sm text-[#525252]">
-          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+        <div className="text-muted-foreground flex items-start gap-2 text-sm">
+          <FileText className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-6">
             {appointment.reason ?? "Sin motivo registrado"}
           </p>
         </div>
         {appointment.notes && (
-          <p className="mt-3 border-t border-[#f0f0f0] pt-3 text-sm leading-6 text-[#525252]">
+          <p className="border-border text-muted-foreground mt-3 border-t pt-3 text-sm leading-6">
             {appointment.notes}
           </p>
         )}
@@ -159,26 +161,26 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="font-medium">Síntomas</dt>
-              <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+              <dd className="text-muted-foreground mt-1 whitespace-pre-wrap">
                 {appointment.intakeSymptoms}
               </dd>
             </div>
             <div>
               <dt className="font-medium">Alergias</dt>
-              <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+              <dd className="text-muted-foreground mt-1 whitespace-pre-wrap">
                 {appointment.intakeAllergies || "No reportadas"}
               </dd>
             </div>
             <div>
               <dt className="font-medium">Medicamentos</dt>
-              <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+              <dd className="text-muted-foreground mt-1 whitespace-pre-wrap">
                 {appointment.intakeMedications || "No reportados"}
               </dd>
             </div>
             {appointment.intakeContext && (
               <div>
                 <dt className="font-medium">Contexto adicional</dt>
-                <dd className="mt-1 whitespace-pre-wrap text-[#525252]">
+                <dd className="text-muted-foreground mt-1 whitespace-pre-wrap">
                   {appointment.intakeContext}
                 </dd>
               </div>
@@ -188,27 +190,27 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
       )}
 
       <InfoSection title="Contacto del consultorio">
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#525252]">
+        <div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-2 text-sm">
           {doctorPhone && (
             <a
               href={`tel:${doctorPhone}`}
-              className="inline-flex min-h-11 items-center gap-2 hover:text-[#171717]"
+              className="hover:text-foreground inline-flex min-h-11 items-center gap-2"
             >
-              <Phone className="h-4 w-4 text-[#737373]" />
+              <Phone className="text-muted-foreground h-4 w-4" />
               {doctorPhone}
             </a>
           )}
           {doctorEmail && (
             <a
               href={`mailto:${doctorEmail}`}
-              className="inline-flex min-h-11 items-center gap-2 hover:text-[#171717]"
+              className="hover:text-foreground inline-flex min-h-11 items-center gap-2"
             >
-              <Mail className="h-4 w-4 text-[#737373]" />
+              <Mail className="text-muted-foreground h-4 w-4" />
               {doctorEmail}
             </a>
           )}
           {!doctorPhone && !doctorEmail && (
-            <p className="text-[#737373]">
+            <p className="text-muted-foreground">
               No hay datos de contacto publicados.
             </p>
           )}
@@ -217,7 +219,7 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
 
       {(appointment.status === "PENDING" ||
         appointment.status === "CONFIRMED") && (
-        <div className="flex flex-wrap gap-2 border-t border-[#ebebeb] pt-5">
+        <div className="border-border flex flex-wrap gap-2 border-t pt-5">
           <Link href="/patient/appointments">
             <Button variant="outline">Gestionar cita</Button>
           </Link>
@@ -238,7 +240,7 @@ function InfoSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-y border-[#ebebeb] bg-white px-4 py-4 sm:px-5">
+    <section className="border-border bg-card border-y px-4 py-4 sm:px-5">
       <h2 className="text-sm font-semibold">{title}</h2>
       <div className="mt-3 space-y-2">{children}</div>
     </section>
@@ -253,8 +255,8 @@ function InfoRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-2 text-sm text-[#525252]">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#737373]" />
+    <div className="text-muted-foreground flex items-start gap-2 text-sm">
+      <Icon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
       <span>{children}</span>
     </div>
   );
@@ -263,10 +265,10 @@ function InfoRow({
 function AppointmentSkeleton() {
   return (
     <div className="space-y-6" aria-label="Cargando detalle de cita">
-      <div className="h-36 animate-pulse border-y border-[#ebebeb] bg-white" />
+      <div className="border-border bg-card h-36 animate-pulse border-y" />
       <div className="grid gap-6 sm:grid-cols-2">
-        <div className="h-28 animate-pulse border-y border-[#ebebeb] bg-white" />
-        <div className="h-28 animate-pulse border-y border-[#ebebeb] bg-white" />
+        <div className="border-border bg-card h-28 animate-pulse border-y" />
+        <div className="border-border bg-card h-28 animate-pulse border-y" />
       </div>
       <span className="sr-only">Cargando detalle de cita</span>
     </div>

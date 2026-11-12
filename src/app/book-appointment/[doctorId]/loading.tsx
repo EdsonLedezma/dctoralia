@@ -2,8 +2,8 @@ import { Skeleton } from "~/components/ui/skeleton";
 
 export default function BookingLoading() {
   return (
-    <div className="min-h-screen bg-[#fafafa]">
-      <header className="border-b border-[#ebebeb] bg-white">
+    <div className="bg-background min-h-screen">
+      <header className="border-border bg-card border-b">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4">
           <Skeleton className="h-8 w-28" />
           <Skeleton className="h-8 w-8 rounded-md" />
@@ -19,8 +19,8 @@ export default function BookingLoading() {
             </div>
           ))}
         </div>
-        <div className="overflow-hidden rounded-lg border border-[#ebebeb] bg-white">
-          <div className="border-b border-[#ebebeb] p-5">
+        <div className="border-border bg-card overflow-hidden rounded-lg border">
+          <div className="border-border border-b p-5">
             <Skeleton className="h-5 w-32" />
           </div>
           <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,1fr)_220px]">

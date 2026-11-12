@@ -1,6 +1,6 @@
 # Línea base de seguridad web
 
-Este documento registra controles técnicos presentes en Dctoralia y tareas de despliegue que todavía deben completarse. Es una guía de implementación, no una certificación OWASP ni una garantía de cumplimiento legal.
+Este documento registra controles técnicos presentes en Dopilot y tareas de despliegue que todavía deben completarse. Es una guía de implementación, no una certificación OWASP ni una garantía de cumplimiento legal.
 
 ## Controles implementados en el código
 

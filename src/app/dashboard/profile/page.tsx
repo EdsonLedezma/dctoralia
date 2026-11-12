@@ -275,8 +275,8 @@ export default function DoctorProfilePage() {
           className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-8"
           aria-label="Cargando perfil"
         >
-          <div className="h-32 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
-          <div className="h-56 animate-pulse rounded-lg border border-[#ebebeb] bg-white motion-reduce:animate-none" />
+          <div className="material-card border-border bg-card h-32 animate-pulse rounded-2xl border motion-reduce:animate-none" />
+          <div className="material-card border-border bg-card h-56 animate-pulse rounded-2xl border motion-reduce:animate-none" />
         </main>
       </ProductShell>
     );
@@ -329,14 +329,14 @@ export default function DoctorProfilePage() {
 
   return (
     <ProductShell role="DOCTOR">
-      <div className="min-h-screen bg-[#fafafa] px-4 py-6 sm:px-8 sm:py-8">
+      <div className="bg-background min-h-screen px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-5xl space-y-8">
           <MotionList>
-            <Card className="border-[#ebebeb] bg-white shadow-none">
+            <Card className="border-border bg-card shadow-none">
               <CardContent className="p-5 sm:p-6">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#171717] text-sm font-medium text-white">
+                    <div className="bg-secondary text-foreground relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-medium">
                       {(avatarPreview ?? formData.image) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -354,7 +354,7 @@ export default function DoctorProfilePage() {
                         <label
                           htmlFor="doctorAvatarUpload"
                           title="Cambiar foto de perfil"
-                          className="absolute right-0 bottom-0 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white text-[#171717] shadow-sm transition-transform hover:scale-105"
+                          className="bg-card text-foreground absolute right-0 bottom-0 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full shadow-sm transition-transform hover:scale-105"
                         >
                           <Camera aria-hidden="true" className="h-3.5 w-3.5" />
                           <span className="sr-only">
@@ -376,16 +376,16 @@ export default function DoctorProfilePage() {
                       />
                     )}
                     <div>
-                      <p className="text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+                      <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                         Perfil profesional
                       </p>
                       <h1 className="mt-1 text-2xl font-semibold tracking-tight">
                         {profile.user?.name ?? "Doctor"}
                       </h1>
-                      <p className="mt-1 text-sm text-[#6b6b6b]">
+                      <p className="text-muted-foreground mt-1 text-sm">
                         {profile.specialty || "Especialidad no registrada"}
                       </p>
-                      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#6b6b6b]">
+                      <div className="text-muted-foreground mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs">
                         <span>
                           {profile.experience ?? 0} años de experiencia
                         </span>
@@ -395,8 +395,8 @@ export default function DoctorProfilePage() {
                         </span>
                       </div>
                       {(profile.city || profile.state || profile.address) && (
-                        <p className="mt-3 flex items-center gap-1.5 text-xs text-[#525252]">
-                          <MapPin className="size-3.5 shrink-0 text-[#737373]" />
+                        <p className="text-muted-foreground mt-3 flex items-center gap-1.5 text-xs">
+                          <MapPin className="text-muted-foreground size-3.5 shrink-0" />
                           {[profile.address, profile.city, profile.state]
                             .filter(Boolean)
                             .join(", ")}
@@ -406,7 +406,7 @@ export default function DoctorProfilePage() {
                               target="_blank"
                               rel="noreferrer"
                               aria-label="Abrir ubicación en Google Maps"
-                              className="ml-1 inline-flex size-7 items-center justify-center rounded-md transition-colors hover:bg-[#f5f5f5]"
+                              className="hover:bg-muted ml-1 inline-flex size-7 items-center justify-center rounded-md transition-colors"
                             >
                               <ExternalLink className="size-3.5" />
                             </a>
@@ -430,10 +430,10 @@ export default function DoctorProfilePage() {
             </Card>
           </MotionList>
 
-          <div className="border-y border-[#ebebeb] bg-white px-4 py-4 sm:px-5">
+          <div className="border-border bg-card border-y px-4 py-4 sm:px-5">
             <dl className="grid grid-cols-3 gap-4 sm:gap-8">
               <div>
-                <dt className="text-[11px] font-medium tracking-[0.08em] text-[#737373] uppercase">
+                <dt className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                   Citas
                 </dt>
                 <dd className="mt-1 text-sm font-medium">
@@ -441,7 +441,7 @@ export default function DoctorProfilePage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-medium tracking-[0.08em] text-[#737373] uppercase">
+                <dt className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                   Reseñas
                 </dt>
                 <dd className="mt-1 text-sm font-medium">
@@ -449,11 +449,11 @@ export default function DoctorProfilePage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-medium tracking-[0.08em] text-[#737373] uppercase">
+                <dt className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
                   Calificación
                 </dt>
                 <dd className="mt-1 flex items-center gap-1 text-sm font-medium">
-                  <Star className="h-3.5 w-3.5 fill-current text-[#171717]" />
+                  <Star className="text-foreground h-3.5 w-3.5 fill-current" />
                   {profile.rating?.toFixed(1) ?? "—"}
                 </dd>
               </div>
@@ -461,19 +461,19 @@ export default function DoctorProfilePage() {
           </div>
 
           {isEditing ? (
-            <Card className="border-[#ebebeb] bg-white shadow-none">
-              <CardHeader className="border-b border-[#ebebeb] px-5 py-4 sm:px-6">
+            <Card className="border-border bg-card shadow-none">
+              <CardHeader className="border-border border-b px-5 py-4 sm:px-6">
                 <CardTitle className="text-base">Editar perfil</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
                 <div className="sm:col-span-2">
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="doctorAvatarUpload"
                   >
                     Foto de perfil
                   </label>
-                  <p className="text-xs text-[#737373]">
+                  <p className="text-muted-foreground text-xs">
                     JPG, PNG, WebP o AVIF · máximo 5 MB. Usa el icono de la foto
                     para elegir una imagen.
                   </p>
@@ -493,7 +493,7 @@ export default function DoctorProfilePage() {
                   )}
                   {isUploadingAvatar && (
                     <p
-                      className="mt-2 text-xs text-[#737373]"
+                      className="text-muted-foreground mt-2 text-xs"
                       aria-live="polite"
                     >
                       Subiendo foto… {Math.round(avatarProgress)}%
@@ -502,7 +502,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div>
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="name"
                   >
                     Nombre completo
@@ -517,7 +517,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div>
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="email"
                   >
                     Correo electrónico
@@ -533,7 +533,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div>
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="specialty"
                   >
                     Especialidad
@@ -548,7 +548,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div>
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="phone"
                   >
                     Teléfono
@@ -563,7 +563,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div>
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="license"
                   >
                     Cédula profesional
@@ -578,7 +578,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div>
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="experience"
                   >
                     Años de experiencia
@@ -593,11 +593,11 @@ export default function DoctorProfilePage() {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="mb-3 border-t border-[#ebebeb] pt-5">
-                    <h3 className="text-sm font-medium text-[#171717]">
+                  <div className="border-border mb-3 border-t pt-5">
+                    <h3 className="text-foreground text-sm font-medium">
                       Ubicación de consulta
                     </h3>
-                    <p className="mt-1 text-xs leading-5 text-[#737373]">
+                    <p className="text-muted-foreground mt-1 text-xs leading-5">
                       Los pacientes podrán encontrarte por ciudad. Agrega
                       coordenadas para mostrar un punto exacto en el mapa de
                       México.
@@ -606,7 +606,7 @@ export default function DoctorProfilePage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label
-                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        className="text-muted-foreground mb-2 block text-xs font-medium"
                         htmlFor="address"
                       >
                         Dirección del consultorio
@@ -622,7 +622,7 @@ export default function DoctorProfilePage() {
                     </div>
                     <div>
                       <label
-                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        className="text-muted-foreground mb-2 block text-xs font-medium"
                         htmlFor="city"
                       >
                         Ciudad
@@ -638,7 +638,7 @@ export default function DoctorProfilePage() {
                     </div>
                     <div>
                       <label
-                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        className="text-muted-foreground mb-2 block text-xs font-medium"
                         htmlFor="state"
                       >
                         Estado
@@ -654,7 +654,7 @@ export default function DoctorProfilePage() {
                     </div>
                     <div>
                       <label
-                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        className="text-muted-foreground mb-2 block text-xs font-medium"
                         htmlFor="googleMapsUrl"
                       >
                         Enlace de Google Maps
@@ -668,14 +668,14 @@ export default function DoctorProfilePage() {
                         onBlur={handleMapsUrlBlur}
                         placeholder="https://maps.google.com/..."
                       />
-                      <p className="mt-1 text-xs text-[#737373]">
+                      <p className="text-muted-foreground mt-1 text-xs">
                         Si el enlace incluye coordenadas, las completamos
                         automáticamente.
                       </p>
                     </div>
                     <div>
                       <label
-                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        className="text-muted-foreground mb-2 block text-xs font-medium"
                         htmlFor="latitude"
                       >
                         Latitud
@@ -695,7 +695,7 @@ export default function DoctorProfilePage() {
                     </div>
                     <div>
                       <label
-                        className="mb-2 block text-xs font-medium text-[#525252]"
+                        className="text-muted-foreground mb-2 block text-xs font-medium"
                         htmlFor="longitude"
                       >
                         Longitud
@@ -717,7 +717,7 @@ export default function DoctorProfilePage() {
                 </div>
                 <div className="sm:col-span-2">
                   <label
-                    className="mb-2 block text-xs font-medium text-[#525252]"
+                    className="text-muted-foreground mb-2 block text-xs font-medium"
                     htmlFor="about"
                   >
                     Acerca de mí
@@ -731,7 +731,7 @@ export default function DoctorProfilePage() {
                     rows={4}
                     maxLength={1000}
                   />
-                  <p className="mt-1 text-xs text-[#737373]">
+                  <p className="text-muted-foreground mt-1 text-xs">
                     {formData.about.length}/1000
                   </p>
                 </div>
@@ -775,30 +775,30 @@ export default function DoctorProfilePage() {
               <section>
                 <div className="mb-3 flex items-center justify-between gap-2 text-sm font-medium">
                   <span className="flex items-center gap-2">
-                    <BriefcaseMedical className="h-4 w-4 text-[#737373]" />
+                    <BriefcaseMedical className="text-muted-foreground h-4 w-4" />
                     Servicios
                   </span>
                   <Link
                     href="/dashboard/services"
-                    className="min-h-9 rounded-md px-2 py-2 text-xs text-[#737373] transition-colors hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0070f3]"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground min-h-9 rounded-md px-2 py-2 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0070f3]"
                   >
                     Administrar servicios
                   </Link>
                 </div>
-                <MotionList className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white">
+                <MotionList className="border-border bg-card divide-y divide-[#ebebeb] border-y">
                   {activeServices.length > 0 ? (
                     activeServices.map((service: DoctorService) => (
                       <div
                         key={service.id}
-                        className="flex items-start justify-between gap-4 px-4 py-4 transition-colors duration-150 hover:bg-[#fafafa]"
+                        className="hover:bg-background flex items-start justify-between gap-4 px-4 py-4 transition-colors duration-150"
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-medium">{service.name}</p>
-                          <p className="mt-1 text-xs text-[#737373]">
+                          <p className="text-muted-foreground mt-1 text-xs">
                             {service.description || `${service.duration} min`}
                           </p>
                         </div>
-                        <span className="shrink-0 text-xs text-[#525252]">
+                        <span className="text-muted-foreground shrink-0 text-xs">
                           {service.price > 0
                             ? `$${service.price}`
                             : "Consultar"}
@@ -806,7 +806,7 @@ export default function DoctorProfilePage() {
                       </div>
                     ))
                   ) : (
-                    <p className="px-4 py-5 text-sm text-[#737373]">
+                    <p className="text-muted-foreground px-4 py-5 text-sm">
                       Aún no hay servicios activos.
                     </p>
                   )}
@@ -815,31 +815,31 @@ export default function DoctorProfilePage() {
 
               <section>
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                  <Star className="h-4 w-4 text-[#737373]" />
+                  <Star className="text-muted-foreground h-4 w-4" />
                   Reseñas recientes
                 </div>
-                <MotionList className="divide-y divide-[#ebebeb] border-y border-[#ebebeb] bg-white">
+                <MotionList className="border-border bg-card divide-y divide-[#ebebeb] border-y">
                   {reviews.length > 0 ? (
                     reviews.map((review: DoctorReview) => (
                       <div
                         key={review.id}
-                        className="px-4 py-4 transition-colors duration-150 hover:bg-[#fafafa]"
+                        className="hover:bg-background px-4 py-4 transition-colors duration-150"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <p className="text-sm font-medium">
                             {review.patient?.user?.name ?? "Paciente"}
                           </p>
-                          <span className="flex items-center gap-1 text-xs text-[#525252]">
+                          <span className="text-muted-foreground flex items-center gap-1 text-xs">
                             <Star className="h-3 w-3 fill-current" />{" "}
                             {review.rating}
                           </span>
                         </div>
                         {review.comment && (
-                          <p className="mt-2 text-sm leading-6 text-[#525252]">
+                          <p className="text-muted-foreground mt-2 text-sm leading-6">
                             {review.comment}
                           </p>
                         )}
-                        <p className="mt-2 text-xs text-[#737373]">
+                        <p className="text-muted-foreground mt-2 text-xs">
                           {new Date(review.createdAt).toLocaleDateString(
                             "es-MX",
                           )}
@@ -847,7 +847,7 @@ export default function DoctorProfilePage() {
                       </div>
                     ))
                   ) : (
-                    <p className="px-4 py-5 text-sm text-[#737373]">
+                    <p className="text-muted-foreground px-4 py-5 text-sm">
                       Aún no hay reseñas.
                     </p>
                   )}
@@ -857,11 +857,11 @@ export default function DoctorProfilePage() {
           )}
 
           {!isEditing && profile.about && (
-            <section className="border-t border-[#ebebeb] pt-6">
-              <p className="mb-2 text-xs font-medium tracking-[0.08em] text-[#737373] uppercase">
+            <section className="border-border border-t pt-6">
+              <p className="text-muted-foreground mb-2 text-xs font-medium tracking-[0.08em] uppercase">
                 Acerca de mí
               </p>
-              <p className="max-w-3xl text-sm leading-6 text-[#525252]">
+              <p className="text-muted-foreground max-w-3xl text-sm leading-6">
                 {profile.about}
               </p>
             </section>
