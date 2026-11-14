@@ -4,6 +4,7 @@ import { type Metadata, type Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import Providers from "~/components/providers/Providers";
+import { auth } from "~/server/auth";
 
 export const metadata: Metadata = {
   title: "Dopilot",
@@ -33,9 +34,10 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
 });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth();
   return (
     <html
       lang="es-MX"
@@ -43,7 +45,7 @@ export default function RootLayout({
       className={`${geist.variable} ${geistMono.variable}`}
     >
       <body>
-        <Providers>{children}</Providers>
+        <Providers session={session}>{children}</Providers>
         <Analytics />
       </body>
     </html>
