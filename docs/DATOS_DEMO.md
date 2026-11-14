@@ -67,3 +67,9 @@ El script muestra la fase y un código sin revelar credenciales. Un fallo no sig
 - `IDENTITY_COLLISION`: una identidad demo ya existe con datos distintos; se cancela sin reemplazarla.
 
 Las inserciones se ejecutan juntas en una transacción. El script no modifica el esquema automáticamente.
+
+## Demo sin IA ni sent.dm
+
+Configura `DEMO_MODE=true` y reinicia el servidor. Esta opción oculta los paneles de comunicaciones y agente de voz, bloquea solicitudes de línea y webhooks, y detiene el dispatcher de mensajes aunque haya claves configuradas. No marca mensajes como enviados ni simula llamadas.
+
+Login, consultorios, servicios, horarios, pacientes y citas siguen usando la autenticación, permisos y base de datos existentes. No necesitas cargar el seed si ya tienes tus datos. No cambia pagos ni suscripciones. Para el despliegue de la demo configura también esta variable en el servidor; el archivo local .env no se sube a Git. Para recuperar integraciones usa `DEMO_MODE=false`.

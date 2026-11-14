@@ -1,3 +1,4 @@
+import { env } from "~/env";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { normalizeVoicePhone } from "~/server/integrations/vapi/phone-number";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
@@ -5,15 +6,25 @@ import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 export const voiceAgentRouter = createTRPCRouter({
   getMine: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.session.user.role !== "DOCTOR")
-      return trpcFailure("FORBIDDEN", "Solo médicos pueden configurar su línea", 403);
+      return trpcFailure(
+        "FORBIDDEN",
+        "Solo médicos pueden configurar su línea",
+        403,
+      );
     const doctor = await ctx.db.doctor.findUnique({
       where: { userId: ctx.session.user.id },
       select: { id: true, clinicId: true, phone: true },
     });
     if (!doctor?.clinicId)
-      return trpcFailure("WORKSPACE_REQUIRED", "Configura tu consultorio primero", 400);
+      return trpcFailure(
+        "WORKSPACE_REQUIRED",
+        "Configura tu consultorio primero",
+        400,
+      );
     const line = await ctx.db.voiceAgentLine.findUnique({
-      where: { clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id } },
+      where: {
+        clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id },
+      },
       select: { id: true, phoneNumber: true, status: true, createdAt: true },
     });
     return trpcSuccess(
@@ -23,17 +34,35 @@ export const voiceAgentRouter = createTRPCRouter({
   }),
 
   requestLine: protectedProcedure.mutation(async ({ ctx }) => {
+    if (env.DEMO_MODE === "true")
+      return trpcFailure(
+        "INTEGRATION_DISABLED",
+        "Las llamadas están desactivadas en esta demostración.",
+        503,
+      );
     if (ctx.session.user.role !== "DOCTOR")
-      return trpcFailure("FORBIDDEN", "Solo médicos pueden solicitar su línea", 403);
+      return trpcFailure(
+        "FORBIDDEN",
+        "Solo médicos pueden solicitar su línea",
+        403,
+      );
     const doctor = await ctx.db.doctor.findUnique({
       where: { userId: ctx.session.user.id },
       select: { id: true, clinicId: true, phone: true },
     });
     if (!doctor?.clinicId)
-      return trpcFailure("WORKSPACE_REQUIRED", "Configura tu consultorio primero", 400);
+      return trpcFailure(
+        "WORKSPACE_REQUIRED",
+        "Configura tu consultorio primero",
+        400,
+      );
     const workspace = await ctx.getWorkspace();
     if (workspace?.clinicId !== doctor.clinicId)
-      return trpcFailure("WORKSPACE_FORBIDDEN", "Selecciona tu consultorio", 403);
+      return trpcFailure(
+        "WORKSPACE_FORBIDDEN",
+        "Selecciona tu consultorio",
+        403,
+      );
     const phoneNumber = normalizeVoicePhone(doctor.phone);
     if (!phoneNumber)
       return trpcFailure(
@@ -43,7 +72,9 @@ export const voiceAgentRouter = createTRPCRouter({
       );
 
     const existing = await ctx.db.voiceAgentLine.findUnique({
-      where: { clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id } },
+      where: {
+        clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id },
+      },
     });
     if (existing?.status === "ACTIVE")
       return trpcFailure(
@@ -53,7 +84,9 @@ export const voiceAgentRouter = createTRPCRouter({
       );
     try {
       const line = await ctx.db.voiceAgentLine.upsert({
-        where: { clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id } },
+        where: {
+          clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id },
+        },
         create: { clinicId: doctor.clinicId, doctorId: doctor.id, phoneNumber },
         update: {
           phoneNumber,

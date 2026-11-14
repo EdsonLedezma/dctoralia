@@ -16,7 +16,8 @@ export async function GET(request: Request) {
     !timingSafeEqual(supplied, expected)
   )
     return new Response(null, { status: 401 });
-  if (env.SENT_ENABLED !== "true") return Response.json({ status: "disabled" });
+  if (env.DEMO_MODE === "true" || env.SENT_ENABLED !== "true")
+    return Response.json({ status: "disabled" });
   if (!env.SENT_API_KEY) return new Response(null, { status: 503 });
   const provider = new SentMessagingProvider(
     new SentDm({ apiKey: env.SENT_API_KEY, timeout: 10_000, maxRetries: 0 }),

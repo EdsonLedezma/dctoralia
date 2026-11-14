@@ -5,6 +5,7 @@ import { processSentWebhook } from "~/server/integrations/sent/sent-webhook";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
+  if (env.DEMO_MODE === "true") return new Response(null, { status: 503 });
   if (!env.SENT_WEBHOOK_SECRET) return new Response(null, { status: 503 });
   const rawBody = await request.text();
   if (rawBody.length > 256_000) return new Response(null, { status: 413 });

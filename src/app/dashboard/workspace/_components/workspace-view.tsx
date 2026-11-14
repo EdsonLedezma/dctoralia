@@ -338,7 +338,11 @@ function LocationsList({
   );
 }
 
-export function WorkspaceView() {
+export function WorkspaceView({
+  externalIntegrationsEnabled = true,
+}: {
+  externalIntegrationsEnabled?: boolean;
+}) {
   const utils = api.useUtils();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -504,8 +508,9 @@ export function WorkspaceView() {
           onInvite={() => setInviteOpen(true)}
         />
         {workspace.membershipRole === "OWNER" && <BillingSettings />}
-        {workspace.membershipRole === "OWNER" && <MessagingSettings />}
-        <VoiceAgentSettings />
+        {externalIntegrationsEnabled &&
+          workspace.membershipRole === "OWNER" && <MessagingSettings />}
+        {externalIntegrationsEnabled && <VoiceAgentSettings />}
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <Card className="border-border bg-card overflow-hidden rounded-lg shadow-none">

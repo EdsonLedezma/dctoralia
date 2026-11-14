@@ -21,6 +21,7 @@ function authorized(header: string | null, secret: string): boolean {
 }
 
 export async function POST(request: Request) {
+  if (env.DEMO_MODE === "true") return new Response(null, { status: 503 });
   if (!env.VAPI_WEBHOOK_TOKEN) return new Response(null, { status: 503 });
   if (!authorized(request.headers.get("authorization"), env.VAPI_WEBHOOK_TOKEN))
     return new Response(null, { status: 401 });
