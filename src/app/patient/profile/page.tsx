@@ -31,6 +31,7 @@ import {
 import { api, type RouterInputs } from "~/trpc/react";
 import { toast } from "sonner";
 import { ProductShell } from "~/components/shell/product-shell";
+import { TermsSettingsCard } from "~/components/legal/terms-settings-card";
 import { MotionList } from "~/components/shared/motion-list";
 import { unwrapTrpcResult } from "~/types/trpc-response";
 import { avatarUrl } from "~/lib/avatar-url";
@@ -1129,6 +1130,8 @@ export default function PatientProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          <TermsSettingsCard />
         </div>
       </div>
     </ProductShell>
