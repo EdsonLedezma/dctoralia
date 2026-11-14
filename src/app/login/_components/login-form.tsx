@@ -1,7 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { signIn, getSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, ArrowRight, LoaderCircle } from "lucide-react";
 import { PasswordInput } from "~/components/auth/password-input";
@@ -18,7 +18,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+
   const search = useSearchParams();
   const returnPath = safeAuthReturnPath(search.get("callbackUrl"));
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -46,9 +46,15 @@ export function LoginForm() {
         return;
       }
       const role = session.user.role;
-      router.replace(
+      // Reload the authenticated document: discard prefetched anonymous redirects
+      // and initialize SessionProvider from the same cookie the server checks.
+      window.location.replace(
         safeAuthReturnPath(returnPath, role) ??
-          (role === "DOCTOR" ? "/dashboard" : "/patient/dashboard"),
+          (role === "DOCTOR"
+            ? "/dashboard"
+            : role === "PATIENT"
+              ? "/patient/dashboard"
+              : "/"),
       );
     } catch {
       setError("No pudimos iniciar sesión. Inténtalo de nuevo.");
