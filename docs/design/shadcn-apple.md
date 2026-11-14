@@ -623,3 +623,7 @@ La migración de las demás rutas y la revisión de preparación clínica descri
 
 
 Validación de esta revisión: `pnpm check` sin errores (14 advertencias previas), 84 pruebas unitarias correctas, build de producción correcto y **34/34 pruebas de navegador correctas contra ese build**. Las nuevas pruebas verifican el logo oficial con frames WebGPU, ambos temas manuales, ausencia de la card TypeGPU, un único selector arriba, logo en acceso y móvil de 375 px, y liberación de dispositivos por preferencias y salida del viewport. Las capturas resultantes permanecen fuera del repositorio. La búsqueda de la marca anterior en los archivos de producto/documentación y el inventario de PNG del workspace (excluyendo dependencias, Git y caché de Next) no devuelven resultados. Los originales verificados mantienen sus hashes. No se modificaron datos ni configuraciones de infraestructura externas para realizar el cambio de marca.
+
+## Sidebar y tema — 14 de noviembre de 2026
+
+Por petición del usuario, esta regla reemplaza el sidebar oscuro permanente de las secciones 4, 5 y 7: el sidebar sigue la apariencia global Claro/Oscuro/Sistema. En claro usa cristal neutro luminoso con tinta oscura; en oscuro usa cristal grafito con tinta clara. Fondo, selección, hover, avatares, notificaciones, borde y foco usan tokens semánticos. El material mantiene una base sólida sin backdrop-filter y desactiva blur cuando se reduce transparencia o aumenta contraste. Los destinos y las acciones existentes se conservan.

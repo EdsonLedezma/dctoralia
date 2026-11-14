@@ -118,7 +118,7 @@ function NavLink({
       {item.icon === Bell &&
         notificationCount > 0 &&
         (collapsed ? (
-          <span className="bg-card absolute top-1.5 right-1.5 size-1.5 rounded-full" />
+          <span className="bg-sidebar-foreground absolute top-1.5 right-1.5 size-1.5 rounded-full" />
         ) : (
           <span className="bg-sidebar-foreground text-sidebar ml-auto min-w-5 rounded-full px-1 text-center text-[10px] leading-5 font-semibold">
             {notificationCount > 9 ? "9+" : notificationCount}
@@ -196,7 +196,7 @@ function WorkspaceSwitcher({
           aria-label={`Cambiar consultorio, actual: ${activeWorkspace.name}`}
           title={compact ? activeWorkspace.name : undefined}
         >
-          <span className="bg-sidebar-foreground/20 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold text-white">
+          <span className="bg-sidebar-foreground/20 text-sidebar-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold">
             {activeWorkspace.name.slice(0, 1).toUpperCase()}
           </span>
           {!compact && (
@@ -362,7 +362,7 @@ export function ProductShellView({
                 ? "Expandir barra lateral"
                 : "Colapsar barra lateral"
             }
-            className="text-sidebar-foreground/65 hover:bg-sidebar-accent focus-visible:ring-sidebar-ring flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:text-white focus-visible:ring-2 focus-visible:outline-none"
+            className="text-sidebar-foreground/65 hover:bg-sidebar-accent focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {sidebarCollapsed ? (
               <PanelLeftOpen className="size-[18px]" />
@@ -391,7 +391,7 @@ export function ProductShellView({
               }
               title={sidebarCollapsed ? displayName : undefined}
             >
-              <span className="bg-sidebar-foreground/20 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold text-white">
+              <span className="bg-sidebar-foreground/20 text-sidebar-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold">
                 {initial}
               </span>
               {!sidebarCollapsed && (
@@ -412,7 +412,7 @@ export function ProductShellView({
           <button
             type="button"
             onClick={openCommandMenu}
-            className={`border-sidebar-foreground/25 bg-sidebar-accent/70 text-sidebar-foreground/85 hover:border-sidebar-foreground/60 focus-visible:ring-sidebar-ring flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl border px-2.5 text-left text-[13px] transition-colors duration-150 hover:text-white focus-visible:ring-2 focus-visible:outline-none ${sidebarCollapsed ? "justify-center px-0" : ""}`}
+            className={`border-sidebar-foreground/25 bg-sidebar-accent/70 text-sidebar-foreground/85 hover:border-sidebar-foreground/60 focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl border px-2.5 text-left text-[13px] transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none ${sidebarCollapsed ? "justify-center px-0" : ""}`}
             aria-label="Buscar sección"
             title={sidebarCollapsed ? "Buscar sección" : undefined}
           >
@@ -457,18 +457,18 @@ export function ProductShellView({
           <div
             className={`flex items-center gap-2 rounded-xl px-2 py-2 ${sidebarCollapsed ? "flex-col" : ""}`}
           >
-            <span className="bg-sidebar-foreground/20 flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-semibold text-white">
+            <span className="bg-sidebar-foreground/20 text-sidebar-foreground flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-semibold">
               {initial}
             </span>
             {!sidebarCollapsed && (
-              <span className="min-w-0 flex-1 truncate text-[12px] text-[#e4e4e7]">
+              <span className="text-sidebar-foreground min-w-0 flex-1 truncate text-[12px]">
                 {displayName}
               </span>
             )}
             <button
               type="button"
               onClick={() => onSignOut()}
-              className="text-sidebar-foreground/65 hover:bg-sidebar-accent focus-visible:ring-sidebar-ring flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors duration-150 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
+              className="text-sidebar-foreground/65 hover:bg-sidebar-accent focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Cerrar sesión"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -556,7 +556,7 @@ export function ProductShellView({
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="bg-sidebar absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold text-white">
+                  <span className="bg-primary text-primary-foreground absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -601,7 +601,7 @@ export function ProductShellView({
                     <Icon className="text-muted-foreground h-4 w-4" />
                     <span className="flex-1">{item.label}</span>
                     {item.icon === Bell && unreadCount > 0 && (
-                      <span className="bg-primary rounded-full px-2 py-0.5 text-xs text-white">
+                      <span className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">
                         {unreadCount > 9 ? "9+" : unreadCount}
                       </span>
                     )}

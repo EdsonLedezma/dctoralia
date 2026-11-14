@@ -31,7 +31,7 @@ export const messagingRouter = createTRPCRouter({
       });
       return trpcSuccess(
         {
-          enabled: env.SENT_ENABLED === "true",
+          enabled: env.DEMO_MODE !== "true" && env.SENT_ENABLED === "true",
           sandbox: env.SENT_SANDBOX !== "false",
           messages,
         },
@@ -55,6 +55,7 @@ export const messagingRouter = createTRPCRouter({
           403,
         );
       if (
+        env.DEMO_MODE === "true" ||
         env.SENT_ENABLED !== "true" ||
         !env.SENT_API_KEY ||
         !env.SENT_TEST_TEMPLATE
