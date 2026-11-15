@@ -44,7 +44,7 @@ export function SegmentedControl<T extends string>({
       disabled={disabled}
       data-slot="segmented-control"
       className={cn(
-        "glass-track inline-flex w-fit items-center gap-1 p-1",
+        "glass-track inline-flex w-fit items-center gap-0.5 p-0.5",
         className,
       )}
     >
@@ -59,8 +59,8 @@ export function SegmentedControl<T extends string>({
             aria-label={option.label}
             title={iconOnly ? option.label : undefined}
             className={cn(
-              "text-foreground focus-visible:ring-ring focus-visible:ring-offset-background relative isolate inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45",
-              iconOnly && "min-w-14 px-3",
+              "text-foreground focus-visible:ring-ring focus-visible:ring-offset-background relative isolate inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-full px-3 text-xs font-medium transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45",
+              iconOnly && "min-w-9 px-2",
             )}
           >
             {active && (

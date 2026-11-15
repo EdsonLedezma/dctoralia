@@ -1,7 +1,10 @@
 "use client";
 
+import { NotificationBell } from "~/components/notifications/notification-bell";
+import { WorkspaceDock } from "./workspace-dock";
+import { NavigationRefraction } from "~/components/liquid-glass/navigation-refraction";
 import { DopilotBrand } from "~/components/brand/dopilot-brand";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import type { LucideIcon } from "lucide-react";
@@ -29,6 +32,16 @@ import {
   DialogDescription,
   DialogTitle,
 } from "~/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "~/components/ui/alert-dialog";
 import { Input } from "~/components/ui/input";
 import { AppearanceSwitcher } from "~/components/shared/appearance-switcher";
 import { GlassSurface } from "~/components/liquid-glass/glass-surface";
@@ -260,6 +273,7 @@ export function ProductShellView({
 }) {
   const items = role === "DOCTOR" ? doctorNav : patientNav;
   const initial = displayName.slice(0, 1).toUpperCase();
+  const [signOutOpen, setSignOutOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [moreNavOpen, setMoreNavOpen] = useState(false);
@@ -285,11 +299,10 @@ export function ProductShellView({
   };
   const primaryMobileItems = items.slice(0, 4);
   const secondaryMobileItems = items.slice(4);
-  const notificationHref =
-    role === "DOCTOR" ? "/dashboard/notifications" : "/patient/notifications";
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setCommandOpen(true);
@@ -309,13 +322,37 @@ export function ProductShellView({
     );
   }, [commandQuery, items]);
 
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    workspaceRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [pathname]);
   const openCommandMenu = () => {
     setCommandQuery("");
     setCommandOpen(true);
   };
 
   return (
-    <div className="bg-background text-foreground min-h-[100dvh] md:flex">
+    <div className="product-layout text-foreground min-h-[100dvh] md:flex">
+      <NavigationRefraction />
+      <div className="fixed top-5 right-6 z-40 hidden md:block">
+        <AppearanceSwitcher />
+      </div>
+      <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+        <AlertDialogContent className="sm:max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Deseas salir de la aplicación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cerrará tu sesión en este dispositivo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onSignOut()}>
+              Sí, cerrar sesión
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <a
         href="#main-content"
         className="bg-primary text-primary-foreground sr-only z-50 rounded-md px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
@@ -331,7 +368,7 @@ export function ProductShellView({
             ? { duration: 0 }
             : { type: "spring", stiffness: 420, damping: 42 }
         }
-        className="product-sidebar border-sidebar-border bg-sidebar text-sidebar-foreground/85 sticky top-3 m-3 mr-0 hidden h-[calc(100dvh-1.5rem)] shrink-0 overflow-hidden rounded-[28px] border md:flex md:flex-col"
+        className="product-sidebar border-sidebar-border text-sidebar-foreground/85 sticky top-3 m-3 mr-0 hidden h-[calc(100dvh-1.5rem)] shrink-0 overflow-hidden rounded-[28px] border md:flex md:flex-col"
         aria-label="Barra lateral"
       >
         <div
@@ -399,9 +436,6 @@ export function ProductShellView({
                   <span className="text-sidebar-foreground min-w-0 flex-1 truncate text-[13px] font-medium">
                     {displayName}
                   </span>
-                  <span className="border-sidebar-foreground/25 text-sidebar-foreground/85 rounded border px-1.5 py-0.5 text-[10px]">
-                    {role === "DOCTOR" ? "Doctor" : "Paciente"}
-                  </span>
                 </>
               )}
             </Link>
@@ -412,7 +446,7 @@ export function ProductShellView({
           <button
             type="button"
             onClick={openCommandMenu}
-            className={`border-sidebar-foreground/25 bg-sidebar-accent/70 text-sidebar-foreground/85 hover:border-sidebar-foreground/60 focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl border px-2.5 text-left text-[13px] transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none ${sidebarCollapsed ? "justify-center px-0" : ""}`}
+            className={`border-sidebar-foreground/10 bg-sidebar-accent/35 text-sidebar-foreground/85 hover:border-sidebar-foreground/60 focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-full border px-2.5 text-left text-[13px] transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none ${sidebarCollapsed ? "justify-center px-0" : ""}`}
             aria-label="Buscar sección"
             title={sidebarCollapsed ? "Buscar sección" : undefined}
           >
@@ -429,7 +463,7 @@ export function ProductShellView({
         </div>
 
         <nav
-          className="flex-1 space-y-1 overflow-y-auto px-2 py-3"
+          className="sidebar-navigation min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-3"
           aria-label="Navegación principal"
         >
           {items.slice(0, 4).map((item) => (
@@ -453,31 +487,24 @@ export function ProductShellView({
           ))}
         </nav>
 
-        <div className="border-sidebar-border space-y-1 border-t p-2">
+        <div className="border-sidebar-border border-t p-2">
           <div
-            className={`flex items-center gap-2 rounded-xl px-2 py-2 ${sidebarCollapsed ? "flex-col" : ""}`}
+            className={`flex items-center gap-2 ${sidebarCollapsed ? "flex-col" : "justify-between px-2"}`}
           >
-            <span className="bg-sidebar-foreground/20 text-sidebar-foreground flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-semibold">
-              {initial}
-            </span>
-            {!sidebarCollapsed && (
-              <span className="text-sidebar-foreground min-w-0 flex-1 truncate text-[12px]">
-                {displayName}
-              </span>
-            )}
             <button
               type="button"
-              onClick={() => onSignOut()}
-              className="text-sidebar-foreground/65 hover:bg-sidebar-accent focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none"
+              onClick={() => setSignOutOpen(true)}
+              className="text-sidebar-foreground/65 hover:bg-sidebar-accent focus-visible:ring-sidebar-ring hover:text-sidebar-foreground flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Cerrar sesión"
+              title="Cerrar sesión"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="size-[18px]" aria-hidden="true" />
             </button>
           </div>
         </div>
       </motion.aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="product-workspace min-w-0 flex-1">
         <Dialog open={commandOpen} onOpenChange={setCommandOpen}>
           <DialogContent className="border-border bg-card top-[18%] max-w-xl translate-y-0 gap-0 overflow-hidden rounded-[24px] p-0 shadow-[0_20px_60px_rgba(0,0,0,0.16)] sm:top-[20%]">
             <DialogTitle className="sr-only">Buscar en Dopilot</DialogTitle>
@@ -525,15 +552,16 @@ export function ProductShellView({
             </nav>
           </DialogContent>
         </Dialog>
-        <div className="mobile-shell-header border-border bg-card border-b md:hidden">
+        <div className="mobile-shell-header border-border/50 bg-card sticky top-0 z-30 border-b md:hidden">
           <div className="flex h-14 items-center justify-between px-4">
             <Link
               href={role === "DOCTOR" ? "/dashboard" : "/patient/dashboard"}
               className="flex items-center gap-2 font-semibold tracking-tight"
             >
-              <DopilotBrand />
+              <DopilotBrand markOnly />
             </Link>
             <div className="flex items-center gap-1">
+              <AppearanceSwitcher />
               {role === "DOCTOR" && workspaceOptions.length > 1 && (
                 <div className="mr-1 w-10">
                   <WorkspaceSwitcher
@@ -545,22 +573,7 @@ export function ProductShellView({
                   />
                 </div>
               )}
-              <Link
-                href={notificationHref}
-                aria-label={
-                  unreadCount > 0
-                    ? `Notificaciones, ${unreadCount} sin leer`
-                    : "Notificaciones"
-                }
-                className="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring relative flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-              >
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="bg-primary text-primary-foreground absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </Link>
+              <NotificationBell role={role} unreadCount={unreadCount} />
               <button
                 type="button"
                 onClick={openCommandMenu}
@@ -571,7 +584,7 @@ export function ProductShellView({
               </button>
               <button
                 type="button"
-                onClick={() => onSignOut()}
+                onClick={() => setSignOutOpen(true)}
                 className="text-muted-foreground focus-visible:ring-ring flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md p-2 focus-visible:ring-2 focus-visible:outline-none"
                 aria-label="Cerrar sesión"
               >
@@ -586,7 +599,6 @@ export function ProductShellView({
             <DialogDescription>
               Accesos secundarios de tu cuenta.
             </DialogDescription>
-            <AppearanceSwitcher />
             <nav className="grid gap-1" aria-label="Más secciones">
               {secondaryMobileItems.map((item) => {
                 const Icon = item.icon;
@@ -635,25 +647,15 @@ export function ProductShellView({
             </button>
           </GlassSurface>
         </nav>
-        <div className="border-border hidden min-h-20 items-center justify-between gap-4 border-b px-8 md:flex">
-          <p className="text-muted-foreground text-sm">
-            {role === "DOCTOR" ? "Consultorio" : "Mi espacio"}
-            <span className="px-3" aria-hidden="true">
-              /
-            </span>
-            <span className="text-foreground font-medium">
-              {items.find((item) => isActive(pathname, item.href))?.label ??
-                "Dopilot"}
-            </span>
-          </p>
-          <AppearanceSwitcher />
+        <div ref={workspaceRef} className="product-view-scroll">
+          <main
+            id="main-content"
+            className="min-w-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0"
+          >
+            {children}
+          </main>
         </div>
-        <main
-          id="main-content"
-          className="min-w-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0"
-        >
-          {children}
-        </main>
+        <WorkspaceDock role={role} unreadCount={unreadCount} />
       </div>
     </div>
   );

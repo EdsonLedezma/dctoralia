@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { VoiceCallAccess } from "./voice-call-access";
 import { useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -384,6 +385,7 @@ export function DoctorProfileView() {
               </div>
             </section>
 
+            <VoiceCallAccess doctorId={doctor.id} />
             <div className="text-muted-foreground flex items-start gap-2 text-xs leading-5">
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               Consulta la ubicación al reservar tu cita.

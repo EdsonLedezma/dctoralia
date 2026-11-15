@@ -1,3 +1,5 @@
+import { vapiFunctionDefinitions } from "../../src/server/integrations/vapi/tool-definitions";
+import { z } from "zod";
 import nextEnv from "@next/env";
 import { fileURLToPath } from "node:url";
 
@@ -7,8 +9,10 @@ const apiKey = process.env.VAPI_API_KEY;
 const credentialId = process.env.VAPI_WEBHOOK_CREDENTIAL_ID;
 const appUrl = process.env.APP_URL;
 const apply = process.argv.includes("--apply");
-if (!apiKey || !credentialId || !appUrl)
-  throw new Error("Configura VAPI_API_KEY, VAPI_WEBHOOK_CREDENTIAL_ID y APP_URL.");
+if ((apply && !apiKey) || !credentialId || !appUrl)
+  throw new Error(
+    "Configura VAPI_API_KEY, VAPI_WEBHOOK_CREDENTIAL_ID y APP_URL.",
+  );
 if (!appUrl.startsWith("https://"))
   throw new Error("APP_URL debe ser HTTPS y accesible desde Vapi.");
 
@@ -16,51 +20,12 @@ const server = {
   url: new URL("/api/integrations/vapi/webhook", appUrl).toString(),
   credentialId,
 };
-const tools = [
-  {
-    type: "function",
-    function: {
-      name: "list_services",
-      description: "Consulta los servicios públicos, precio y duración del médico de esta llamada.",
-      parameters: { type: "object", properties: {} },
-    },
-    server,
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_available_slots",
-      description: "Consulta horarios libres para un servicio y fecha. Nunca inventes disponibilidad.",
-      parameters: {
-        type: "object",
-        properties: {
-          serviceId: { type: "string", description: "ID obtenido de list_services" },
-          date: { type: "string", description: "Fecha AAAA-MM-DD en México" },
-        },
-        required: ["serviceId", "date"],
-      },
-    },
-    server,
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_booking_link",
-      description:
-        "Prepara un enlace para que el paciente confirme una cita disponible y complete su brief médico de forma privada.",
-      parameters: {
-        type: "object",
-        properties: {
-          serviceId: { type: "string", description: "ID obtenido de list_services" },
-          date: { type: "string", description: "Fecha AAAA-MM-DD en México" },
-          time: { type: "string", description: "Hora HH:mm obtenida de get_available_slots" },
-        },
-        required: ["serviceId", "date", "time"],
-      },
-    },
-    server,
-  },
-] as const;
+const tools = vapiFunctionDefinitions.map((definition) => ({
+  type: "function",
+  function: definition,
+  server,
+  async: false,
+}));
 
 if (!apply) {
   console.log(JSON.stringify({ mode: "preview", tools }, null, 2));
@@ -69,12 +34,17 @@ if (!apply) {
     headers: { Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error(`No se pudo listar tools: ${response.status}`);
-  const existing = (await response.json()) as Array<{
-    id: string;
-    function?: { name?: string };
-    server?: { url?: string };
-  }>;
+  if (!response.ok)
+    throw new Error(`No se pudo listar tools: ${response.status}`);
+  const existing = z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        function: z.object({ name: z.string().optional() }).optional(),
+        server: z.object({ url: z.string().optional() }).optional(),
+      }),
+    )
+    .parse(await response.json());
   for (const tool of tools) {
     const found = existing.find(
       (item) =>
@@ -82,6 +52,20 @@ if (!apply) {
         item.server?.url === server.url,
     );
     if (found) {
+      const updated = await fetch(
+        "https://api.vapi.ai/tool/" + encodeURIComponent(found.id),
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: "Bearer " + apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(tool),
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+      if (!updated.ok)
+        throw new Error("No se pudo actualizar " + tool.function.name);
       console.log(`${tool.function.name}: ${found.id} (existente)`);
       continue;
     }
@@ -95,8 +79,12 @@ if (!apply) {
       signal: AbortSignal.timeout(10_000),
     });
     if (!created.ok)
-      throw new Error(`No se pudo crear ${tool.function.name}: ${created.status}`);
-    const data = (await created.json()) as { id: string };
+      throw new Error(
+        `No se pudo crear ${tool.function.name}: ${created.status}`,
+      );
+    const data = z
+      .object({ id: z.string().uuid() })
+      .parse(await created.json());
     console.log(`${tool.function.name}: ${data.id} (creada)`);
   }
 }

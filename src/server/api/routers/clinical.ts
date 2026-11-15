@@ -514,6 +514,7 @@ export const clinicalRouter = createTRPCRouter({
       const tasks = await ctx.db.followUpTask.findMany({
         where: {
           clinicId: actor.clinicId,
+          ...(input.taskId ? { id: input.taskId } : {}),
           OR: [
             { assignedToUserId: actor.userId },
             { createdByUserId: actor.userId },

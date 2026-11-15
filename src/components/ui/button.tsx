@@ -9,7 +9,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "glass-bubble font-semibold",
+        default: "glass-bubble glass-floating font-semibold",
+        floating: "glass-bubble glass-floating",
         destructive:
           "bg-destructive text-primary-foreground shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         outline: "glass-bubble glass-bubble-secondary",
@@ -19,10 +20,10 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-11 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-11 gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-12 px-6 has-[>svg]:px-4",
-        icon: "size-11",
+        default: "h-9 px-3 py-1.5 has-[>svg]:px-3",
+        sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "h-10 px-5 has-[>svg]:px-4",
+        icon: "size-9",
       },
     },
     defaultVariants: {

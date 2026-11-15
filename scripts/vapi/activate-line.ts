@@ -26,17 +26,19 @@ const apiKey = process.env.VAPI_API_KEY;
 const credentialId = process.env.VAPI_WEBHOOK_CREDENTIAL_ID;
 const webhookToken = process.env.VAPI_WEBHOOK_TOKEN;
 const appUrl = process.env.APP_URL;
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.POSTGRES_PRISMA_URL;
 if (!apiKey || !credentialId || !webhookToken || !appUrl || !databaseUrl)
   throw new Error(
-    "Configura VAPI_API_KEY, VAPI_WEBHOOK_CREDENTIAL_ID, VAPI_WEBHOOK_TOKEN, APP_URL y DATABASE_URL.",
+    "Configura VAPI_API_KEY, VAPI_WEBHOOK_CREDENTIAL_ID, VAPI_WEBHOOK_TOKEN, APP_URL y POSTGRES_PRISMA_URL.",
   );
 if (webhookToken.length < 32)
   throw new Error("VAPI_WEBHOOK_TOKEN debe tener al menos 32 caracteres.");
 if (!appUrl.startsWith("https://"))
   throw new Error("APP_URL debe ser HTTPS y accesible desde Vapi.");
 
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+const db = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 const endpoint = "https://api.vapi.ai";
 
 async function vapi(path: string, init?: RequestInit) {
@@ -48,7 +50,8 @@ async function vapi(path: string, init?: RequestInit) {
     },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error(`Vapi respondió ${response.status} en ${path}.`);
+  if (!response.ok)
+    throw new Error(`Vapi respondió ${response.status} en ${path}.`);
   return (await response.json()) as Record<string, unknown>;
 }
 
@@ -63,7 +66,9 @@ try {
   if (phone.id !== phoneId || assistant.id !== assistantId)
     throw new Error("Vapi devolvió un recurso diferente al solicitado.");
   if (phone.orgId !== assistant.orgId)
-    throw new Error("El número y el asistente deben pertenecer a la misma organización Vapi.");
+    throw new Error(
+      "El número y el asistente deben pertenecer a la misma organización Vapi.",
+    );
   if (typeof phone.number !== "string")
     throw new Error("Vapi no devolvió el número telefónico de la línea.");
   if (phone.number !== line.phoneNumber && !forwardingVerified)
@@ -73,9 +78,14 @@ try {
   if (phone.status !== "active")
     throw new Error("El número aún no está activo en Vapi.");
   const assistantServer = assistant.server as { url?: string } | undefined;
-  const webhookUrl = new URL("/api/integrations/vapi/webhook", appUrl).toString();
+  const webhookUrl = new URL(
+    "/api/integrations/vapi/webhook",
+    appUrl,
+  ).toString();
   if (assistantServer?.url && assistantServer.url !== webhookUrl)
-    throw new Error("El asistente tiene otro Server URL; revísalo antes de activar.");
+    throw new Error(
+      "El asistente tiene otro Server URL; revísalo antes de activar.",
+    );
 
   console.log({
     lineId: line.id,
@@ -102,9 +112,13 @@ try {
         vapiDialInNumber: phone.number,
         vapiAssistantId: assistantId,
         status: "ACTIVE",
+        enabled: false,
+        mutationsEnabled: false,
       },
     });
-    console.log("Línea activa. Verifica una llamada de prueba y las tools del asistente.");
+    console.log(
+      "Línea conectada, asistente apagado. Habilita la licencia y permite que el médico lo active desde su consultorio.",
+    );
   }
 } finally {
   await db.$disconnect();

@@ -627,3 +627,70 @@ Validación de esta revisión: `pnpm check` sin errores (14 advertencias previas
 ## Sidebar y tema — 14 de noviembre de 2026
 
 Por petición del usuario, esta regla reemplaza el sidebar oscuro permanente de las secciones 4, 5 y 7: el sidebar sigue la apariencia global Claro/Oscuro/Sistema. En claro usa cristal neutro luminoso con tinta oscura; en oscuro usa cristal grafito con tinta clara. Fondo, selección, hover, avatares, notificaciones, borde y foco usan tokens semánticos. El material mantiene una base sólida sin backdrop-filter y desactiva blur cuando se reduce transparencia o aumenta contraste. Los destinos y las acciones existentes se conservan.
+
+## Cristal y apariencia compacta — 14 de noviembre de 2026
+
+La referencia vigente del usuario son las barras translúcidas de Apple sobre contenido real. Se retira el degradado diagonal del sidebar y se baja la opacidad del material de navegación; luz de perímetro fina y sombra contenida sustituyen al bisel blanco grueso. El fondo del sidebar sigue el tema. Su capa decorativa aplica blur y, donde el motor lo admite, desplazamiento SVG del fondo en los bordes. Los textos e iconos quedan fuera del filtro. La barra superior permanece fija al desplazar contenido y deja pasar el fondo real; no se añaden imágenes o manchas de color para simularlo. Sobre un lienzo uniforme el efecto es necesariamente más sutil que sobre las fotos de la referencia.
+
+La navegación seleccionada y la búsqueda usan cápsulas de relleno tenue. Las cards clínicas conservan su base sólida. El material regular de botones reduce el bisel inferior y conserva foco y respuesta al tacto. La barra móvil usa un relleno translúcido con fallback sólido. Transparencia reducida, contraste alto y colores forzados desactivan la capa óptica.
+
+Se reemplaza el selector segmentado Claro/Oscuro/Sistema por un único botón sin pista ni texto visible, con icono de 18 px: sol en claro y luna en oscuro. Al pulsar alterna entre ambos temas y conserva la elección mediante next-themes. Respeta el tema resuelto inicial, incluido Sistema si estaba guardado, hasta que el usuario elige. El botón tiene nombre accesible, foco visible y área táctil de 44 px. Se comparte en landing y shell.
+
+Verificación de esta revisión: código y tipos; no se ejecutan pruebas de navegador por instrucción del usuario. No considerar esta implementación una reproducción visual certificada del material nativo de Apple.
+
+El botón de apariencia conserva un solo icono, ahora dentro de una burbuja flotante de 44 px con contorno fino, relleno translúcido y sombra separada. La variante compartida `floating` permite reutilizarlo; los botones primarios también usan esta elevación. Hover eleva un píxel y pulsar comprime suavemente; movimiento y transparencia reducidos conservan alternativas accesibles. No se agregan controles decorativos sin acción.
+
+## Jornada del médico y panel elevado — 14 de noviembre de 2026
+
+El layout autenticado usa un fondo neutro y, en escritorio, un único panel principal redondeado y elevado. El sidebar queda en el plano de fondo, sin otra card exterior compitiendo. El panel contiene su propio scroll y la navegación lateral permanece visible; al cambiar de ruta se restablece el scroll del panel. En móvil se conserva desplazamiento nativo de página, sin márgenes ni scroll interior de escritorio, safe areas y navegación inferior existente. La marca móvil compacta deja espacio para controles táctiles, incluido el tema.
+
+La barra superior baja su relleno al 28% y el blur a 3 px para dejar percibir letras y contenido detrás. Las preferencias de transparencia reducida y contraste siguen usando una superficie sólida. No añadir fondos fotográficos a la aplicación clínica para demostrar el cristal: el contraste procede del plano neutro y del panel principal.
+
+El dashboard médico abre con la jornada y acciones de buscar/registrar paciente y nueva cita, sin card de accesos rápidos. Cuatro indicadores pequeños viven en una franja superior compartida, sin cards individuales; ante errores muestran un guion en vez de ceros. La agenda de hoy muestra todas las citas activas, hora, nombre, servicio, duración, estado y acceso al expediente existente. Se destaca el siguiente horario futuro y se conserva la agenda anterior para revisión. En móvil la lista no tiene scroll anidado. La columna secundaria contiene seguimientos y citas de días posteriores, sin repetir las de hoy. El análisis mensual se despliega bajo la operación diaria.
+
+Las fechas de la jornada y el mes usan la zona que proporciona la analítica del consultorio, con el fallback existente de Ciudad de México. La agenda conserva la consulta y autorización del backend; no se crean datos ni se alteran estados al abrir una ficha. El registro y la carga clínica continúan en sus formularios existentes. No se realizaron pruebas de navegador.
+
+Por ajuste posterior del usuario se elimina por completo el encabezado de escritorio y su blur. El nombre/avatar permanecen solo en el bloque superior del sidebar, sin badge Doctor/Paciente. El pie conserva únicamente tema y cerrar sesión. La navegación lateral oculta su barra de scroll visual sin bloquear rueda, touchpad o teclado. El encabezado compacto móvil conserva los controles de navegación de la PWA; no usa el blur eliminado.
+
+## Densidad operativa y controles — 14 de noviembre de 2026
+
+Esta revisión sustituye la escala grande anterior de los controles compartidos: botones y selectores de escritorio de 32–36 px, segmented controls discretos y cards de radio 16 px con padding/gap de 16 px. En dispositivos táctiles se conservan objetivos mínimos de 44 px. Formularios clínicos y texto mantienen lectura estable; no se reduce toda la página mediante zoom o transformaciones.
+
+Los KPI usan información pequeña, sin cards individuales ni sombras, con el componente MetricStrip compartido en Resumen y Agenda. Seguimiento y el análisis desplegable usan valores de 18 px y menor espaciado. Los filtros de Agenda se agrupan, con selecciones planas y menús acotados; no usan burbujas de acción primaria. Notificaciones se presenta como una lista de filas separadas, sin padding exterior duplicado ni una card enorme por aviso; conserva acciones, estado de lectura y carga progresiva.
+
+Horarios muestra la semana de lunes a domingo, incluidos días sin configurar. Crear un horario abre un diálogo compacto: una plantilla opcional, selector de día breve y campos nativos de hora. El formulario completo ya no ocupa la página; la ruta compone ScheduleView desde su _components. Los datos y operaciones existentes se conservan.
+
+La burbuja del tema vuelve a la esquina superior derecha de escritorio, sin header. Cerrar sesión desde sidebar o móvil siempre abre confirmación: «¿Deseas salir de la aplicación?». Cancelar no ejecuta la salida.
+
+El panel principal reserva una barra inferior discreta para Notificaciones y, solo para DOCTOR, Agente con etiqueta «Próximamente». El agente es una presentación desactivada: no abre chat, no consulta el consultorio, no llama a proveedores ni simula respuestas. Notificaciones conserva su enlace real. En móvil la barra flota sobre la navegación inferior y el contenido reserva espacio; en escritorio queda fuera del área desplazable para permanecer accesible.
+
+Verificación: tipos, lint y compilación CSS. Sin pruebas de navegador ni operaciones de base de datos.
+
+## Patrón obligatorio de tablas, avisos y modales — 14 de noviembre de 2026
+
+Esta sección recoge las correcciones más recientes del usuario y reemplaza las decisiones anteriores que contradiga.
+
+### Tablas y colecciones
+
+- Todas las tablas basadas en el primitive compartido muestran búsqueda y conmutador Lista/Grid. Grid presenta los mismos registros, campos y acciones como cards compactas, sin duplicar datos ni ejecutar otra consulta. El modo no debe alterar filtros, selección ni página.
+- No colocar tres dropdowns de filtros permanentes consumiendo una franja de pantalla. La búsqueda permanece accesible; los filtros contextuales se abren desde la selección o Ctrl+K cuando la tabla tiene el foco. Fuera de la tabla se conserva el atajo global de navegación.
+- Todas las tablas llevan una cápsula de paginación centrada debajo: rango visible de registros, total filtrado, tamaño de página (10/25/50/100, por defecto 25), anterior, página actual/total y siguiente. Vacíos muestran cero registros y controles desactivados. No fingir paginación del servidor si el dataset ya se cargó completo.
+- La selección por checkbox, clic en una parte no interactiva de la fila o Espacio con foco se vincula a claves estables. Links, menús, inputs y botones dentro de la fila conservan su propia función sin seleccionar por accidente. El checkbox de cabecera selecciona la página visible y expresa estado parcial.
+- Al seleccionar filas, la cápsula inferior cambia a cantidad seleccionada, acceso a filtros con indicación Ctrl+K y limpiar selección. El filtro puede buscar en campos y mostrar solo seleccionados. No añadir acciones clínicas masivas implícitas: confirmar, cancelar, firmar y exportar requieren su flujo autorizado y confirmación correspondiente.
+- Los filtros y la paginación deben conservar acciones y permisos por registro. Grid no convierte texto clínico en contenido decorativo ni oculta etiquetas importantes. La selección es estado de interfaz; nunca equivale a guardar o alterar registros.
+
+### Historial de citas
+
+La ruta /dashboard/appointments es un historial del médico, no una agenda semanal. Mostrar primero las citas futuras desde la más cercana a la más lejana y después las pasadas de más reciente a más antigua. Conservar únicamente un selector opcional de fecha, con forma clara de volver a todas las fechas; retirar Día/Semana/Hoy, flechas de día y la fila de tres filtros. La agenda de hoy permanece en el dashboard. El acceso desde un aviso de cita filtra el ID concreto y ofrece volver al historial completo. Conservar llegada, inicio, confirmación, reprogramación y cancelación por cita.
+
+### Notificaciones
+
+La campana abre una bandeja modal, nunca redirige a una lista general. Cada aviso ofrece enlace al registro relacionado: cita exacta, tarea de seguimiento exacta o expediente referenciado, respetando rol y alcance. Abrir el enlace cierra la bandeja y marca el aviso como leído mediante el backend existente; no simular éxito si falla.
+
+La página dedicada a Notificaciones contiene preferencias de presentación: sin leer por defecto, mostrar detalles y cantidad por bloque. Se guardan por usuario en este navegador y se etiquetan como ajustes locales; no afirmar que controlan email, WhatsApp o push. El agente sigue Próximamente y solo se muestra a doctores.
+
+### Acabado y densidad
+
+Todos los modales, confirmaciones y sheets utilizan el material compartido de dialog-material.css: overlay con blur, panel con translucidez controlada, perímetro fino y sombra suave; texto clínico legible fuera de filtros. Transparencia reducida, contraste alto y colores forzados usan alternativa opaca. La web no se presenta como una reproducción idéntica certificada de macOS.
+
+Ocultar la barra visual del scroll derecho y del sidebar sin desactivar rueda, touchpad, teclado ni desplazamiento táctil. El dashboard no usa la etiqueta «Tu jornada». Sus botones de buscar paciente, registrar paciente y nueva cita conservan igual altura, padding y peso, con un objetivo táctil adecuado en móvil; no variar su tamaño por jerarquía de manera desproporcionada.

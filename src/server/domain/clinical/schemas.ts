@@ -104,6 +104,7 @@ export const createFollowUpTaskInput = z.object({
 });
 
 export const listFollowUpTasksInput = z.object({
+  taskId: z.string().cuid().optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).optional(),
   includeClosed: z.boolean().default(false),
   dueBefore: z.coerce.date().optional(),

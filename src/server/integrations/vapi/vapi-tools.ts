@@ -1,189 +1,177 @@
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
-
+import type { VoiceLine } from "~/server/domain/voice/voice-context";
 import {
-  getAvailableAppointmentSlots,
-  getUtcDayBounds,
-  isTodayOrFuture,
-} from "~/server/domain/appointments/appointment-time";
+  voiceSchemas,
+  parsedArguments,
+} from "~/server/domain/voice/voice-policy";
+import {
+  executeVoiceAppointment,
+  listVoiceAppointments,
+  voiceAvailability,
+  VoiceCommandError,
+} from "~/server/domain/voice/voice-appointments";
+import { verifyVoicePatient } from "~/server/domain/voice/voice-verification";
+export { vapiPhoneNumberId } from "~/server/domain/voice/voice-context";
 
-const uuid = z.string().uuid();
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const toolCallSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   function: z.object({
-    name: z.string().min(1),
+    name: z.string().min(1).max(80),
     arguments: z.unknown().optional(),
   }),
 });
-
-const serviceInput = z.object({ serviceId: z.string().min(1) });
-const slotInput = serviceInput.extend({ date: dateKey });
-const linkInput = slotInput.extend({
-  time: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-});
-
 export type VapiToolCall = z.infer<typeof toolCallSchema>;
-
 export function parseVapiToolCalls(message: unknown): VapiToolCall[] | null {
   const parsed = z
     .object({ toolCallList: z.array(toolCallSchema).min(1).max(5) })
     .safeParse(message);
-  return parsed.success ? parsed.data.toolCallList : null;
-}
-
-export function vapiPhoneNumberId(message: unknown): string | null {
-  const parsed = z
-    .object({
-      phoneNumber: z.object({ id: uuid }).optional(),
-      call: z
-        .object({
-          phoneNumberId: uuid.optional(),
-          phoneNumber: z.object({ id: uuid }).optional(),
-        })
-        .optional(),
-    })
-    .safeParse(message);
-  if (!parsed.success) return null;
-  return (
-    parsed.data.call?.phoneNumberId ??
-    parsed.data.call?.phoneNumber?.id ??
-    parsed.data.phoneNumber?.id ??
-    null
-  );
-}
-
-function parseArguments(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
+  if (
+    !parsed.success ||
+    new Set(parsed.data.toolCallList.map((t) => t.id)).size !==
+      parsed.data.toolCallList.length
+  )
     return null;
-  }
+  return parsed.data.toolCallList;
 }
-
-function parseDate(value: string): Date | null {
-  const date = new Date(`${value}T12:00:00Z`);
-  return Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== value
-    ? null
-    : date;
-}
-
-type Line = { doctorId: string; clinicId: string };
-
-async function availableSlots(
-  db: PrismaClient,
-  line: Line,
-  serviceId: string,
-  dateKeyValue: string,
-) {
-  const date = parseDate(dateKeyValue);
-  if (!date || !isTodayOrFuture(date))
-    return { error: "Solicita una fecha válida de hoy en adelante." };
-  const service = await db.service.findFirst({
-    where: { id: serviceId, doctorId: line.doctorId, isActive: true },
-    select: { id: true, name: true, duration: true },
-  });
-  if (!service) return { error: "Ese servicio no está disponible." };
-
-  const { start, end } = getUtcDayBounds(date);
-  const schedule = await db.schedule.findFirst({
-    where: {
-      doctorId: line.doctorId,
-      dayOfWeek: start.getUTCDay(),
-      isActive: true,
-    },
-    select: { startTime: true, endTime: true },
-  });
-  if (!schedule) return { service: service.name, date: dateKeyValue, slots: [] };
-  const appointments = await db.appointment.findMany({
-    where: {
-      doctorId: line.doctorId,
-      date: { gte: start, lt: end },
-      status: { in: ["PENDING", "CONFIRMED"] },
-    },
-    select: { time: true, duration: true },
-  });
-  return {
-    service: service.name,
-    date: dateKeyValue,
-    slots: getAvailableAppointmentSlots(
-      date,
-      service.duration,
-      schedule.startTime,
-      schedule.endTime,
-      appointments,
-    ),
-  };
-}
-
 export async function runVapiTool(
   db: PrismaClient,
-  line: Line,
+  line: VoiceLine,
   tool: VapiToolCall,
   appUrl: string | undefined,
+  callId: string,
+  secret: string,
 ) {
-  const args = parseArguments(tool.function.arguments);
+  const args = parsedArguments(tool.function.arguments ?? {});
   switch (tool.function.name) {
     case "list_services": {
+      if (!voiceSchemas.list_services.safeParse(args).success)
+        throw new VoiceCommandError("Argumentos no válidos.");
       const services = await db.service.findMany({
-        where: { doctorId: line.doctorId, isActive: true },
-        select: { id: true, name: true, description: true, duration: true, price: true },
+        where: {
+          doctorId: line.doctorId,
+          clinicId: line.clinicId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          duration: true,
+          price: true,
+        },
         orderBy: { name: "asc" },
         take: 30,
       });
-      return { services };
+      return {
+        services,
+        changesEnabled: line.mutationsEnabled,
+        verificationUrl: appUrl
+          ? new URL(
+              "/patient/voice-access?doctorId=" +
+                encodeURIComponent(line.doctorId),
+              appUrl,
+            ).toString()
+          : null,
+        message:
+          "El enlace de verificación está preparado, no enviado. El paciente debe iniciar sesión para generar su código.",
+      };
     }
     case "get_available_slots": {
-      const parsed = slotInput.safeParse(args);
-      if (!parsed.success) return { error: "Indica servicio y fecha (AAAA-MM-DD)." };
-      return availableSlots(db, line, parsed.data.serviceId, parsed.data.date);
+      const input = voiceSchemas.get_available_slots.parse(args);
+      return voiceAvailability(db, line, input.serviceId, input.date);
     }
     case "get_booking_link": {
-      const parsed = linkInput.safeParse(args);
-      if (!parsed.success) return { error: "Indica servicio, fecha y hora válidos." };
-      if (!appUrl) return { error: "El enlace de reserva no está configurado." };
-      const availability = await availableSlots(
+      const input = voiceSchemas.get_booking_link.parse(args);
+      if (!appUrl)
+        throw new VoiceCommandError("El enlace no está configurado.");
+      const availability = await voiceAvailability(
         db,
         line,
-        parsed.data.serviceId,
-        parsed.data.date,
+        input.serviceId,
+        input.date,
       );
-      if ("error" in availability) return availability;
-      if (!availability.slots.includes(parsed.data.time))
-        return { error: "Ese horario ya no está disponible. Consulta los horarios de nuevo." };
-      const url = new URL(`/book-appointment/${line.doctorId}`, appUrl);
-      url.searchParams.set("serviceId", parsed.data.serviceId);
-      url.searchParams.set("date", parsed.data.date);
-      url.searchParams.set("time", parsed.data.time);
+      if (!availability.slots.includes(input.time))
+        throw new VoiceCommandError("Horario ya no disponible.");
+      const url = new URL("/book-appointment/" + line.doctorId, appUrl);
+      url.searchParams.set("serviceId", input.serviceId);
+      url.searchParams.set("date", input.date);
+      url.searchParams.set("time", input.time);
       return {
         bookingUrl: url.toString(),
         message:
-          "La persona debe abrir el enlace, iniciar sesión y completar el brief médico para confirmar su solicitud.",
+          "Enlace preparado, no enviado. La persona debe abrirlo y confirmar la reserva.",
       };
     }
+    case "verify_patient": {
+      const input = voiceSchemas.verify_patient.parse(args);
+      return verifyVoicePatient(db, line, callId, input.code, secret);
+    }
+    case "list_my_appointments": {
+      voiceSchemas.list_my_appointments.parse(args);
+      return listVoiceAppointments(db, line, callId);
+    }
+    case "create_appointment": {
+      const input = voiceSchemas.create_appointment.parse(args);
+      return executeVoiceAppointment(db, line, callId, {
+        name: "create_appointment",
+        serviceId: input.serviceId,
+        date: input.date,
+        time: input.time,
+      });
+    }
+    case "reschedule_appointment": {
+      const input = voiceSchemas.reschedule_appointment.parse(args);
+      return executeVoiceAppointment(db, line, callId, {
+        name: "reschedule_appointment",
+        appointmentId: input.appointmentId,
+        date: input.date,
+        time: input.time,
+      });
+    }
+    case "cancel_appointment": {
+      const input = voiceSchemas.cancel_appointment.parse(args);
+      return executeVoiceAppointment(db, line, callId, {
+        name: "cancel_appointment",
+        appointmentId: input.appointmentId,
+      });
+    }
     default:
-      return { error: "Herramienta no autorizada para este asistente." };
+      throw new VoiceCommandError("Herramienta no autorizada.");
   }
 }
-
 export async function handleVapiToolCalls(
   db: PrismaClient,
-  line: Line,
+  line: VoiceLine,
   calls: VapiToolCall[],
   appUrl: string | undefined,
+  callId: string,
+  secret: string,
 ) {
-  const results = await Promise.all(
-    calls.map(async (tool) => {
-      try {
-        const value = await runVapiTool(db, line, tool, appUrl);
-        return "error" in value
-          ? { name: tool.function.name, toolCallId: tool.id, error: value.error }
-          : { name: tool.function.name, toolCallId: tool.id, result: JSON.stringify(value) };
-      } catch {
-        return { name: tool.function.name, toolCallId: tool.id, error: "No pude consultar la agenda ahora." };
-      }
-    }),
-  );
+  const results: Array<
+    | { toolCallId: string; result: string }
+    | { toolCallId: string; error: string }
+  > = [];
+  // Sequential: verification precedes a mutation; writes in a batch must not race.
+  for (const tool of calls) {
+    try {
+      const value = await runVapiTool(db, line, tool, appUrl, callId, secret);
+      results.push(
+        "error" in value && typeof value.error === "string"
+          ? { toolCallId: tool.id, error: value.error }
+          : { toolCallId: tool.id, result: JSON.stringify(value) },
+      );
+    } catch (e: unknown) {
+      results.push({
+        toolCallId: tool.id,
+        error:
+          e instanceof VoiceCommandError
+            ? e.message
+            : e instanceof z.ZodError
+              ? "Argumentos no válidos. Consulta los servicios y horarios antes de continuar."
+              : "No pude completar la operación. Consulta la cita antes de reintentar o contacta recepción.",
+      });
+    }
+  }
   return { results };
 }

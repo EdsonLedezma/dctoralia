@@ -1,32 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { SegmentedControl } from "~/components/ui/segmented-control";
+import { Button } from "~/components/ui/button";
 
-const options = [
-  { value: "light", label: "Claro", icon: Sun },
-  { value: "dark", label: "Oscuro", icon: Moon },
-  { value: "system", label: "Sistema", icon: Monitor },
-] as const;
-
+/** One quiet control; the icon reflects the appearance currently being used. */
 export function AppearanceSwitcher() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const selected =
-    mounted && options.some((option) => option.value === theme)
-      ? theme
-      : "light";
+  const dark = mounted && resolvedTheme === "dark";
+  const label = dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+  const Icon = dark ? Moon : Sun;
   return (
-    <SegmentedControl
-      label="Apariencia"
-      value={selected ?? "light"}
-      options={options}
-      onValueChange={setTheme}
+    <Button
+      type="button"
+      variant="floating"
+      size="icon"
+      className="shrink-0 rounded-full"
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      aria-label={label}
+      title={label}
       disabled={!mounted}
-      iconOnly
-    />
+    >
+      <Icon className="size-[18px]" aria-hidden="true" strokeWidth={1.7} />
+    </Button>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { notificationTarget } from "./notification-target";
+import { useInboxPreferences } from "./inbox-preferences";
 import {
   Bell,
   CalendarDays,
@@ -47,10 +49,20 @@ function formatCreatedAt(value: Date | string) {
   });
 }
 
-export function NotificationInbox({ role }: { role: InboxRole }) {
+export function NotificationInbox({
+  role,
+  compact = false,
+  onNavigate,
+}: {
+  role: InboxRole;
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
+  const { preferences } = useInboxPreferences();
   const utils = api.useUtils();
-  const [filter, setFilter] = useState<NotificationFilter>("ALL");
-  const [visibleLimit, setVisibleLimit] = useState(8);
+  const [filterChoice, setFilter] = useState<NotificationFilter | null>(null);
+  const filter = filterChoice ?? (preferences.unreadOnly ? "UNREAD" : "ALL");
+  const [visibleLimit, setVisibleLimit] = useState(0);
   const {
     data: notificationsRes,
     isLoading,
@@ -64,14 +76,14 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
   const deleteNotificationMutation = api.notifications.delete.useMutation();
   const notifications = notificationsRes?.result ?? [];
   const unreadCount = notifications.filter((item) => !item.isRead).length;
-  const visibleNotifications = useMemo(
-    () =>
-      filter === "UNREAD"
-        ? notifications.filter((notification) => !notification.isRead)
-        : notifications,
-    [filter, notifications],
+  const visibleNotifications =
+    filter === "UNREAD"
+      ? notifications.filter((notification) => !notification.isRead)
+      : notifications;
+  const displayedNotifications = visibleNotifications.slice(
+    0,
+    visibleLimit || preferences.pageSize,
   );
-  const displayedNotifications = visibleNotifications.slice(0, visibleLimit);
 
   const refreshInbox = async () => {
     await Promise.all([
@@ -121,24 +133,32 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
   };
 
   return (
-    <div className="bg-background min-h-[calc(100dvh-3.5rem)] px-4 py-6 sm:px-8 sm:py-8">
-      <div className="mx-auto max-w-4xl">
-        <header className="border-border mb-5 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div
+      className={
+        compact
+          ? "bg-background px-3 py-4"
+          : "bg-background px-4 py-5 sm:px-7 sm:py-6"
+      }
+    >
+      <div className="mx-auto max-w-6xl">
+        <header className="border-border mb-3 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
           <div>
-            <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
-              Centro de avisos
-            </p>
+            {!compact && (
+              <p className="text-muted-foreground text-xs">Centro de avisos</p>
+            )}
             <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
               Notificaciones
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Cambios importantes de tus citas y actividad de tu cuenta.
-            </p>
+            {!compact && (
+              <p className="text-muted-foreground mt-1 text-sm">
+                Cambios importantes de tus citas y actividad de tu cuenta.
+              </p>
+            )}
           </div>
           {unreadCount > 0 && (
             <Button
-              variant="outline"
-              className="min-h-11 w-full sm:w-auto"
+              variant="ghost"
+              className="w-full text-xs sm:w-auto"
               onClick={() => void handleMarkAllAsRead()}
               disabled={markAllAsReadMutation.isPending}
             >
@@ -157,7 +177,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
             aria-pressed={filter === "ALL"}
             onClick={() => {
               setFilter("ALL");
-              setVisibleLimit(8);
+              setVisibleLimit(0);
             }}
             className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors ${filter === "ALL" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}
           >
@@ -169,7 +189,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
             aria-pressed={filter === "UNREAD"}
             onClick={() => {
               setFilter("UNREAD");
-              setVisibleLimit(8);
+              setVisibleLimit(0);
             }}
             className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors ${filter === "UNREAD" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary"}`}
           >
@@ -182,7 +202,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
             {[0, 1, 2].map((item) => (
               <div
                 key={item}
-                className="material-card border-border bg-card h-28 animate-pulse rounded-2xl border"
+                className="material-card border-border bg-card h-24 animate-pulse rounded-2xl border"
               />
             ))}
             <span className="sr-only">Cargando avisos</span>
@@ -212,35 +232,43 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
             </CardContent>
           </Card>
         ) : (
-          <MotionList className="space-y-3">
+          <MotionList className="notification-list">
             {displayedNotifications.map((notification) => {
               const counterpart =
                 role === "DOCTOR"
                   ? notification.patient.user.name
                   : notification.doctor.user.name;
-              const actionHref = notification.followUpTaskId
-                ? "/dashboard/follow-ups"
-                : notification.appointmentId
-                  ? role === "DOCTOR"
-                    ? "/dashboard/appointments"
-                    : `/patient/appointments/${notification.appointmentId}`
-                  : null;
+              const actionHref = notificationTarget(role, notification);
               return (
                 <Card
                   key={notification.id}
-                  className={`border-border bg-card shadow-none transition-[opacity,box-shadow] duration-200 ${notification.isRead ? "opacity-70" : "border-l-2 border-l-[#171717]"}`}
+                  className={`notification-row transition-colors ${notification.isRead ? "" : "notification-row-unread"}`}
                 >
-                  <CardContent className="p-4 sm:p-5">
+                  <CardContent className="px-3 py-3 sm:px-4">
                     <div className="flex items-start gap-3 sm:gap-4">
                       <div
-                        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${notification.isRead ? "bg-muted text-muted-foreground" : "bg-muted text-foreground"}`}
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${notification.isRead ? "bg-muted text-muted-foreground" : "bg-muted text-foreground"}`}
                       >
                         <NotificationIcon type={notification.type} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="text-foreground text-sm font-semibold">
-                            {notification.title}
+                            {actionHref ? (
+                              <Link
+                                href={actionHref}
+                                onClick={() => {
+                                  if (!notification.isRead)
+                                    void handleMarkAsRead(notification.id);
+                                  onNavigate?.();
+                                }}
+                                className="underline-offset-4 hover:underline"
+                              >
+                                {notification.title}
+                              </Link>
+                            ) : (
+                              notification.title
+                            )}
                           </h2>
                           {!notification.isRead && (
                             <Badge className="bg-secondary text-foreground">
@@ -248,10 +276,12 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-muted-foreground mt-1.5 text-sm leading-5">
-                          {notification.message}
-                        </p>
-                        <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        {preferences.showDetails && (
+                          <p className="text-muted-foreground mt-1 text-[13px] leading-5">
+                            {notification.message}
+                          </p>
+                        )}
+                        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <span>{formatCreatedAt(notification.createdAt)}</span>
                           {counterpart && (
                             <span>
@@ -259,12 +289,16 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
                               {counterpart}
                             </span>
                           )}
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
+
                           {actionHref && (
                             <Link
                               href={actionHref}
-                              className="text-foreground hover:bg-muted inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hover:text-black focus-visible:ring-2 focus-visible:ring-[#171717] focus-visible:outline-none"
+                              onClick={() => {
+                                if (!notification.isRead)
+                                  void handleMarkAsRead(notification.id);
+                                onNavigate?.();
+                              }}
+                              className="text-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
                             >
                               {notification.followUpTaskId
                                 ? "Ver seguimiento"
@@ -279,7 +313,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="min-h-10 min-w-10"
+                            className="size-9"
                             aria-label="Marcar como leído"
                             disabled={markAsReadMutation.isPending}
                             onClick={() =>
@@ -292,7 +326,7 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="min-h-10 min-w-10"
+                          className="size-9"
                           aria-label="Eliminar aviso"
                           disabled={deleteNotificationMutation.isPending}
                           onClick={() => void handleDelete(notification.id)}
@@ -315,7 +349,12 @@ export function NotificationInbox({ role }: { role: InboxRole }) {
                 type="button"
                 variant="outline"
                 className="min-h-11 w-full sm:w-auto"
-                onClick={() => setVisibleLimit((limit) => limit + 8)}
+                onClick={() =>
+                  setVisibleLimit(
+                    (limit) =>
+                      (limit || preferences.pageSize) + preferences.pageSize,
+                  )
+                }
               >
                 Cargar avisos anteriores
               </Button>
