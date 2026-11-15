@@ -1,0 +1,95 @@
+/* Shared modal material. Only the background is filtered; clinical text is not. */
+:root {
+  --dialog-glass-fill: rgb(255 255 255 / 0.84);
+  --dialog-glass-light: rgb(255 255 255 / 0.34);
+  --dialog-glass-rim: rgb(255 255 255 / 0.78);
+  --dialog-glass-edge: rgb(25 25 30 / 0.12);
+  --dialog-glass-shadow: rgb(20 20 25 / 0.19);
+  --dialog-scrim: rgb(16 16 20 / 0.2);
+}
+.dark {
+  --dialog-glass-fill: rgb(30 30 34 / 0.88);
+  --dialog-glass-light: rgb(255 255 255 / 0.075);
+  --dialog-glass-rim: rgb(255 255 255 / 0.18);
+  --dialog-glass-edge: rgb(0 0 0 / 0.34);
+  --dialog-glass-shadow: rgb(0 0 0 / 0.48);
+  --dialog-scrim: rgb(0 0 0 / 0.36);
+}
+.dialog-material-overlay {
+  background: var(--dialog-scrim);
+}
+/* An opaque fallback keeps every confirmation readable without filter support. */
+.dialog-material:is(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"]
+  ) {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--dialog-glass-rim);
+  box-shadow:
+    inset 0 1px 0 var(--dialog-glass-light),
+    0 0 0 1px var(--dialog-glass-edge),
+    0 8px 20px -12px var(--dialog-glass-shadow),
+    0 28px 72px -24px var(--dialog-glass-shadow);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .dialog-material-overlay {
+    -webkit-backdrop-filter: blur(5px) saturate(85%);
+    backdrop-filter: blur(5px) saturate(85%);
+  }
+  .dialog-material:is(
+      [data-slot="dialog-content"],
+      [data-slot="alert-dialog-content"],
+      [data-slot="sheet-content"]
+    ) {
+    background:
+      linear-gradient(145deg, var(--dialog-glass-light), transparent 42%),
+      var(--dialog-glass-fill);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
+    backdrop-filter: blur(18px) saturate(125%);
+  }
+  /* Nested controls use the already sampled material, avoiding another blur. */
+  .dialog-material :is(.glass-bubble, .glass-track, .glass-surface) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .dialog-material-overlay {
+    background: rgb(0 0 0 / 0.45);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .dialog-material:is(
+      [data-slot="dialog-content"],
+      [data-slot="alert-dialog-content"],
+      [data-slot="sheet-content"]
+    ) {
+    background: var(--popover);
+    border-color: var(--foreground);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .dialog-material-overlay {
+    background: Canvas;
+    opacity: 0.75;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .dialog-material:is(
+      [data-slot="dialog-content"],
+      [data-slot="alert-dialog-content"],
+      [data-slot="sheet-content"]
+    ) {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

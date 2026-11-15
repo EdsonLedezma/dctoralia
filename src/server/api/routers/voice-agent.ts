@@ -1,9 +1,11 @@
+import { voiceAgentControls } from "./voice-agent-controls";
 import { env } from "~/env";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { normalizeVoicePhone } from "~/server/integrations/vapi/phone-number";
 import { trpcFailure, trpcSuccess } from "~/types/trpc-response";
 
 export const voiceAgentRouter = createTRPCRouter({
+  ...voiceAgentControls,
   getMine: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.session.user.role !== "DOCTOR")
       return trpcFailure(
@@ -25,7 +27,14 @@ export const voiceAgentRouter = createTRPCRouter({
       where: {
         clinicId_doctorId: { clinicId: doctor.clinicId, doctorId: doctor.id },
       },
-      select: { id: true, phoneNumber: true, status: true, createdAt: true },
+      select: {
+        id: true,
+        phoneNumber: true,
+        status: true,
+        createdAt: true,
+        enabled: true,
+        mutationsEnabled: true,
+      },
     });
     return trpcSuccess(
       { profilePhone: doctor.phone, line },

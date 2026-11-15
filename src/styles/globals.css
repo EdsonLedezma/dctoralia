@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./dialog-material.css";
 @import "tw-animate-css";
 
 @media (prefers-reduced-motion: reduce) {
@@ -238,7 +239,7 @@
 
 /* A shared optical material; semantic content never goes through refraction. */
 :root {
-  --glass-plain: rgb(255 255 255 / 0.72);
+  --glass-plain: rgb(255 255 255 / 0.44);
   --glass-content: rgb(255 255 255 / 0.94);
   --glass-media: rgb(255 255 255 / 0.96);
   --glass-gloss: rgb(255 255 255 / 0.85);
@@ -252,7 +253,7 @@
   --material-blur: 12px;
 }
 .dark {
-  --glass-plain: rgb(44 44 48 / 0.84);
+  --glass-plain: rgb(44 44 48 / 0.58);
   --glass-content: rgb(34 34 38 / 0.96);
   --glass-media: rgb(36 36 40 / 0.97);
   --glass-gloss: rgb(255 255 255 / 0.1);
@@ -384,9 +385,9 @@
     var(--material-fill);
   border-color: rgb(255 255 255 / 0.96);
   box-shadow:
-    inset 0 2px 2px rgb(255 255 255 / 0.95),
-    inset 2px 0 4px rgb(255 255 255 / 0.6),
-    inset 0 -4px 7px rgb(100 100 100 / 0.12),
+    inset 0 1px 1px rgb(255 255 255 / 0.75),
+    inset 1px 0 1px rgb(255 255 255 / 0.25),
+    inset 0 -1px 1px rgb(100 100 100 / 0.08),
     0 0 0 1px var(--glass-outline),
     0 4px 8px -4px var(--glass-shadow),
     0 12px 24px -14px var(--glass-shadow);
@@ -468,46 +469,67 @@
     backdrop-filter: none;
   }
 }
+/* Navigation is a clear optical layer; its labels never enter the filter. */
 .product-sidebar {
+  isolation: isolate;
   color: var(--sidebar-foreground);
-  background:
-    linear-gradient(
-      155deg,
-      var(--glass-gloss),
-      transparent 45%,
-      var(--glass-shade)
-    ),
-    var(--sidebar);
-  border-color: var(--glass-rim);
+  background: var(--sidebar);
+  border-color: color-mix(in srgb, var(--foreground) 9%, transparent);
   box-shadow:
-    inset 0 1px 1px var(--glass-gloss),
-    inset 0 -1px 2px var(--glass-shade),
-    0 0 0 1px var(--glass-outline),
-    0 12px 32px -20px var(--glass-shadow);
+    inset 0 1px 0 rgb(255 255 255 / 0.75),
+    inset 1px 0 0 rgb(255 255 255 / 0.35),
+    inset 0 -1px 0 rgb(0 0 0 / 0.06),
+    0 8px 32px -16px var(--glass-shadow);
 }
+.product-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.dark .product-sidebar {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 1px 0 0 rgb(255 255 255 / 0.08),
+    inset 0 -1px 0 rgb(0 0 0 / 0.24),
+    0 12px 36px -16px rgb(0 0 0 / 0.4);
+}
+
 @supports (backdrop-filter: blur(1px)) {
   .product-sidebar {
-    background:
-      linear-gradient(
-        155deg,
-        var(--glass-gloss),
-        transparent 45%,
-        var(--glass-shade)
-      ),
-      color-mix(in srgb, var(--sidebar) 82%, transparent);
-    -webkit-backdrop-filter: blur(24px) saturate(120%);
-    backdrop-filter: blur(24px) saturate(120%);
+    background: transparent;
+  }
+  .product-sidebar::before {
+    background: color-mix(in srgb, var(--sidebar) 38%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+  .dark .product-sidebar::before {
+    background: color-mix(in srgb, var(--sidebar) 58%, transparent);
+  }
+}
+/* Chromium supports SVG backdrop displacement; other engines retain the blur. */
+@supports (backdrop-filter: url("#dopilot-navigation-refraction") blur(1px)) {
+  .product-sidebar::before {
+    backdrop-filter: url("#dopilot-navigation-refraction") blur(14px)
+      saturate(140%);
   }
 }
 .sidebar-link[aria-current="page"] {
-  background:
-    linear-gradient(155deg, var(--glass-gloss), transparent 75%),
-    var(--glass-lens);
+  background: color-mix(in srgb, var(--card) 56%, transparent);
+  border-radius: 999px;
   box-shadow:
-    inset 0 1px 1px var(--glass-rim),
-    inset 0 -1px 2px var(--glass-shade),
-    0 0 0 1px var(--glass-outline),
-    0 4px 9px -5px var(--glass-shadow);
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--foreground) 6%, transparent),
+    0 1px 4px -2px var(--glass-shadow);
+}
+.dark .sidebar-link[aria-current="page"] {
+  background: rgb(255 255 255 / 0.1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 1px 4px rgb(0 0 0 / 0.12);
 }
 .mobile-nav-surface {
   border-radius: 9999px;
@@ -731,4 +753,342 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@media (prefers-reduced-transparency: reduce),
+  (prefers-contrast: more),
+  (forced-colors: active) {
+  .product-sidebar::before {
+    display: none;
+  }
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .mobile-nav-surface[data-backdrop="content"] {
+    --material-fill: color-mix(in srgb, var(--card) 64%, transparent);
+    --material-blur: 16px;
+  }
+}
+@media (prefers-reduced-transparency: reduce),
+  (prefers-contrast: more),
+  (forced-colors: active) {
+  .mobile-nav-surface[data-backdrop="content"] {
+    --material-fill: var(--card);
+  }
+}
+
+/* Floating controls: a clear capsule with a thin optical rim, not a solid disc. */
+.glass-bubble.glass-floating[data-slot="button"] {
+  --floating-fill: var(--card);
+  position: relative;
+  isolation: isolate;
+  color: var(--foreground);
+  background:
+    linear-gradient(
+      155deg,
+      var(--glass-gloss),
+      transparent 42%,
+      var(--glass-shade)
+    ),
+    var(--floating-fill);
+  border: 1px solid var(--glass-rim);
+  box-shadow:
+    inset 0 1px 1px var(--glass-gloss),
+    inset 0 -1px 1px var(--glass-shade),
+    0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent),
+    0 3px 6px -3px var(--glass-shadow),
+    0 9px 22px -9px var(--glass-shadow);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .glass-bubble.glass-floating[data-slot="button"] {
+    --floating-fill: color-mix(in srgb, var(--card) 46%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
+  }
+  .dark .glass-bubble.glass-floating[data-slot="button"] {
+    --floating-fill: color-mix(in srgb, var(--card) 60%, transparent);
+  }
+  /* Keep one backdrop filter when a button lives inside a glass container. */
+  :is(.glass-surface, .glass-panel) .glass-floating[data-slot="button"] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (hover: hover) {
+  .glass-bubble.glass-floating[data-slot="button"]:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 1px var(--glass-gloss),
+      inset 0 -1px 1px var(--glass-shade),
+      0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent),
+      0 5px 10px -5px var(--glass-shadow),
+      0 12px 26px -9px var(--glass-shadow);
+  }
+}
+.glass-bubble.glass-floating[data-slot="button"]:not(:disabled):active {
+  transform: translateY(0) scale(0.96);
+  box-shadow:
+    inset 0 1px 3px var(--glass-shade),
+    0 0 0 1px var(--glass-outline),
+    0 2px 6px -3px var(--glass-shadow);
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-bubble.glass-floating[data-slot="button"]:is(:hover, :active) {
+    transform: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce),
+  (prefers-contrast: more),
+  (forced-colors: active) {
+  .glass-bubble.glass-floating[data-slot="button"] {
+    background: var(--card);
+    border-color: var(--foreground);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .glass-bubble.glass-floating[data-slot="button"] {
+    background: ButtonFace;
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+}
+
+/* Desktop content floats above the sidebar; mobile retains native page scrolling. */
+.product-layout {
+  background: var(--muted);
+}
+.product-workspace {
+  background: var(--background);
+}
+@media (min-width: 768px) {
+  .product-layout {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .product-layout .product-sidebar {
+    border-color: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .product-layout .product-sidebar::before {
+    background: transparent;
+  }
+  .product-workspace {
+    --background: var(--card);
+    position: relative;
+    z-index: 1;
+    height: calc(100dvh - 1.5rem);
+    margin: 0.75rem;
+    margin-left: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-radius: 24px;
+    box-shadow:
+      0 2px 4px rgb(0 0 0 / 0.04),
+      0 14px 40px -24px var(--glass-shadow);
+    scroll-padding-top: 1rem;
+  }
+  .product-workspace #main-content {
+    min-height: 100%;
+  }
+}
+@media (prefers-reduced-transparency: reduce),
+  (prefers-contrast: more),
+  (forced-colors: active) {
+  .product-layout .product-sidebar {
+    background: var(--sidebar);
+  }
+  .product-workspace {
+    box-shadow: none;
+  }
+}
+@media (forced-colors: active) {
+  .product-workspace {
+    border-color: CanvasText;
+  }
+}
+
+/* No scroll rail in navigation; wheel, touchpad and keyboard scrolling remain. */
+.sidebar-navigation {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-y: contain;
+}
+.sidebar-navigation::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Dense utility controls keep visual weight below the appointment content. */
+.product-workspace .agenda-filters [data-slot="select-trigger"],
+.schedule-editor [data-slot="select-trigger"] {
+  height: 36px;
+  min-height: 36px;
+  border-radius: 10px;
+  border-color: var(--border);
+  background: var(--background);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 12px;
+  padding: 0 10px;
+}
+.agenda-filter-options[data-slot="select-content"] {
+  max-height: min(18rem, var(--radix-select-content-available-height));
+  max-width: calc(100vw - 2rem);
+  border-radius: 12px;
+}
+.agenda-filter-options [data-slot="select-item"] {
+  min-height: 34px;
+  padding-block: 6px;
+  font-size: 13px;
+}
+@media (pointer: coarse) {
+  .product-workspace .agenda-filters [data-slot="select-trigger"],
+  .schedule-editor [data-slot="select-trigger"],
+  .agenda-filter-options [data-slot="select-item"] {
+    min-height: 44px;
+  }
+}
+
+@media (min-width: 768px) {
+  .product-workspace {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+  }
+  .product-view-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior-y: contain;
+    scroll-padding-top: 1rem;
+  }
+}
+@media (max-width: 767px) {
+  .workspace-dock {
+    position: fixed;
+    right: 0.75rem;
+    bottom: calc(5rem + env(safe-area-inset-bottom));
+    z-index: 30;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: 0 3px 12px -6px var(--glass-shadow);
+  }
+  .product-view-scroll #main-content {
+    padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
+}
+
+.notification-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.notification-row[data-slot="card"] {
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.notification-row + .notification-row {
+  border-top: 1px solid var(--border);
+}
+.notification-row-unread[data-slot="card"] {
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  box-shadow: inset 2px 0 var(--foreground);
+}
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="select-trigger"],
+  [data-slot="select-item"],
+  [data-slot="segmented-control"] [role="radio"] {
+    min-height: 44px;
+  }
+  [data-slot="button"]:has(> svg:only-child) {
+    min-width: 44px;
+  }
+  .notification-row a {
+    min-height: 44px;
+  }
+}
+
+/* Hide the content rail without disabling native scrolling. */
+.product-view-scroll,
+.product-workspace {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.product-view-scroll::-webkit-scrollbar,
+.product-workspace::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.product-view-scroll {
+  scrollbar-gutter: auto;
+}
+
+.data-table[data-view="grid"] [data-slot="table"] {
+  display: block;
+}
+.data-table[data-view="grid"] [data-slot="table-header"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.data-table[data-view="grid"] [data-slot="table-body"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+.data-table[data-view="grid"] [data-slot="table-body"] > tr {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+}
+.data-table[data-view="grid"] td {
+  display: block;
+  padding: 4px 0;
+  white-space: normal;
+  min-width: 0;
+}
+.data-table[data-view="grid"] td::before {
+  content: attr(data-label);
+  display: block;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-bottom: 4px;
+}
+.data-table[data-view="grid"] .table-selection-cell {
+  grid-column: 1 / -1;
+}
+.data-table[data-view="grid"] .table-selection-cell::before {
+  display: none;
+}
+.table-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+.table-bottom-bar > div {
+  pointer-events: auto;
 }

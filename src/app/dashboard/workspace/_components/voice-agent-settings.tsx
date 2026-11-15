@@ -1,4 +1,5 @@
 "use client";
+import { VoicePreferences } from "./voice-preferences";
 
 import { PhoneCall } from "lucide-react";
 import { toast } from "sonner";
@@ -57,9 +58,19 @@ export function VoiceAgentSettings() {
               activa las llamadas por sí solo.
             </p>
             {status === "ACTIVE" ? (
-              <p className="bg-secondary text-foreground rounded-lg px-3 py-2 font-medium">
-                Línea activa: {data?.line?.phoneNumber}
-              </p>
+              <div className="space-y-3">
+                <p className="bg-secondary text-foreground rounded-lg px-3 py-2 font-medium">
+                  Línea conectada: {data?.line?.phoneNumber}
+                </p>
+                <VoicePreferences
+                  key={
+                    String(data?.line?.enabled) +
+                    String(data?.line?.mutationsEnabled)
+                  }
+                  enabled={data?.line?.enabled ?? false}
+                  mutationsEnabled={data?.line?.mutationsEnabled ?? false}
+                />
+              </div>
             ) : status === "PENDING" ? (
               <p className="bg-muted text-foreground rounded-lg px-3 py-2 font-medium">
                 Solicitud recibida para {data?.line?.phoneNumber}. Falta

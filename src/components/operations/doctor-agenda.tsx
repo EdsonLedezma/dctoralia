@@ -1,30 +1,28 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { useGSAP } from "@gsap/react";
-import gsap from "gsap";
-import { motion, useReducedMotion } from "motion/react";
+import { MetricStrip } from "~/components/shared/metric-strip";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import {
-  CalendarClock,
-  CalendarDays,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  MoreHorizontal,
-  Plus,
-  X,
-} from "lucide-react";
+import { CalendarClock, Check, MoreHorizontal, Plus, X } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { sortAppointmentHistory } from "./appointment-history";
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableRow,
+  TableBody,
+  TableCell,
+} from "~/components/ui/table";
 import DashboardWrapper from "~/components/auth/DashboardWrapper";
 import { api } from "~/trpc/react";
 import { OperationsShell } from "./operations-shell";
 import { Skeleton } from "~/components/ui/skeleton";
 import { DatePicker } from "~/components/ui/date-picker";
 import { TimeSlotPicker } from "~/components/ui/time-slot-picker";
-import { SegmentedControl } from "~/components/ui/segmented-control";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "sonner";
@@ -44,20 +42,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+
 import {
   getAppointmentStatusColor,
   normalizeAppointmentStatus,
 } from "./appointments.utils";
 import type { DailyAppointment } from "./appointments.types";
-
-gsap.registerPlugin(useGSAP);
 
 function mexicoDateKey(date: Date): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
@@ -65,35 +55,6 @@ function mexicoDateKey(date: Date): string {
 
 function dateFromKey(key: string): Date {
   return new Date(`${key}T12:00:00Z`);
-}
-
-function shiftDateKey(key: string, days: number): string {
-  const date = dateFromKey(key);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function weekStartKey(date: Date): string {
-  const key = mexicoDateKey(date);
-  const day = dateFromKey(key).getUTCDay();
-  return shiftDateKey(key, day === 0 ? -6 : 1 - day);
-}
-
-function formatWeekRange(startKey: string): string {
-  const endKey = shiftDateKey(startKey, 6);
-  const formatter = new Intl.DateTimeFormat("es-MX", {
-    day: "numeric",
-    month: "short",
-    timeZone: "America/Mexico_City",
-  });
-  const start = formatter.format(dateFromKey(startKey));
-  const end = new Intl.DateTimeFormat("es-MX", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Mexico_City",
-  }).format(dateFromKey(endKey));
-  return `${start} – ${end}`;
 }
 
 function AppointmentActions({
@@ -205,11 +166,10 @@ function AppointmentActions({
 }
 
 export function DoctorAgenda() {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [serviceFilter, setServiceFilter] = useState("ALL");
-  const [locationFilter, setLocationFilter] = useState("ALL");
+  const [selectedDate, setSelectedDate] = useState("");
+  const params = useSearchParams();
+  const router = useRouter();
+  const focusedId = params.get("appointmentId");
   const [rescheduleTarget, setRescheduleTarget] =
     useState<DailyAppointment | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState({ date: "", time: "" });
@@ -217,8 +177,7 @@ export function DoctorAgenda() {
     null,
   );
   const [cancelReason, setCancelReason] = useState("");
-  const agendaRef = useRef<HTMLElement>(null);
-  const reducedMotion = useReducedMotion();
+
   const { data, isLoading, isError, refetch } =
     api.appointments.listMine.useQuery();
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
@@ -268,65 +227,14 @@ export function DoctorAgenda() {
       );
   }, [appointmentResults]);
 
-  const targetDate = mexicoDateKey(currentDate);
-  const currentWeekStart = weekStartKey(currentDate);
-  const appointments = useMemo(
-    () =>
-      allAppointments.filter((appointment) => appointment.date === targetDate),
-    [allAppointments, targetDate],
-  );
-  const weekAppointments = useMemo(() => {
-    const endKey = shiftDateKey(currentWeekStart, 6);
-    return allAppointments.filter(
+  const visibleAppointments = sortAppointmentHistory(
+    allAppointments.filter(
       (appointment) =>
-        appointment.date >= currentWeekStart && appointment.date <= endKey,
-    );
-  }, [allAppointments, currentWeekStart]);
-  const visibleAppointments =
-    viewMode === "day" ? appointments : weekAppointments;
-  const serviceOptions = useMemo(() => {
-    const services = new Map<string, string>();
-    allAppointments.forEach((appointment) => {
-      if (appointment.service.id)
-        services.set(appointment.service.id, appointment.service.name);
-    });
-    return [...services.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [allAppointments]);
-  const locationOptions = useMemo(() => {
-    const locations = new Map<string, string>();
-    allAppointments.forEach((appointment) => {
-      if (appointment.location)
-        locations.set(appointment.location.id, appointment.location.name);
-    });
-    return [...locations.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [allAppointments]);
-  const filteredAppointments = useMemo(
-    () =>
-      visibleAppointments.filter(
-        (appointment) =>
-          (statusFilter === "ALL" || appointment.rawStatus === statusFilter) &&
-          (serviceFilter === "ALL" ||
-            appointment.service.id === serviceFilter) &&
-          (locationFilter === "ALL" ||
-            appointment.location?.id === locationFilter),
-      ),
-    [visibleAppointments, statusFilter, serviceFilter, locationFilter],
+        (!selectedDate || appointment.date === selectedDate) &&
+        (!focusedId || appointment.id === focusedId),
+    ),
+    new Date(),
   );
-  const weekDays = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, index) => {
-        const key = shiftDateKey(currentWeekStart, index);
-        return {
-          key,
-          date: dateFromKey(key),
-          appointments: filteredAppointments.filter(
-            (item) => item.date === key,
-          ),
-        };
-      }),
-    [currentWeekStart, filteredAppointments],
-  );
-
   const availableSlotsQuery = api.appointments.availableSlots.useQuery(
     {
       appointmentId: rescheduleTarget?.id ?? "",
@@ -408,7 +316,7 @@ export function DoctorAgenda() {
       );
       toast.success("Cita reprogramada");
       setRescheduleTarget(null);
-      setCurrentDate(dateFromKey(rescheduleForm.date));
+      setSelectedDate(rescheduleForm.date);
       setRescheduleForm({ date: "", time: "" });
       await refreshAppointments();
     } catch (error) {
@@ -443,49 +351,6 @@ export function DoctorAgenda() {
     }
   };
 
-  useGSAP(
-    () => {
-      if (reducedMotion) return;
-      const cards = gsap.utils
-        .toArray<HTMLElement>(".agenda-appointment-card")
-        .slice(0, 10);
-      if (!cards.length) return;
-      gsap.fromTo(
-        cards,
-        { autoAlpha: 0, y: 6 },
-        {
-          autoAlpha: 1,
-          y: 0,
-          duration: 0.2,
-          stagger: 0.018,
-          ease: "power3.out",
-          clearProps: "opacity,visibility,transform",
-        },
-      );
-    },
-    {
-      scope: agendaRef,
-      dependencies: [filteredAppointments, viewMode, reducedMotion],
-      revertOnUpdate: true,
-    },
-  );
-
-  const previousDay = () => {
-    setCurrentDate((date) => {
-      const baseKey =
-        viewMode === "day" ? mexicoDateKey(date) : weekStartKey(date);
-      return dateFromKey(shiftDateKey(baseKey, viewMode === "day" ? -1 : -7));
-    });
-  };
-
-  const nextDay = () => {
-    setCurrentDate((date) => {
-      const baseKey =
-        viewMode === "day" ? mexicoDateKey(date) : weekStartKey(date);
-      return dateFromKey(shiftDateKey(baseKey, viewMode === "day" ? 1 : 7));
-    });
-  };
-
   const startReschedule = (appointment: DailyAppointment) => {
     setRescheduleError(null);
     setRescheduleForm({ date: appointment.date, time: "" });
@@ -497,85 +362,10 @@ export function DoctorAgenda() {
     setCancelTarget(appointment);
   };
 
-  const appointmentCard = (appointment: DailyAppointment, compact = false) => (
-    <article
-      key={appointment.id}
-      className={`agenda-appointment-card group material-card border-border bg-card hover:border-foreground/30 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-150 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] ${compact ? "p-2.5" : ""}`}
-    >
-      <div className="flex items-start justify-between gap-1">
-        <p className="text-muted-foreground font-mono text-xs font-medium tabular-nums">
-          {appointment.time}
-        </p>
-        <AppointmentActions
-          appointment={appointment}
-          isUpdating={updateStatus.isPending}
-          isRecordingAttendance={recordAttendance.isPending}
-          isRescheduling={rescheduleAppointment.isPending}
-          isCancelling={cancelAppointment.isPending}
-          onStatusChange={(item, status) =>
-            void handleStatusChange(item, status)
-          }
-          onAttendance={(item, action) => void handleAttendance(item, action)}
-          onReschedule={startReschedule}
-          onCancel={startCancel}
-        />
-      </div>
-      <Link
-        href={`/dashboard/patients/${appointment.patient.id}`}
-        className="text-foreground focus-visible:outline-ring mt-1 block truncate text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-      >
-        {appointment.patient.name || "Paciente"}
-      </Link>
-      <p className="text-muted-foreground mt-1 truncate text-xs">
-        {appointment.service.name || appointment.reason || "Consulta"}
-      </p>
-      {appointment.checkedInAt && (
-        <p className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs tabular-nums">
-          <span className="bg-foreground size-1.5 rounded-full" />
-          Llegó{" "}
-          {new Intl.DateTimeFormat("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "America/Mexico_City",
-          }).format(appointment.checkedInAt)}
-          {appointment.consultationStartedAt && (
-            <span className="text-muted-foreground">
-              · Consulta iniciada{" "}
-              {new Intl.DateTimeFormat("es-MX", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "America/Mexico_City",
-              }).format(appointment.consultationStartedAt)}
-            </span>
-          )}
-        </p>
-      )}
-      {!compact && appointment.location && (
-        <p className="text-muted-foreground mt-1 truncate text-xs">
-          {appointment.location.name}
-        </p>
-      )}
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <Badge className={getAppointmentStatusColor(appointment.status)}>
-          {appointment.rawStatus === "NO_SHOW"
-            ? "No asistió"
-            : appointment.status.charAt(0).toUpperCase() +
-              appointment.status.slice(1)}
-        </Badge>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {appointment.duration} min
-        </span>
-      </div>
-    </article>
-  );
-
   return (
     <DashboardWrapper allowedRoles={["DOCTOR"]}>
       <OperationsShell>
-        <main
-          ref={agendaRef}
-          className="bg-background min-h-[100dvh] px-4 py-7 sm:px-8 sm:py-10"
-        >
+        <main className="bg-background min-h-[100dvh] px-4 py-7 sm:px-8 sm:py-10">
           <div className="mx-auto max-w-6xl">
             <header className="border-border mb-7 flex flex-col gap-5 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -597,295 +387,158 @@ export function DoctorAgenda() {
               </Button>
             </header>
 
-            <section
-              className="mb-5 grid gap-3 sm:grid-cols-3"
-              aria-label={
-                viewMode === "day" ? "Resumen del día" : "Resumen de la semana"
-              }
-            >
-              {[
+            <MetricStrip
+              label="Histórico de citas"
+              items={[
                 {
-                  label:
-                    viewMode === "day" ? "Citas del día" : "Citas de la semana",
-                  value: filteredAppointments.length,
+                  label: "Citas registradas",
+                  value:
+                    isError || data?.error ? "—" : visibleAppointments.length,
                 },
                 {
                   label: "Por confirmar",
-                  value: filteredAppointments.filter(
-                    (a) => a.rawStatus === "PENDING",
-                  ).length,
+                  value:
+                    isError || data?.error
+                      ? "—"
+                      : visibleAppointments.filter(
+                          (item) => item.rawStatus === "PENDING",
+                        ).length,
                 },
                 {
                   label: "Confirmadas",
-                  value: filteredAppointments.filter(
-                    (a) => a.rawStatus === "CONFIRMED",
-                  ).length,
+                  value:
+                    isError || data?.error
+                      ? "—"
+                      : visibleAppointments.filter(
+                          (item) => item.rawStatus === "CONFIRMED",
+                        ).length,
                 },
-              ].map((item, index) => (
-                <motion.div
-                  key={item.label}
-                  initial={
-                    reducedMotion
-                      ? false
-                      : { opacity: 0, transform: "translateY(6px)" }
-                  }
-                  animate={{ opacity: 1, transform: "translateY(0px)" }}
-                  transition={{
-                    duration: 0.2,
-                    delay: reducedMotion ? 0 : index * 0.035,
-                    ease: [0.23, 1, 0.32, 1],
-                  }}
-                  className="material-card border-border bg-card rounded-3xl border px-5 py-4"
+              ]}
+            />
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <DatePicker
+                label="Filtrar por fecha"
+                value={selectedDate}
+                onValueChange={setSelectedDate}
+              />
+              {selectedDate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedDate("")}
                 >
-                  <p className="text-muted-foreground text-sm">{item.label}</p>
-                  <p className="text-foreground mt-2 text-2xl font-semibold tracking-tight tabular-nums">
-                    {item.value}
-                  </p>
-                </motion.div>
-              ))}
-            </section>
-
-            <section className="material-card border-border bg-card overflow-hidden rounded-3xl border">
-              <div className="border-border flex flex-wrap items-center justify-between gap-4 border-b px-4 py-4 sm:px-5">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={previousDay}
-                    aria-label={
-                      viewMode === "day" ? "Día anterior" : "Semana anterior"
-                    }
-                    className="size-11 lg:size-11"
-                  >
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={nextDay}
-                    aria-label={
-                      viewMode === "day" ? "Día siguiente" : "Semana siguiente"
-                    }
-                    className="size-11 lg:size-11"
-                  >
-                    <ChevronRight className="size-4" />
-                  </Button>
-                  <div className="ml-2">
-                    <DatePicker
-                      label="Fecha de agenda"
-                      value={targetDate}
-                      onValueChange={(value) =>
-                        setCurrentDate(dateFromKey(value))
-                      }
-                    />
-                    {viewMode === "week" && (
-                      <p className="mt-2 text-sm font-medium">
-                        {formatWeekRange(currentWeekStart)}
-                      </p>
-                    )}
-                    <p className="text-muted-foreground mt-0.5 text-xs">
-                      {filteredAppointments.length} de{" "}
-                      {visibleAppointments.length}{" "}
-                      {visibleAppointments.length === 1 ? "cita" : "citas"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <SegmentedControl
-                    value={viewMode}
-                    onValueChange={setViewMode}
-                    label="Vista de agenda"
-                    options={[
-                      { value: "day", label: "Día" },
-                      { value: "week", label: "Semana" },
-                    ]}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentDate(new Date())}
-                    className="text-muted-foreground min-h-10 lg:min-h-11"
-                  >
-                    Hoy
-                  </Button>
-                </div>
-              </div>
-
-              <div className="border-border bg-background flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-5">
-                <span className="text-muted-foreground mr-1 text-xs font-medium">
-                  Filtrar
-                </span>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger
-                    className="min-h-11 w-full sm:w-[170px]"
-                    aria-label="Estado de citas"
-                  >
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos los estados</SelectItem>
-                    <SelectItem value="PENDING">Pendientes</SelectItem>
-                    <SelectItem value="CONFIRMED">Confirmadas</SelectItem>
-                    <SelectItem value="COMPLETED">Completadas</SelectItem>
-                    <SelectItem value="CANCELLED">Canceladas</SelectItem>
-                    <SelectItem value="NO_SHOW">No asistió</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={serviceFilter} onValueChange={setServiceFilter}>
-                  <SelectTrigger
-                    className="min-h-11 w-full sm:w-[190px]"
-                    aria-label="Servicio de citas"
-                  >
-                    <SelectValue placeholder="Servicio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos los servicios</SelectItem>
-                    {serviceOptions.map(([id, name]) => (
-                      <SelectItem key={id} value={id}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={locationFilter}
-                  onValueChange={setLocationFilter}
-                >
-                  <SelectTrigger
-                    className="min-h-11 w-full sm:w-[190px]"
-                    aria-label="Ubicación de citas"
-                  >
-                    <SelectValue placeholder="Ubicación" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todas las ubicaciones</SelectItem>
-                    {locationOptions.map(([id, name]) => (
-                      <SelectItem key={id} value={id}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {(statusFilter !== "ALL" ||
-                  serviceFilter !== "ALL" ||
-                  locationFilter !== "ALL") && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground min-h-10 px-2 text-xs lg:min-h-11"
-                    onClick={() => {
-                      setStatusFilter("ALL");
-                      setServiceFilter("ALL");
-                      setLocationFilter("ALL");
-                    }}
-                  >
-                    Limpiar filtros
-                  </Button>
-                )}
-              </div>
-
-              {isError || data?.error ? (
-                <div role="alert" className="space-y-3 p-6">
-                  <p>No pudimos cargar la agenda.</p>
-                  <Button variant="outline" onClick={() => void refetch()}>
-                    Reintentar agenda
-                  </Button>
-                </div>
-              ) : isLoading ? (
-                <div className="space-y-3 p-5">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <Skeleton key={index} className="h-14 w-full" />
-                  ))}
-                </div>
-              ) : filteredAppointments.length ? (
-                viewMode === "week" ? (
-                  <div className="p-3 sm:p-4">
-                    <div className="divide-border border-border bg-background grid min-w-0 grid-cols-1 divide-y rounded-lg border xl:grid-cols-7 xl:divide-x xl:divide-y-0">
-                      {weekDays.map((day) => {
-                        const dayKey = mexicoDateKey(new Date());
-                        const isToday = day.key === dayKey;
-                        return (
-                          <section key={day.key} className="min-h-[280px] p-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCurrentDate(day.date);
-                                setViewMode("day");
-                              }}
-                              className="hover:bg-card focus-visible:outline-ring mb-2 flex min-h-11 w-full items-center justify-between rounded-md px-1.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
-                              aria-label={`Ver agenda del ${new Intl.DateTimeFormat("es-MX", { dateStyle: "full", timeZone: "America/Mexico_City" }).format(day.date)}`}
-                            >
-                              <span>
-                                <span className="text-muted-foreground block text-xs font-medium tracking-wide uppercase">
-                                  {new Intl.DateTimeFormat("es-MX", {
-                                    weekday: "short",
-                                    timeZone: "America/Mexico_City",
-                                  }).format(day.date)}
-                                </span>
-                                <span
-                                  className={`mt-0.5 inline-flex size-7 items-center justify-center rounded-full text-sm font-medium tabular-nums ${isToday ? "glass-thumb text-foreground" : "text-foreground"}`}
-                                >
-                                  {new Intl.DateTimeFormat("es-MX", {
-                                    day: "numeric",
-                                    timeZone: "America/Mexico_City",
-                                  }).format(day.date)}
-                                </span>
-                              </span>
-                              <span className="text-muted-foreground text-xs">
-                                {day.appointments.length}
-                              </span>
-                            </button>
-                            <div className="space-y-2">
-                              {day.appointments.map((appointment) =>
-                                appointmentCard(appointment, true),
-                              )}
-                              {!day.appointments.length && (
-                                <p className="border-border text-muted-foreground rounded-md border border-dashed px-2 py-3 text-center text-xs">
-                                  Sin citas
-                                </p>
-                              )}
-                            </div>
-                          </section>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2 p-3 sm:p-4">
-                    {filteredAppointments.map((appointment) =>
-                      appointmentCard(appointment),
-                    )}
-                  </div>
-                )
-              ) : (
-                <div className="flex flex-col items-center px-6 py-14 text-center">
-                  <div className="bg-muted text-muted-foreground mb-4 flex size-11 items-center justify-center rounded-full">
-                    <CalendarDays className="size-5" />
-                  </div>
-                  <h3 className="text-foreground text-sm font-semibold">
-                    {visibleAppointments.length
-                      ? "No hay citas con estos filtros"
-                      : viewMode === "day"
-                        ? "No hay citas para este día"
-                        : "No hay citas esta semana"}
-                  </h3>
-                  <p className="text-muted-foreground mt-1 max-w-sm text-sm leading-6">
-                    Puedes agendar una consulta o revisar{" "}
-                    {viewMode === "day" ? "otro día" : "otra semana"}.
-                  </p>
-                  <Button asChild variant="outline" className="mt-5">
-                    <Link href="/dashboard/appointments/new">
-                      <Plus className="mr-2 size-4" />
-                      Agendar cita
-                    </Link>
-                  </Button>
-                </div>
+                  Todas las fechas
+                </Button>
               )}
-            </section>
+              {focusedId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.replace("/dashboard/appointments")}
+                >
+                  Ver todas las citas
+                </Button>
+              )}
+            </div>
+            {isError || data?.error ? (
+              <div role="alert" className="space-y-3 py-6">
+                <p>No pudimos cargar el historial.</p>
+                <Button variant="outline" onClick={() => void refetch()}>
+                  Reintentar
+                </Button>
+              </div>
+            ) : isLoading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : (
+              <section
+                aria-label="Historial de citas"
+                className="border-border overflow-hidden rounded-2xl border"
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha y hora</TableHead>
+                      <TableHead>Paciente</TableHead>
+                      <TableHead>Servicio</TableHead>
+                      <TableHead>Ubicación</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Duración</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleAppointments.map((appointment) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell>
+                          <time className="text-xs tabular-nums">
+                            {appointment.date} · {appointment.time}
+                          </time>
+                        </TableCell>
+                        <TableCell>
+                          <Link
+                            className="font-medium underline-offset-4 hover:underline"
+                            href={`/dashboard/patients/${appointment.patient.id}`}
+                          >
+                            {appointment.patient.name || "Paciente"}
+                          </Link>
+                          {appointment.checkedInAt && (
+                            <span className="text-muted-foreground block text-xs">
+                              {appointment.consultationStartedAt
+                                ? "Consulta iniciada"
+                                : "Llegada registrada"}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{appointment.service.name}</TableCell>
+                        <TableCell>
+                          {appointment.location?.name ?? "Sin ubicación"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={getAppointmentStatusColor(
+                              appointment.status,
+                            )}
+                          >
+                            {appointment.rawStatus === "NO_SHOW"
+                              ? "No asistió"
+                              : appointment.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{appointment.duration} min</TableCell>
+                        <TableCell>
+                          <AppointmentActions
+                            appointment={appointment}
+                            isUpdating={updateStatus.isPending}
+                            isRecordingAttendance={recordAttendance.isPending}
+                            isRescheduling={rescheduleAppointment.isPending}
+                            isCancelling={cancelAppointment.isPending}
+                            onStatusChange={(item, status) =>
+                              void handleStatusChange(item, status)
+                            }
+                            onAttendance={(item, action) =>
+                              void handleAttendance(item, action)
+                            }
+                            onReschedule={startReschedule}
+                            onCancel={startCancel}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!visibleAppointments.length && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="text-muted-foreground py-10 text-center"
+                        >
+                          No hay citas para esta selección.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
           </div>
-
           <Dialog
             open={!!rescheduleTarget}
             onOpenChange={(open) => {

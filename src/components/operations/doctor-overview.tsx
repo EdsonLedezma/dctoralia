@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,33 +9,23 @@ import {
   CalendarClock,
   CalendarPlus,
   Check,
-  CheckCircle2,
   ChevronRight,
-  Clock3,
   ClipboardList,
   ListTodo,
   Plus,
-  UsersRound,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { api } from "~/trpc/react";
+import { getDoctorWorkday } from "~/server/domain/appointments/doctor-workday";
 import { OperationsShell } from "./operations-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import { MetricStrip } from "~/components/shared/metric-strip";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { avatarUrl } from "~/lib/avatar-url";
 import { toast } from "sonner";
 
 const easeOut = [0.23, 1, 0.32, 1] as const;
-
-function dateKey(value: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Mexico_City",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(value);
-}
 
 function formatDate(value: Date, options: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat("es-MX", options).format(value);
@@ -45,6 +35,11 @@ export function DoctorOverview() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const reducedMotion = useReducedMotion();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const analyticsPeriod = useMemo(() => {
     const to = new Date();
     const from = new Date(to);
@@ -58,6 +53,7 @@ export function DoctorOverview() {
     refetch,
   } = api.appointments.listMine.useQuery(undefined, {
     enabled: status === "authenticated",
+    refetchOnWindowFocus: true,
   });
   const {
     data: analyticsData,
@@ -108,15 +104,15 @@ export function DoctorOverview() {
   if (status === "loading" || (status === "authenticated" && isLoading)) {
     return (
       <OperationsShell>
-        <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-8">
+        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-8">
           <Skeleton className="h-16 w-2/3" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-32 rounded-xl" />
+              <Skeleton key={index} className="h-16 rounded-xl" />
             ))}
           </div>
           <Skeleton className="h-80 rounded-xl" />
-        </main>
+        </div>
       </OperationsShell>
     );
   }
@@ -127,94 +123,37 @@ export function DoctorOverview() {
   const allAppointments = appointmentsData?.result ?? [];
   const analytics = analyticsData?.result;
   const followUpTasks = followUpsData?.result ?? [];
-  const now = new Date();
-  const today = dateKey(now);
-  const todayAppointments = allAppointments
-    .filter(
-      (appointment) =>
-        new Date(appointment.date).toISOString().slice(0, 10) === today &&
-        (appointment.status === "PENDING" ||
-          appointment.status === "CONFIRMED"),
-    )
-    .sort((a, b) => a.time.localeCompare(b.time));
-  const upcomingAppointments = allAppointments
-    .filter((appointment) => {
-      const appointmentDay = new Date(appointment.date)
-        .toISOString()
-        .slice(0, 10);
-      return (
-        (appointmentDay > today ||
-          (appointmentDay === today &&
-            appointment.time >=
-              formatDate(now, {
-                hour: "2-digit",
-                minute: "2-digit",
-                hourCycle: "h23",
-                timeZone: "America/Mexico_City",
-              }))) &&
-        (appointment.status === "PENDING" || appointment.status === "CONFIRMED")
-      );
-    })
-    .sort(
-      (a, b) =>
-        new Date(a.date).getTime() - new Date(b.date).getTime() ||
-        a.time.localeCompare(b.time),
-    )
-    .slice(0, 5);
-  const pendingCount = allAppointments.filter(
-    (appointment) => appointment.status === "PENDING",
-  ).length;
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const completedThisMonth = allAppointments.filter(
-    (appointment) =>
-      appointment.status === "COMPLETED" &&
-      new Date(appointment.date) >= monthStart,
-  ).length;
-  const activePatients = new Set(
-    allAppointments
-      .filter((appointment) => appointment.status !== "CANCELLED")
-      .map((appointment) => appointment.patientId),
-  ).size;
-
+  const timezone = analytics?.period.clinicTimezone ?? "America/Mexico_City";
+  const {
+    todayAppointments,
+    upcomingAppointments,
+    nextToday,
+    pendingCount,
+    completedThisMonth,
+    activePatients,
+  } = getDoctorWorkday(allAppointments, now, timezone);
   const stats = [
     {
-      label: "Citas de hoy",
+      label: "Por atender hoy",
       value: todayAppointments.length,
-      detail: todayAppointments.length
-        ? `Primera cita a las ${todayAppointments[0]?.time}`
-        : "Tu agenda está libre por hoy",
-      icon: CalendarClock,
       href: "/dashboard/appointments",
     },
     {
       label: "Por confirmar",
       value: pendingCount,
-      detail: pendingCount
-        ? "Revisa las solicitudes pendientes"
-        : "Todo al día",
-      icon: Clock3,
       href: "/dashboard/appointments",
     },
     {
       label: "Atendidos este mes",
       value: completedThisMonth,
-      detail: formatDate(now, {
-        month: "long",
-        year: "numeric",
-        timeZone: "America/Mexico_City",
-      }),
-      icon: CheckCircle2,
       href: "/dashboard/appointments",
     },
     {
-      label: "Pacientes",
+      label: "Pacientes con citas",
       value: activePatients,
-      detail: "Con citas registradas",
-      icon: UsersRound,
       href: "/dashboard/patients",
     },
   ];
-
   const entrance = reducedMotion
     ? { initial: false as const, animate: { opacity: 1 } }
     : {
@@ -224,19 +163,16 @@ export function DoctorOverview() {
 
   return (
     <OperationsShell>
-      <main className="bg-background min-h-[100dvh] px-4 py-7 sm:px-8 sm:py-10">
+      <div className="px-4 py-6 sm:px-7 sm:py-7">
         <div className="mx-auto max-w-6xl">
           <motion.header
             {...entrance}
             transition={{ duration: 0.24, ease: easeOut }}
-            className="border-border mb-8 flex flex-col gap-5 border-b pb-6 sm:flex-row sm:items-end sm:justify-between"
+            className="border-border mb-8 flex flex-col gap-5 border-b pb-6 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
           >
             <div>
-              <p className="text-muted-foreground text-xs font-medium tracking-[0.08em] uppercase">
-                Resumen de consulta
-              </p>
               <h1 className="text-foreground mt-2 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
-                Hola, {session.user.name?.split(" ")[0] ?? "doctor"}
+                Tu agenda de hoy
               </h1>
               <p className="text-muted-foreground mt-2 text-sm">
                 {formatDate(now, {
@@ -244,19 +180,46 @@ export function DoctorOverview() {
                   day: "numeric",
                   month: "long",
                   year: "numeric",
-                  timeZone: "America/Mexico_City",
+                  timeZone: timezone,
                 })}
-                . Aquí tienes el estado de tu operación.
+                · {session.user.name?.split(" ")[0] ?? "Doctor"}
               </p>
             </div>
-            <Button asChild className="h-11 w-full px-4 sm:w-auto">
-              <Link href="/dashboard/appointments/new">
-                <Plus className="mr-2 size-4" />
-                Nueva cita
-              </Link>
-            </Button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 min-w-0 px-3 font-medium"
+              >
+                <Link href="/dashboard/patients">Buscar paciente</Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 min-w-0 px-3 font-medium"
+              >
+                <Link href="/dashboard/patients/new">Registrar paciente</Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="col-span-2 h-9 px-3 font-medium sm:w-auto"
+              >
+                <Link href="/dashboard/appointments/new">
+                  <Plus className="size-4" />
+                  Nueva cita
+                </Link>
+              </Button>
+            </div>
           </motion.header>
 
+          <MetricStrip
+            label="Indicadores de la consulta"
+            items={stats.map((stat) => ({
+              ...stat,
+              value: isError ? "—" : stat.value,
+            }))}
+          />
           {isError && (
             <div
               role="alert"
@@ -290,10 +253,12 @@ export function DoctorOverview() {
                     id="today-title"
                     className="text-foreground text-base font-semibold"
                   >
-                    Agenda de hoy
+                    Pacientes de hoy
                   </h2>
                   <p className="text-muted-foreground mt-1 text-xs">
-                    {todayAppointments.length} citas confirmadas o pendientes
+                    {nextToday
+                      ? `Siguiente horario: ${nextToday.time}`
+                      : `${todayAppointments.length} citas por revisar`}
                   </p>
                 </div>
                 <Link
@@ -309,8 +274,8 @@ export function DoctorOverview() {
                   para consultar tus citas.
                 </p>
               ) : todayAppointments.length > 0 ? (
-                <ul className="divide-border divide-y">
-                  {todayAppointments.slice(0, 6).map((appointment, index) => {
+                <ul className="divide-border divide-y md:max-h-[36rem] md:overflow-y-auto md:overscroll-contain">
+                  {todayAppointments.map((appointment, index) => {
                     const patient = appointment.patient;
                     const patientName = patient?.user?.name ?? "Paciente";
                     return (
@@ -326,7 +291,8 @@ export function DoctorOverview() {
                       >
                         <Link
                           href={`/dashboard/patients/${appointment.patientId}`}
-                          className="group focus-visible:outline-inset hover:bg-background focus-visible:outline-ring flex min-h-[76px] items-center gap-4 px-5 py-3 transition-colors duration-150 focus-visible:outline-2 sm:px-6"
+                          aria-label={`Abrir expediente de ${patientName}, cita a las ${appointment.time}`}
+                          className={`group focus-visible:outline-inset hover:bg-muted/40 focus-visible:outline-ring flex min-h-[84px] items-center gap-3 px-4 py-3 transition-colors duration-150 focus-visible:outline-2 sm:gap-4 sm:px-6 ${appointment.id === nextToday?.id ? "bg-muted/35" : ""}`}
                         >
                           <time className="text-muted-foreground w-14 shrink-0 font-mono text-sm tabular-nums">
                             {appointment.time}
@@ -361,11 +327,14 @@ export function DoctorOverview() {
                             </p>
                           </div>
                           <span
-                            className={`hidden inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${appointment.status === "CONFIRMED" ? "bg-accent text-foreground" : "bg-muted text-foreground"}`}
+                            className={`hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex ${appointment.status === "CONFIRMED" ? "bg-accent text-foreground" : "bg-muted text-foreground"}`}
                           >
                             {appointment.status === "CONFIRMED"
                               ? "Confirmada"
                               : "Por confirmar"}
+                          </span>
+                          <span className="text-foreground hidden shrink-0 text-xs font-medium 2xl:inline">
+                            Abrir expediente
                           </span>
                           <ChevronRight
                             className="text-muted-foreground size-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
@@ -480,7 +449,7 @@ export function DoctorOverview() {
                                     month: "short",
                                     hour: "2-digit",
                                     minute: "2-digit",
-                                    timeZone: "America/Mexico_City",
+                                    timeZone: timezone,
                                   })
                                 : "Sin fecha límite"}
                             </p>
@@ -497,7 +466,7 @@ export function DoctorOverview() {
                                 task.status === "OPEN" ? "outline" : "default"
                               }
                               size="icon"
-                              className="size-8 shrink-0"
+                              className="size-11 shrink-0"
                               aria-label={
                                 task.status === "OPEN"
                                   ? `Iniciar seguimiento: ${task.title}`
@@ -558,10 +527,10 @@ export function DoctorOverview() {
                       id="upcoming-title"
                       className="text-foreground text-sm font-semibold"
                     >
-                      Próximas citas
+                      Próximos días
                     </h2>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Siguientes en tu agenda
+                      Citas posteriores a hoy
                     </p>
                   </div>
                   <ClipboardList
@@ -569,9 +538,14 @@ export function DoctorOverview() {
                     aria-hidden="true"
                   />
                 </div>
-                {upcomingAppointments.length ? (
+                {isError ? (
+                  <p className="text-muted-foreground px-5 py-6 text-sm">
+                    Las próximas citas no están disponibles. Reintenta la carga
+                    de la agenda.
+                  </p>
+                ) : upcomingAppointments.length ? (
                   <ul className="divide-border divide-y">
-                    {upcomingAppointments.slice(0, 4).map((appointment) => (
+                    {upcomingAppointments.map((appointment) => (
                       <li key={appointment.id}>
                         <Link
                           href={`/dashboard/patients/${appointment.patientId}`}
@@ -605,247 +579,170 @@ export function DoctorOverview() {
                   </p>
                 )}
               </motion.section>
-
-              <motion.section
-                {...entrance}
-                transition={{
-                  duration: 0.28,
-                  delay: reducedMotion ? 0 : 0.18,
-                  ease: easeOut,
-                }}
-                aria-labelledby="shortcuts-title"
-                className="material-card border-border bg-card rounded-3xl border p-5"
-              >
-                <h2
-                  id="shortcuts-title"
-                  className="text-foreground text-sm font-semibold"
-                >
-                  Accesos rápidos
-                </h2>
-                <div className="divide-border mt-3 divide-y">
-                  <Link
-                    href="/dashboard/patients/new"
-                    className="text-muted-foreground hover:text-foreground flex min-h-12 items-center justify-between gap-3 py-2 text-sm transition-colors"
-                  >
-                    Registrar paciente{" "}
-                    <ArrowRight className="text-muted-foreground size-4" />
-                  </Link>
-                  <Link
-                    href="/dashboard/services"
-                    className="text-muted-foreground hover:text-foreground flex min-h-12 items-center justify-between gap-3 py-2 text-sm transition-colors"
-                  >
-                    Administrar servicios{" "}
-                    <ArrowRight className="text-muted-foreground size-4" />
-                  </Link>
-                  <Link
-                    href="/dashboard/schedule"
-                    className="text-muted-foreground hover:text-foreground flex min-h-12 items-center justify-between gap-3 py-2 text-sm transition-colors"
-                  >
-                    Configurar horarios{" "}
-                    <ArrowRight className="text-muted-foreground size-4" />
-                  </Link>
-                </div>
-              </motion.section>
             </div>
           </div>
           <div className="mt-8 space-y-6">
-            {" "}
-            <section
-              aria-label="Indicadores de la consulta"
-              className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-            >
-              {stats.map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <motion.div
-                    key={stat.label}
-                    {...entrance}
-                    transition={{
-                      duration: 0.26,
-                      delay: reducedMotion ? 0 : 0.04 * index,
-                      ease: easeOut,
-                    }}
-                  >
-                    <Link
-                      href={stat.href}
-                      className="group material-card border-border bg-card hover:border-foreground/30 focus-visible:outline-ring block rounded-3xl border p-5 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2"
+            <details>
+              <summary className="text-muted-foreground hover:text-foreground focus-visible:outline-ring mb-3 min-h-11 cursor-pointer rounded-lg py-3 text-sm font-medium focus-visible:outline-2">
+                Actividad de la consulta · últimos 30 días
+              </summary>
+              <motion.section
+                {...entrance}
+                transition={{
+                  duration: 0.25,
+                  delay: reducedMotion ? 0 : 0.08,
+                  ease: easeOut,
+                }}
+                aria-labelledby="operations-title"
+                className="material-card border-border bg-card mb-8 overflow-hidden rounded-3xl border"
+              >
+                <div className="border-border flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:px-6">
+                  <div>
+                    <p className="text-muted-foreground text-xs tracking-[0.08em] uppercase">
+                      Últimos 30 días
+                    </p>
+                    <h2
+                      id="operations-title"
+                      className="text-foreground mt-1 text-sm font-semibold"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground text-sm">
-                          {stat.label}
-                        </span>
-                        <Icon
-                          className="text-muted-foreground size-4 transition-transform duration-150 group-hover:-translate-y-0.5"
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <p className="text-foreground mt-5 text-3xl font-semibold tracking-[-0.04em] tabular-nums">
-                        {stat.value}
-                      </p>
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        {stat.detail}
-                      </p>
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </section>{" "}
-            <motion.section
-              {...entrance}
-              transition={{
-                duration: 0.25,
-                delay: reducedMotion ? 0 : 0.08,
-                ease: easeOut,
-              }}
-              aria-labelledby="operations-title"
-              className="material-card border-border bg-card mb-8 overflow-hidden rounded-3xl border"
-            >
-              <div className="border-border flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
-                <div>
-                  <p className="text-muted-foreground text-xs tracking-[0.08em] uppercase">
-                    Últimos 30 días
-                  </p>
-                  <h2
-                    id="operations-title"
-                    className="text-foreground mt-1 text-sm font-semibold"
-                  >
-                    Actividad de la consulta
-                  </h2>
-                </div>
-                <Link
-                  href="/dashboard/follow-ups"
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex min-h-11 items-center gap-1 self-start rounded-md px-2 text-sm font-medium transition-colors focus-visible:outline-2 sm:self-auto"
-                >
-                  Ver análisis <ArrowRight className="size-3.5" />
-                </Link>
-              </div>
-              {isAnalyticsError ? (
-                <div
-                  role="alert"
-                  className="text-muted-foreground flex flex-col gap-3 px-5 py-5 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6"
-                >
-                  <p>No pudimos actualizar la actividad de tu consulta.</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void refetchAnalytics()}
-                  >
-                    Reintentar
-                  </Button>
-                </div>
-              ) : analyticsData?.error ? (
-                <div className="text-muted-foreground px-5 py-5 text-sm sm:px-6">
-                  <p>
-                    Para ver actividad y seguimiento, selecciona un consultorio
-                    con acceso clínico.
-                  </p>
+                      Actividad de la consulta
+                    </h2>
+                  </div>
                   <Link
-                    href="/dashboard/workspace"
-                    className="text-foreground mt-2 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
+                    href="/dashboard/follow-ups"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex min-h-11 items-center gap-1 self-start rounded-md px-2 text-sm font-medium transition-colors focus-visible:outline-2 sm:self-auto"
                   >
-                    Revisar consultorio
+                    Ver análisis <ArrowRight className="size-3.5" />
                   </Link>
                 </div>
-              ) : (
-                <>
-                  <div className="divide-border grid divide-y sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3 lg:divide-x xl:grid-cols-6">
-                    {[
-                      {
-                        label: "Ocupación próximos 7 días",
-                        href: "/dashboard/appointments",
-                        value:
-                          analytics?.upcomingCapacity.occupancyRate == null
-                            ? "—"
-                            : `${Math.round(analytics.upcomingCapacity.occupancyRate * 100)}%`,
-                        detail: analytics?.upcomingCapacity.availableMinutes
-                          ? `${analytics.upcomingCapacity.bookedMinutes} de ${analytics.upcomingCapacity.availableMinutes} min reservados`
-                          : "Sin horarios activos",
-                      },
-                      {
-                        label: "Citas programadas",
-                        href: "/dashboard/appointments",
-                        value: analytics?.appointments.denominator,
-                        detail: "Por fecha de agenda",
-                      },
-                      {
-                        label: "Cancelaciones",
-                        href: "/dashboard/appointments",
-                        value:
-                          analytics?.appointments.lifecycleEvents.cancelled,
-                        detail: "Cambios registrados en el periodo",
-                      },
-                      {
-                        label: "Ausencias",
-                        href: "/dashboard/appointments",
-                        value: analytics?.appointments.lifecycleEvents.noShow,
-                        detail: "Cambios registrados en el periodo",
-                      },
-                      {
-                        label: "Seguimientos cerrados",
-                        href: "/dashboard/follow-ups",
-                        value:
-                          analytics?.followUps.completionRate == null
-                            ? "—"
-                            : `${Math.round(analytics.followUps.completionRate * 100)}%`,
-                        detail:
-                          analytics?.followUps.denominator === undefined
-                            ? "Tareas con vencimiento en periodo"
-                            : `De ${analytics.followUps.denominator} tareas no canceladas`,
-                      },
-                      {
-                        label: "Espera mediana",
-                        href: "/dashboard/appointments",
-                        value:
-                          analytics?.waitingTime.medianMinutes == null
-                            ? "—"
-                            : `${analytics.waitingTime.medianMinutes} min`,
-                        detail: analytics?.waitingTime.pairedAppointments
-                          ? `De ${analytics.waitingTime.pairedAppointments} consultas con llegada e inicio registrados`
-                          : "Se calcula al registrar llegada e inicio",
-                      },
-                    ].map((metric, index) => (
-                      <motion.div
-                        key={metric.label}
-                        initial={reducedMotion ? false : { opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.2,
-                          delay: reducedMotion ? 0 : index * 0.025,
-                          ease: easeOut,
-                        }}
-                        className=""
-                      >
-                        <Link
-                          href={metric.href}
-                          className="group focus-visible:outline-inset hover:bg-background focus-visible:outline-ring block min-h-full px-5 py-4 transition-colors focus-visible:z-10 focus-visible:outline-2 sm:px-6"
-                        >
-                          <p className="text-muted-foreground group-hover:text-muted-foreground text-xs">
-                            {metric.label}
-                          </p>
-                          <p className="text-foreground mt-2 text-2xl font-semibold tracking-[-0.04em] tabular-nums">
-                            {isAnalyticsLoading ? "—" : (metric.value ?? 0)}
-                          </p>
-                          <p className="text-muted-foreground mt-1 text-xs">
-                            {metric.detail}
-                          </p>
-                        </Link>
-                      </motion.div>
-                    ))}
+                {isAnalyticsError ? (
+                  <div
+                    role="alert"
+                    className="text-muted-foreground flex flex-col gap-3 px-5 py-5 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6"
+                  >
+                    <p>No pudimos actualizar la actividad de tu consulta.</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void refetchAnalytics()}
+                    >
+                      Reintentar
+                    </Button>
                   </div>
-                  <p className="border-border text-muted-foreground border-t px-5 py-3 text-xs leading-5 sm:px-6">
-                    Las cancelaciones y ausencias cuentan transiciones auditadas
-                    desde que se habilitó el registro; el historial previo no se
-                    reconstruye. La ocupación usa el horario recurrente actual,
-                    no contempla excepciones y cuenta citas pendientes o
-                    confirmadas. Zona: {analytics?.period.clinicTimezone ?? "—"}
-                    .
-                  </p>
-                </>
-              )}
-            </motion.section>
+                ) : analyticsData?.error ? (
+                  <div className="text-muted-foreground px-5 py-5 text-sm sm:px-6">
+                    <p>
+                      Para ver actividad y seguimiento, selecciona un
+                      consultorio con acceso clínico.
+                    </p>
+                    <Link
+                      href="/dashboard/workspace"
+                      className="text-foreground mt-2 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
+                    >
+                      Revisar consultorio
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <div className="divide-border grid divide-y sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3 lg:divide-x xl:grid-cols-6">
+                      {[
+                        {
+                          label: "Ocupación próximos 7 días",
+                          href: "/dashboard/appointments",
+                          value:
+                            analytics?.upcomingCapacity.occupancyRate == null
+                              ? "—"
+                              : `${Math.round(analytics.upcomingCapacity.occupancyRate * 100)}%`,
+                          detail: analytics?.upcomingCapacity.availableMinutes
+                            ? `${analytics.upcomingCapacity.bookedMinutes} de ${analytics.upcomingCapacity.availableMinutes} min reservados`
+                            : "Sin horarios activos",
+                        },
+                        {
+                          label: "Citas programadas",
+                          href: "/dashboard/appointments",
+                          value: analytics?.appointments.denominator,
+                          detail: "Por fecha de agenda",
+                        },
+                        {
+                          label: "Cancelaciones",
+                          href: "/dashboard/appointments",
+                          value:
+                            analytics?.appointments.lifecycleEvents.cancelled,
+                          detail: "Cambios registrados en el periodo",
+                        },
+                        {
+                          label: "Ausencias",
+                          href: "/dashboard/appointments",
+                          value: analytics?.appointments.lifecycleEvents.noShow,
+                          detail: "Cambios registrados en el periodo",
+                        },
+                        {
+                          label: "Seguimientos cerrados",
+                          href: "/dashboard/follow-ups",
+                          value:
+                            analytics?.followUps.completionRate == null
+                              ? "—"
+                              : `${Math.round(analytics.followUps.completionRate * 100)}%`,
+                          detail:
+                            analytics?.followUps.denominator === undefined
+                              ? "Tareas con vencimiento en periodo"
+                              : `De ${analytics.followUps.denominator} tareas no canceladas`,
+                        },
+                        {
+                          label: "Espera mediana",
+                          href: "/dashboard/appointments",
+                          value:
+                            analytics?.waitingTime.medianMinutes == null
+                              ? "—"
+                              : `${analytics.waitingTime.medianMinutes} min`,
+                          detail: analytics?.waitingTime.pairedAppointments
+                            ? `De ${analytics.waitingTime.pairedAppointments} consultas con llegada e inicio registrados`
+                            : "Se calcula al registrar llegada e inicio",
+                        },
+                      ].map((metric, index) => (
+                        <motion.div
+                          key={metric.label}
+                          initial={reducedMotion ? false : { opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            duration: 0.2,
+                            delay: reducedMotion ? 0 : index * 0.025,
+                            ease: easeOut,
+                          }}
+                          className=""
+                        >
+                          <Link
+                            href={metric.href}
+                            className="group focus-visible:outline-inset hover:bg-background focus-visible:outline-ring block min-h-full px-5 py-4 transition-colors focus-visible:z-10 focus-visible:outline-2 sm:px-6"
+                          >
+                            <p className="text-muted-foreground group-hover:text-muted-foreground text-xs">
+                              {metric.label}
+                            </p>
+                            <p className="text-foreground mt-1 text-lg font-semibold tracking-tight tabular-nums">
+                              {isAnalyticsLoading ? "—" : (metric.value ?? 0)}
+                            </p>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                              {metric.detail}
+                            </p>
+                          </Link>
+                        </motion.div>
+                      ))}
+                    </div>
+                    <p className="border-border text-muted-foreground border-t px-5 py-3 text-xs leading-5 sm:px-6">
+                      Las cancelaciones y ausencias cuentan transiciones
+                      auditadas desde que se habilitó el registro; el historial
+                      previo no se reconstruye. La ocupación usa el horario
+                      recurrente actual, no contempla excepciones y cuenta citas
+                      pendientes o confirmadas. Zona:{" "}
+                      {analytics?.period.clinicTimezone ?? "—"}.
+                    </p>
+                  </>
+                )}
+              </motion.section>
+            </details>
           </div>
         </div>
-      </main>
+      </div>
     </OperationsShell>
   );
 }

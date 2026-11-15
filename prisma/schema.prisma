@@ -116,6 +116,8 @@ model VoiceAgentLine {
   id                String   @id @default(cuid())
   clinicId          String
   doctorId          String
+  enabled           Boolean  @default(false)
+  mutationsEnabled  Boolean  @default(false)
   vapiPhoneNumberId String?  @unique
   vapiDialInNumber  String?
   vapiAssistantId   String?
@@ -124,11 +126,54 @@ model VoiceAgentLine {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  patientCodes VoicePatientCode[]
+  callSessions VoiceCallSession[]
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
   @@unique([clinicId, doctorId])
   @@index([doctorId, status])
+}
+
+/// Single-use account-issued authorization; never infer identity from caller ID.
+model VoicePatientCode {
+  id         String   @id @default(cuid())
+  lineId     String
+  patientId  String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  line       VoiceAgentLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  patient    Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  @@index([lineId, patientId, createdAt])
+}
+
+model VoiceCallSession {
+  id          String   @id @default(cuid())
+  callId      String   @unique
+  lineId      String
+  patientId   String?
+  attempts    Int      @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  line        VoiceAgentLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  operations  VoiceToolOperation[]
+  @@index([lineId, createdAt])
+}
+
+model VoiceToolOperation {
+  id         String   @id @default(cuid())
+  sessionId  String
+  requestKey String
+  result     Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  session    VoiceCallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@unique([sessionId, requestKey])
 }
 
 enum VoiceAgentLineStatus {
@@ -209,6 +254,7 @@ model ClinicSubscription {
   checkoutAttempt          Int                @default(0)
   billingLockToken         String?
   billingLockUntil         DateTime?
+  voiceAgentEnabled Boolean @default(false)
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
@@ -309,6 +355,9 @@ model Patient {
   clinicalFiles              ClinicalFile[]
   medicalHistoryConsents     MedicalHistoryConsent[]
   patientMessageConsents     PatientMessageConsent[]
+
+  voiceCodes VoicePatientCode[]
+  voiceSessions VoiceCallSession[]
 
   @@index([clinicId])
 }
