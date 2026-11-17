@@ -32,7 +32,9 @@ const isVercelBlobUrl = (image: string) => {
     const url = new URL(image);
     return (
       url.protocol === "https:" &&
-      /^[a-z0-9-]+\.(?:(?:public|private)\.)?blob\.vercel-storage\.com$/i.test(url.hostname)
+      /^[a-z0-9-]+\.(?:(?:public|private)\.)?blob\.vercel-storage\.com$/i.test(
+        url.hostname,
+      )
     );
   } catch {
     return false;
@@ -44,6 +46,12 @@ export const authRouter = createTRPCRouter({
     .input(registerSchema)
     .mutation(async ({ ctx, input }) => {
       const { email, password, role, name, phone, specialty, license } = input;
+      if (role === "PATIENT")
+        return trpcFailure(
+          "INVITATION_REQUIRED",
+          "Tu doctor te enviará el enlace para activar tu cuenta después de atenderte.",
+          403,
+        );
 
       if (role === "DOCTOR" && (!specialty?.trim() || !license?.trim())) {
         return trpcFailure(
@@ -149,7 +157,7 @@ export const authRouter = createTRPCRouter({
         },
       });
 
-      if (!user) {
+      if (!user || !user.password) {
         return trpcFailure("USER_NOT_FOUND", "Usuario no encontrado", 404);
       }
 
@@ -300,7 +308,7 @@ export const authRouter = createTRPCRouter({
           select: { password: true },
         });
 
-        if (!user) {
+        if (!user || !user.password) {
           return trpcFailure("USER_NOT_FOUND", "Usuario no encontrado", 404);
         }
 

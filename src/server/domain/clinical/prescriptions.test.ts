@@ -1,3 +1,9 @@
+vi.mock("~/server/domain/patient-portal/consultation-completed", () => ({
+  afterConsultationCompleted: vi.fn(),
+}));
+vi.mock("~/server/domain/messaging/appointment-reminders", () => ({
+  cancelPendingAppointmentReminders: vi.fn(),
+}));
 import type { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
@@ -82,12 +88,10 @@ describe("recetas clínicas", () => {
     };
     const db = {
       clinicalEncounter: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue({
-            id: input.encounterId,
-            patientId: "patient-id",
-          }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: input.encounterId,
+          patientId: "patient-id",
+        }),
       },
       $transaction: vi.fn((callback: (value: typeof tx) => Promise<unknown>) =>
         callback(tx),

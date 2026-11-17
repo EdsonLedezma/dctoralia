@@ -3,14 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import {
-  AlertCircle,
-  ArrowRight,
-  Check,
-  LoaderCircle,
-  Stethoscope,
-  UserRound,
-} from "lucide-react";
+import { AlertCircle, ArrowRight, Check, LoaderCircle } from "lucide-react";
 import { useRegister } from "~/hooks/useRegister";
 import { validateRegistrationForm } from "~/utils/validation";
 import {
@@ -22,7 +15,7 @@ import { PasswordStrengthIndicator } from "~/components/ui/validation-errors";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { SegmentedControl } from "~/components/ui/segmented-control";
+
 import {
   Select,
   SelectContent,
@@ -92,7 +85,7 @@ function RegistrationField({
 }
 
 export function RegisterForm() {
-  const [role, setRole] = useState<"DOCTOR" | "PATIENT">("DOCTOR");
+  const [role] = useState<"DOCTOR" | "PATIENT">("DOCTOR");
   const [drafts, setDrafts] = useState({
     DOCTOR: { ...emptyDraft },
     PATIENT: { ...emptyDraft },
@@ -187,22 +180,13 @@ export function RegisterForm() {
     );
   return (
     <>
-      <SegmentedControl
-        label="Tipo de cuenta"
-        value={role}
-        disabled={isRegistering}
-        options={[
-          { value: "DOCTOR", label: "Doctor", icon: Stethoscope },
-          { value: "PATIENT", label: "Paciente", icon: UserRound },
-        ]}
-        className="grid w-full grid-cols-2"
-        onValueChange={(value) => {
-          setRole(value);
-          setTouched({});
-          setError("");
-          resetRegister();
-        }}
-      />
+      <p className="text-muted-foreground text-sm">
+        Registro para profesionales. Si eres paciente,{" "}
+        <Link className="underline underline-offset-4" href="/doctores">
+          agenda una consulta
+        </Link>
+        ; tu doctor te enviará el acceso al portal.
+      </p>
       <p className="text-muted-foreground text-sm leading-6">
         {role === "DOCTOR"
           ? "Organiza tu consultorio y da continuidad a tus pacientes."

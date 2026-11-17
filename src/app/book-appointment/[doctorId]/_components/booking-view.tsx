@@ -10,9 +10,13 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { directoryReturnHref } from "~/components/doctors/directory-navigation";
 import { specialtyLabel } from "~/components/doctors/directory-model";
+import { AppointmentLocation } from "~/components/appointments/appointment-location";
 import { BookingFrame } from "./booking-frame";
 import { ServicePicker } from "./service-picker";
 import {
@@ -53,8 +57,17 @@ export function BookingView() {
     medications: "",
     context: "",
   });
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactConsent, setContactConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookedId, setBookedId] = useState<string | null>(null);
+  const [bookedLocation, setBookedLocation] = useState<{
+    name: string;
+    address: string;
+    directions: string | null;
+    mapsUrl: string;
+  } | null>(null);
   const [today] = useState(mexicoDate);
   const initializedDoctorId = useRef<string | null>(null);
   const submitting = useRef(false);
@@ -75,6 +88,15 @@ export function BookingView() {
     enabled: status === "authenticated",
     retry: false,
   });
+  useEffect(() => {
+    if (session?.user.role === "PATIENT") {
+      setContactName((previous) => previous || session.user.name || "");
+      setContactPhone(
+        (previous) =>
+          previous || profileQuery.data?.result?.patient?.phone || "",
+      );
+    }
+  }, [session, profileQuery.data?.result?.patient?.phone]);
   const slotsQuery = api.schedule.getAvailableSlots.useQuery(
     {
       doctorId,
@@ -84,7 +106,7 @@ export function BookingView() {
     },
     { enabled: Boolean(doctorId && serviceId) },
   );
-  const create = api.appointments.create.useMutation();
+  const create = api.guestBooking.publicCreate.useMutation();
   const doctor = doctorQuery.data?.result;
   const services = useMemo(
     () => servicesQuery.data?.result ?? [],
@@ -100,6 +122,7 @@ export function BookingView() {
       setDate("");
       setTime("");
       setBookedId(null);
+      setBookedLocation(null);
       setError(null);
       setDetails({ symptoms: "", allergies: "", medications: "", context: "" });
     }
@@ -127,13 +150,13 @@ export function BookingView() {
   const times = (slotsQuery.data?.result ?? [])
     .filter((slot) => slot.date === date)
     .map((slot) => slot.time);
+  const selectedSlot = slotsQuery.data?.result?.find(
+    (slot) => slot.date === date && slot.time === time,
+  );
+  const selectedLocation = bookedLocation ?? selectedSlot?.location;
   const selectedSlotAvailable = Boolean(date && time && times.includes(time));
   const availabilityReady =
     !slotsQuery.isFetching && !slotsQuery.error && !slotsQuery.data?.error;
-  const patientId =
-    session?.user?.role === "PATIENT"
-      ? profileQuery.data?.result?.patient?.id
-      : undefined;
   const returnPath = `/book-appointment/${doctorId}?${new URLSearchParams({ serviceId, date, time, resume: "1", from: directoryHref })}`;
   const loginHref = authPageHref("/login", returnPath);
   const canAdvance =
@@ -141,7 +164,11 @@ export function BookingView() {
       ? Boolean(service)
       : step === 1
         ? selectedSlotAvailable && availabilityReady
-        : Boolean(service && patientId) &&
+        : Boolean(
+            service &&
+              contactName.trim().length >= 2 &&
+              contactPhone.trim().length >= 7,
+          ) &&
           details.symptoms.trim().length >= 3 &&
           selectedSlotAvailable &&
           availabilityReady;
@@ -154,19 +181,16 @@ export function BookingView() {
       setStep(step + 1);
       return;
     }
-    if (status !== "authenticated" || !patientId) {
-      setError("Inicia sesión como paciente para enviar tu solicitud.");
-      return;
-    }
     submitting.current = true;
     try {
       const response = await create.mutateAsync({
-        patientId,
+        name: contactName.trim(),
+        phone: contactPhone,
+        contactConsent,
         doctorId,
         serviceId,
-        date: new Date(`${date}T12:00:00.000Z`),
+        date,
         time,
-        reason: details.symptoms.trim().slice(0, 500),
         intake: {
           symptoms: details.symptoms.trim(),
           allergies: details.allergies.trim(),
@@ -180,6 +204,7 @@ export function BookingView() {
       }
       const appointment = unwrapTrpcResult(response);
       setBookedId(appointment.id);
+      setBookedLocation(selectedLocation ?? null);
       toast.success("Solicitud enviada al consultorio");
     } catch (cause) {
       const message =
@@ -205,13 +230,15 @@ export function BookingView() {
       <div className="bg-background text-foreground min-h-screen px-4 py-7 sm:px-8 sm:py-10">
         <div className="mx-auto max-w-6xl">
           <Link
-            href={session?.user?.role === "PATIENT" ? directoryHref : "/"}
+            href={
+              session?.user?.role === "PATIENT" ? directoryHref : "/doctores"
+            }
             className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm font-medium"
           >
             <ArrowLeft className="size-4" />{" "}
             {session?.user?.role === "PATIENT"
               ? "Volver a doctores"
-              : "Volver al inicio"}
+              : "Volver a doctores"}
           </Link>
           <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
             <div>
@@ -238,8 +265,8 @@ export function BookingView() {
                     Solicitud enviada
                   </h2>
                   <p className="text-muted-foreground mt-2 text-sm leading-6">
-                    El consultorio recibió tu cita y la información de la
-                    consulta. Te avisaremos cuando confirme el horario.
+                    El consultorio recibió tu solicitud. Si autorizaste
+                    mensajes, recibirás el aviso al confirmar el horario.
                   </p>
                   <div className="bg-muted mt-6 rounded-2xl p-4 text-sm">
                     <strong>{service?.name}</strong>
@@ -248,8 +275,17 @@ export function BookingView() {
                     </p>
                   </div>
                   <Button asChild className="mt-6">
-                    <Link href={`/patient/appointments/${bookedId}`}>
-                      Ver mi solicitud <ArrowRight className="ml-2 size-4" />
+                    <Link
+                      href={
+                        session?.user.role === "PATIENT"
+                          ? `/patient/appointments/${bookedId}`
+                          : "/doctores"
+                      }
+                    >
+                      {session?.user.role === "PATIENT"
+                        ? "Ver mi solicitud"
+                        : "Volver a doctores"}{" "}
+                      <ArrowRight className="ml-2 size-4" />
                     </Link>
                   </Button>
                 </motion.section>
@@ -440,71 +476,61 @@ export function BookingView() {
                           consulta.
                         </p>
                         <div className="mt-6">
-                          {status === "loading" ||
-                          (status === "authenticated" &&
-                            profileQuery.isLoading) ? (
-                            <p
-                              role="status"
-                              className="text-muted-foreground text-sm"
-                            >
-                              Preparando tu cuenta…
-                            </p>
-                          ) : status !== "authenticated" ? (
-                            <div className="bg-muted space-y-3 rounded-2xl p-5">
-                              <h3 className="font-semibold">
-                                Continúa con tu cuenta de paciente
-                              </h3>
-                              <p className="text-muted-foreground text-sm leading-6">
-                                Inicia sesión para enviar la solicitud.
-                                Conservaremos el servicio, la fecha y la hora
-                                que elegiste.
-                              </p>
-                            </div>
-                          ) : !patientId ? (
-                            <div
-                              role="alert"
-                              className="bg-muted space-y-3 rounded-2xl p-5"
-                            >
-                              <p className="text-sm">
-                                {profileQuery.isError ||
-                                profileQuery.data?.error
-                                  ? "No pudimos recuperar tu perfil de paciente."
-                                  : "Para solicitar una cita necesitas una cuenta de paciente."}
-                              </p>
-                              {(profileQuery.isError ||
-                                profileQuery.data?.error) && (
-                                <Button
-                                  variant="outline"
-                                  onClick={() => void profileQuery.refetch()}
-                                >
-                                  Reintentar perfil
-                                </Button>
-                              )}
-                            </div>
-                          ) : (
-                            <>
-                              {!selectedSlotAvailable && (
-                                <p
-                                  role="alert"
-                                  className="bg-muted mb-5 rounded-xl p-4 text-sm"
-                                >
-                                  El horario ya no está disponible.{" "}
-                                  <button
-                                    type="button"
-                                    onClick={() => setStep(1)}
-                                    className="min-h-11 font-semibold underline"
-                                  >
-                                    Elegir otro horario
-                                  </button>
-                                </p>
-                              )}
-                              <ConsultationDetailsForm
-                                value={details}
-                                onChange={setDetails}
+                          <div className="mb-5 grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="booking-name">Tu nombre</Label>
+                              <Input
+                                id="booking-name"
+                                autoComplete="name"
+                                value={contactName}
+                                maxLength={120}
+                                onChange={(event) =>
+                                  setContactName(event.target.value)
+                                }
                                 disabled={create.isPending}
                               />
-                            </>
-                          )}
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="booking-phone">
+                                Teléfono con lada
+                              </Label>
+                              <Input
+                                id="booking-phone"
+                                type="tel"
+                                autoComplete="tel"
+                                value={contactPhone}
+                                maxLength={40}
+                                onChange={(event) =>
+                                  setContactPhone(event.target.value)
+                                }
+                                disabled={create.isPending}
+                              />
+                            </div>
+                          </div>
+                          <p className="text-muted-foreground mb-4 text-xs leading-5">
+                            No necesitas crear una cuenta para solicitar tu
+                            cita. Tu doctor podrá invitarte a tu espacio de
+                            salud después de atenderte.
+                          </p>
+                          <ConsultationDetailsForm
+                            value={details}
+                            onChange={setDetails}
+                            disabled={create.isPending}
+                          />
+                          <label className="mt-4 flex min-h-11 items-start gap-3 text-xs leading-5">
+                            <Checkbox
+                              checked={contactConsent}
+                              onCheckedChange={(value) =>
+                                setContactConsent(value === true)
+                              }
+                              disabled={create.isPending}
+                            />
+                            <span>
+                              Autorizo recibir por WhatsApp avisos de mi cita e
+                              invitación al portal en este número. Puedo
+                              reservar sin aceptar estos mensajes.
+                            </span>
+                          </label>
                         </div>
                       </>
                     )}
@@ -538,31 +564,19 @@ export function BookingView() {
                         Sin cargos por explorar horarios
                       </span>
                     )}
-                    {step === 2 && status === "unauthenticated" ? (
-                      <Button
-                        asChild
-                        className="h-auto min-h-11 min-w-0 flex-1 text-center whitespace-normal"
-                      >
-                        <Link href={loginHref}>
-                          Iniciar sesión para continuar
-                          <ArrowRight className="shrink-0" />
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button
-                        className="min-w-0 flex-1 sm:flex-none"
-                        type="button"
-                        onClick={() => void submit()}
-                        disabled={!canAdvance || create.isPending}
-                      >
-                        {create.isPending
-                          ? "Enviando…"
-                          : step === 2
-                            ? "Solicitar cita"
-                            : "Continuar"}
-                        <ArrowRight className="ml-2 size-4" />
-                      </Button>
-                    )}
+                    <Button
+                      className="min-w-0 flex-1 sm:flex-none"
+                      type="button"
+                      onClick={() => void submit()}
+                      disabled={!canAdvance || create.isPending}
+                    >
+                      {create.isPending
+                        ? "Enviando…"
+                        : step === 2
+                          ? "Solicitar cita"
+                          : "Continuar"}
+                      <ArrowRight className="ml-2 size-4" />
+                    </Button>
                   </div>
                 </section>
               )}
@@ -606,6 +620,11 @@ export function BookingView() {
                   </p>
                 )}
               </div>
+              {selectedLocation && (
+                <div className="mt-5 border-t pt-4">
+                  <AppointmentLocation location={selectedLocation} />
+                </div>
+              )}
               <p className="text-muted-foreground mt-6 text-xs leading-5">
                 La solicitud queda pendiente hasta que el consultorio la
                 confirme.

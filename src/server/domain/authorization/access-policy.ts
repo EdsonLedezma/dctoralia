@@ -3,6 +3,9 @@ import type { Prisma, Role } from "@prisma/client";
 export type AuthenticatedActor = {
   id: string;
   role: Role;
+  receptionist?: boolean;
+  clinicId?: string;
+  operationalDoctorId?: string | null;
 };
 
 export function appointmentScopeForActor(
@@ -10,9 +13,20 @@ export function appointmentScopeForActor(
 ): Prisma.AppointmentWhereInput {
   switch (actor.role) {
     case "DOCTOR":
-      return { doctor: { userId: actor.id } };
+      return actor.receptionist
+        ? actor.clinicId && actor.operationalDoctorId
+          ? { clinicId: actor.clinicId, doctorId: actor.operationalDoctorId }
+          : { id: { in: [] } }
+        : { doctor: { userId: actor.id } };
     case "PATIENT":
-      return { patient: { userId: actor.id } };
+      return {
+        patient: {
+          OR: [
+            { userId: actor.id },
+            { accountLink: { userId: actor.id, active: true } },
+          ],
+        },
+      };
     case "ADMIN":
       return {};
   }
@@ -21,7 +35,7 @@ export function appointmentScopeForActor(
 export function doctorOwnedServiceScope(
   actor: AuthenticatedActor,
 ): Prisma.ServiceWhereInput | null {
-  if (actor.role !== "DOCTOR") {
+  if (actor.role !== "DOCTOR" || actor.receptionist) {
     return null;
   }
 
@@ -31,7 +45,7 @@ export function doctorOwnedServiceScope(
 export function doctorOwnedScheduleScope(
   actor: AuthenticatedActor,
 ): Prisma.ScheduleWhereInput | null {
-  if (actor.role !== "DOCTOR") {
+  if (actor.role !== "DOCTOR" || actor.receptionist) {
     return null;
   }
 
@@ -39,7 +53,12 @@ export function doctorOwnedScheduleScope(
 }
 
 export function canManageAllAppointments(actor: AuthenticatedActor): boolean {
-  return actor.role === "DOCTOR" || actor.role === "ADMIN";
+  return (
+    actor.role === "ADMIN" ||
+    (actor.role === "DOCTOR" &&
+      (!actor.receptionist ||
+        Boolean(actor.clinicId && actor.operationalDoctorId)))
+  );
 }
 
 /**
@@ -52,9 +71,16 @@ export function patientScopeForActor(
 ): Prisma.PatientWhereInput {
   switch (actor.role) {
     case "PATIENT":
-      return { userId: actor.id };
+      return {
+        OR: [
+          { userId: actor.id },
+          { accountLink: { userId: actor.id, active: true } },
+        ],
+      };
     case "DOCTOR":
-      return { appointments: { some: { doctor: { userId: actor.id } } } };
+      return actor.receptionist
+        ? { id: { in: [] } }
+        : { appointments: { some: { doctor: { userId: actor.id } } } };
     case "ADMIN":
       return {};
   }

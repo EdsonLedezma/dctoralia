@@ -37,9 +37,11 @@ import {
 import { api, type RouterOutputs } from "~/trpc/react";
 import { unwrapTrpcResult } from "~/types/trpc-response";
 import { InviteDoctorDialog } from "./invite-doctor-dialog";
-import { LocationDialog } from "./location-dialog";
+import { LocationDialog, type LocationDraft } from "./location-dialog";
 import { BillingSettings } from "./billing-settings";
 import { CreateWorkspaceForm } from "./create-workspace-form";
+import { BookingCommunicationSettings } from "./booking-communication-settings";
+import { AgendaAdministratorSettings } from "./agenda-administrator-settings";
 import { MessagingSettings } from "./messaging-settings";
 import { VoiceAgentSettings } from "./voice-agent-settings";
 
@@ -371,19 +373,17 @@ export function WorkspaceView({
     ]);
   };
 
-  const handleLocationSubmit = async (draft: {
-    id?: string;
-    name: string;
-    address: string;
-    timezone: string;
-  }) => {
+  const handleLocationSubmit = async (draft: LocationDraft) => {
     try {
       if (draft.id) {
         unwrapTrpcResult(
           await updateLocation.mutateAsync({
             locationId: draft.id,
             name: draft.name,
-            address: draft.address || undefined,
+            address: draft.address,
+            directions: draft.directions,
+            latitude: draft.latitude,
+            longitude: draft.longitude,
             timezone: draft.timezone || undefined,
           }),
         );
@@ -392,7 +392,10 @@ export function WorkspaceView({
         unwrapTrpcResult(
           await createLocation.mutateAsync({
             name: draft.name,
-            address: draft.address || undefined,
+            address: draft.address,
+            directions: draft.directions,
+            latitude: draft.latitude,
+            longitude: draft.longitude,
             timezone: draft.timezone || undefined,
           }),
         );
@@ -507,6 +510,12 @@ export function WorkspaceView({
           workspace={workspace}
           onInvite={() => setInviteOpen(true)}
         />
+        {workspace.membershipRole !== "RECEPTIONIST" && (
+          <>
+            <BookingCommunicationSettings />
+            <AgendaAdministratorSettings />
+          </>
+        )}
         {workspace.membershipRole === "OWNER" && <BillingSettings />}
         {externalIntegrationsEnabled &&
           workspace.membershipRole === "OWNER" && <MessagingSettings />}
@@ -615,6 +624,9 @@ export function WorkspaceView({
           editingLocation
             ? {
                 id: editingLocation.id,
+                directions: editingLocation.directions ?? "",
+                latitude: editingLocation.latitude,
+                longitude: editingLocation.longitude,
                 name: editingLocation.name,
                 address: editingLocation.address ?? "",
                 timezone: editingLocation.timezone ?? "",

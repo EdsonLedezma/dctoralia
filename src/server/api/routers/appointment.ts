@@ -1,4 +1,16 @@
-import { Prisma, type AppointmentStatus } from "@prisma/client";
+import { assignedConsultorio } from "~/server/domain/booking/assigned-consultorio";
+import { redactAppointmentForReception } from "~/server/domain/appointments/reception-appointment";
+import {
+  Prisma,
+  type PrismaClient,
+  type AppointmentStatus,
+} from "@prisma/client";
+import {
+  resolveOperationalActor,
+  selectedDoctorCookie,
+} from "~/server/domain/workspaces/operational-actor";
+import type { WorkspaceContext } from "~/server/domain/workspaces/workspace-context";
+import { queueAppointmentConfirmation } from "~/server/domain/patient-portal/appointment-confirmed";
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -52,6 +64,17 @@ const appointmentInclude = {
   },
 } satisfies Prisma.AppointmentInclude;
 
+type IncludedAppointment = Prisma.AppointmentGetPayload<{
+  include: typeof appointmentInclude;
+}>;
+/** Reception only receives administrative data; never the intake or clinical profile. */
+function appointmentForActor(
+  appointment: IncludedAppointment,
+  actor: AuthenticatedActor,
+): IncludedAppointment {
+  if (!actor.receptionist) return appointment;
+  return redactAppointmentForReception(appointment);
+}
 const activeAppointmentStatuses = ["PENDING", "CONFIRMED"] as const;
 const finalAppointmentStatuses = new Set<AppointmentStatus>([
   "COMPLETED",
@@ -59,11 +82,18 @@ const finalAppointmentStatuses = new Set<AppointmentStatus>([
   "NO_SHOW",
 ]);
 
-function getActor(sessionUser: {
-  id: string;
-  role: AuthenticatedActor["role"];
-}): AuthenticatedActor {
-  return { id: sessionUser.id, role: sessionUser.role };
+async function getActor(ctx: {
+  db: PrismaClient;
+  session: { user: AuthenticatedActor };
+  headers: Headers;
+  getWorkspace: () => Promise<WorkspaceContext | null>;
+}): Promise<AuthenticatedActor> {
+  return resolveOperationalActor(
+    ctx.db,
+    { id: ctx.session.user.id, role: ctx.session.user.role },
+    await ctx.getWorkspace(),
+    selectedDoctorCookie(ctx.headers),
+  );
 }
 
 function isSerializationConflict(error: unknown): boolean {
@@ -75,7 +105,7 @@ function isSerializationConflict(error: unknown): boolean {
 
 export const useAppointment = createTRPCRouter({
   getAll: protectedProcedure.query(async ({ ctx }) => {
-    const actor = getActor(ctx.session.user);
+    const actor = await getActor(ctx);
 
     try {
       const appointments = await ctx.db.appointment.findMany({
@@ -84,8 +114,13 @@ export const useAppointment = createTRPCRouter({
         orderBy: [{ date: "asc" }, { time: "asc" }],
       });
 
-      return trpcSuccess(appointments, "Citas obtenidas correctamente");
-    } catch (error) {
+      return trpcSuccess(
+        appointments.map((appointment) =>
+          appointmentForActor(appointment, actor),
+        ),
+        "Citas obtenidas correctamente",
+      );
+    } catch {
       console.error("Unable to list appointments");
       return trpcFailure(
         "INTERNAL_ERROR",
@@ -96,7 +131,7 @@ export const useAppointment = createTRPCRouter({
   }),
 
   listMine: protectedProcedure.query(async ({ ctx }) => {
-    const actor = getActor(ctx.session.user);
+    const actor = await getActor(ctx);
 
     try {
       const appointments = await ctx.db.appointment.findMany({
@@ -105,8 +140,13 @@ export const useAppointment = createTRPCRouter({
         orderBy: [{ date: "desc" }, { time: "desc" }],
       });
 
-      return trpcSuccess(appointments, "Citas obtenidas correctamente");
-    } catch (error) {
+      return trpcSuccess(
+        appointments.map((appointment) =>
+          appointmentForActor(appointment, actor),
+        ),
+        "Citas obtenidas correctamente",
+      );
+    } catch {
       console.error("Unable to list actor appointments");
       return trpcFailure(
         "INTERNAL_ERROR",
@@ -123,7 +163,7 @@ export const useAppointment = createTRPCRouter({
         .optional(),
     )
     .query(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
       const today = getUtcDayBounds(new Date()).start;
 
       try {
@@ -143,10 +183,12 @@ export const useAppointment = createTRPCRouter({
         });
 
         return trpcSuccess(
-          appointments,
+          appointments.map((appointment) =>
+            appointmentForActor(appointment, actor),
+          ),
           "Próximas citas obtenidas correctamente",
         );
-      } catch (error) {
+      } catch {
         console.error("Unable to list upcoming appointments");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -159,7 +201,7 @@ export const useAppointment = createTRPCRouter({
   getById: protectedProcedure
     .input(z.object({ id: z.string().cuid() }))
     .query(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
 
       try {
         const appointment = await ctx.db.appointment.findFirst({
@@ -177,8 +219,11 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        return trpcSuccess(appointment, "Cita obtenida correctamente");
-      } catch (error) {
+        return trpcSuccess(
+          appointmentForActor(appointment, actor),
+          "Cita obtenida correctamente",
+        );
+      } catch {
         console.error("Unable to get appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -196,7 +241,7 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
 
       try {
         const current = await ctx.db.appointment.findFirst({
@@ -261,7 +306,7 @@ export const useAppointment = createTRPCRouter({
         );
 
         return trpcSuccess(slots, "Horarios disponibles obtenidos");
-      } catch (error) {
+      } catch {
         console.error("Unable to list appointment slots");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -296,10 +341,21 @@ export const useAppointment = createTRPCRouter({
       }
 
       try {
-        const doctor = await ctx.db.doctor.findUnique({
-          where: { userId: ctx.session.user.id },
-          select: { id: true },
-        });
+        const actor = await getActor(ctx);
+        const doctor = actor.receptionist
+          ? actor.operationalDoctorId
+            ? await ctx.db.doctor.findFirst({
+                where: {
+                  id: actor.operationalDoctorId,
+                  clinicId: actor.clinicId,
+                },
+                select: { id: true },
+              })
+            : null
+          : await ctx.db.doctor.findUnique({
+              where: { userId: ctx.session.user.id },
+              select: { id: true },
+            });
         if (!doctor) {
           return trpcFailure(
             "DOCTOR_NOT_FOUND",
@@ -352,7 +408,7 @@ export const useAppointment = createTRPCRouter({
         );
 
         return trpcSuccess(slots, "Horarios disponibles obtenidos");
-      } catch (error) {
+      } catch {
         console.error("Unable to list booking slots");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -386,7 +442,13 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
+      if (actor.receptionist && (input.intake || input.notes || input.severity))
+        return trpcFailure(
+          "CLINICIAN_REQUIRED",
+          "Recepción solo puede registrar datos administrativos de la cita.",
+          403,
+        );
 
       if (!isTodayOrFuture(input.date)) {
         return trpcFailure(
@@ -407,7 +469,16 @@ export const useAppointment = createTRPCRouter({
       try {
         const doctor =
           actor.role === "DOCTOR"
-            ? await ctx.db.doctor.findUnique({ where: { userId: actor.id } })
+            ? actor.receptionist
+              ? actor.operationalDoctorId
+                ? await ctx.db.doctor.findFirst({
+                    where: {
+                      id: actor.operationalDoctorId,
+                      clinicId: actor.clinicId,
+                    },
+                  })
+                : null
+              : await ctx.db.doctor.findUnique({ where: { userId: actor.id } })
             : input.doctorId
               ? await ctx.db.doctor.findUnique({
                   where: { id: input.doctorId },
@@ -430,6 +501,13 @@ export const useAppointment = createTRPCRouter({
             : await ctx.db.patient.findFirst({
                 where: {
                   OR: [{ id: input.patientId }, { userId: input.patientId }],
+                  ...(actor.receptionist
+                    ? {
+                        clinicMemberships: {
+                          some: { clinicId: actor.clinicId, status: "ACTIVE" },
+                        },
+                      }
+                    : {}),
                 },
               });
 
@@ -464,33 +542,6 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        let locationId: string | null = null;
-        if (input.locationId) {
-          if (!doctor.clinicId) {
-            return trpcFailure(
-              "LOCATION_NOT_AVAILABLE",
-              "Tu perfil no tiene una clínica configurada para asignar ubicaciones",
-              400,
-            );
-          }
-          const location = await ctx.db.clinicLocation.findFirst({
-            where: {
-              id: input.locationId,
-              clinicId: doctor.clinicId,
-              isActive: true,
-            },
-            select: { id: true },
-          });
-          if (!location) {
-            return trpcFailure(
-              "LOCATION_NOT_FOUND",
-              "Selecciona una ubicación activa de tu clínica",
-              400,
-            );
-          }
-          locationId = location.id;
-        }
-
         const { start: appointmentDate, end: nextDay } = getUtcDayBounds(
           input.date,
         );
@@ -516,6 +567,20 @@ export const useAppointment = createTRPCRouter({
               return null;
             }
 
+            const locations = await tx.clinicLocation.findMany({
+              where: {
+                clinicId: doctor.clinicId ?? "",
+                isActive: true,
+                ...(schedule.locationId ? { id: schedule.locationId } : {}),
+              },
+              take: 2,
+            });
+            const location = assignedConsultorio(
+              locations,
+              doctor.clinicId ?? "",
+              schedule.locationId,
+            );
+            if (!location?.address?.trim()) return null;
             const existingAppointments = await tx.appointment.findMany({
               where: {
                 doctorId: doctor.id,
@@ -541,11 +606,18 @@ export const useAppointment = createTRPCRouter({
                 doctorId: doctor.id,
                 serviceId: service.id,
                 clinicId: doctor.clinicId,
-                locationId,
+                locationId: location.id,
+                locationName: location.name,
+                locationAddress: location.address,
+                locationDirections: location.directions,
+                locationLatitude: location.latitude,
+                locationLongitude: location.longitude,
                 date: appointmentDate,
                 time: input.time,
                 duration: service.duration,
-                reason: input.reason,
+                reason: actor.receptionist
+                  ? "Cita agendada por recepción"
+                  : input.reason,
                 notes: input.notes ?? null,
                 intakeSymptoms: input.intake?.symptoms ?? null,
                 intakeAllergies: input.intake?.allergies ?? null,
@@ -617,7 +689,11 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        return trpcSuccess(appointment, "Cita creada correctamente", 201);
+        return trpcSuccess(
+          appointmentForActor(appointment, actor),
+          "Cita creada correctamente",
+          201,
+        );
       } catch (error) {
         if (isSerializationConflict(error)) {
           return trpcFailure(
@@ -645,7 +721,7 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
 
       if (!isTodayOrFuture(input.newDate)) {
         return trpcFailure(
@@ -741,9 +817,29 @@ export const useAppointment = createTRPCRouter({
               return false;
             }
 
+            const locations = await tx.clinicLocation.findMany({
+              where: {
+                clinicId: current.clinicId ?? "",
+                isActive: true,
+                ...(schedule.locationId ? { id: schedule.locationId } : {}),
+              },
+              take: 2,
+            });
+            const location = assignedConsultorio(
+              locations,
+              current.clinicId ?? "",
+              schedule.locationId,
+            );
+            if (!location?.address?.trim()) return null;
             const updated = await tx.appointment.update({
               where: { id: current.id },
               data: {
+                locationId: location.id,
+                locationName: location.name,
+                locationAddress: location.address,
+                locationDirections: location.directions,
+                locationLatitude: location.latitude,
+                locationLongitude: location.longitude,
                 date: appointmentDate,
                 time: input.newTime,
                 status: "CONFIRMED",
@@ -825,7 +921,10 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        return trpcSuccess(appointment, "Cita reagendada correctamente");
+        return trpcSuccess(
+          appointmentForActor(appointment, actor),
+          "Cita reagendada correctamente",
+        );
       } catch (error) {
         if (isSerializationConflict(error)) {
           return trpcFailure(
@@ -852,7 +951,7 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
 
       try {
         const current = await ctx.db.appointment.findFirst({
@@ -940,8 +1039,11 @@ export const useAppointment = createTRPCRouter({
           );
         }
 
-        return trpcSuccess(appointment, "Cita cancelada correctamente");
-      } catch (error) {
+        return trpcSuccess(
+          appointmentForActor(appointment, actor),
+          "Cita cancelada correctamente",
+        );
+      } catch {
         console.error("Unable to cancel appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -965,7 +1067,13 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
+      if (input.status === "COMPLETED")
+        return trpcFailure(
+          "CLINICIAN_REQUIRED",
+          "El médico debe finalizar la consulta desde el expediente.",
+          403,
+        );
       if (!canManageAllAppointments(actor)) {
         return trpcFailure(
           "FORBIDDEN",
@@ -987,6 +1095,17 @@ export const useAppointment = createTRPCRouter({
             404,
           );
         }
+
+        if (
+          actor.receptionist &&
+          finalAppointmentStatuses.has(current.status) &&
+          current.status !== input.status
+        )
+          return trpcFailure(
+            "INVALID_STATE",
+            "Una cita finalizada no puede reabrirse desde recepción.",
+            409,
+          );
 
         if (current.status === input.status) {
           return trpcSuccess(current.status, "La cita ya tenía ese estado");
@@ -1041,6 +1160,8 @@ export const useAppointment = createTRPCRouter({
                     }
                   : null;
 
+          if (updated.status === "CONFIRMED" && current.status !== "CONFIRMED")
+            await queueAppointmentConfirmation(tx, updated);
           if (patientStatusNotice) {
             await tx.notification.create({
               data: {
@@ -1070,7 +1191,7 @@ export const useAppointment = createTRPCRouter({
           appointment.status,
           "Estado de la cita actualizado correctamente",
         );
-      } catch (error) {
+      } catch {
         console.error("Unable to update appointment status");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -1088,7 +1209,13 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
+      if (actor.receptionist && input.action === "START_CONSULTATION")
+        return trpcFailure(
+          "CLINICIAN_REQUIRED",
+          "Solo el médico puede iniciar la consulta clínica.",
+          403,
+        );
       if (!canManageAllAppointments(actor)) {
         return trpcFailure(
           "FORBIDDEN",
@@ -1274,7 +1401,13 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
+      if (actor.receptionist)
+        return trpcFailure(
+          "CLINICIAN_REQUIRED",
+          "Recepción no tiene acceso a información clínica.",
+          403,
+        );
       if (!canManageAllAppointments(actor)) {
         return trpcFailure(
           "FORBIDDEN",
@@ -1318,7 +1451,7 @@ export const useAppointment = createTRPCRouter({
           appointment.notes,
           "Notas actualizadas correctamente",
         );
-      } catch (error) {
+      } catch {
         console.error("Unable to update appointment notes");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -1336,7 +1469,13 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
+      if (actor.receptionist)
+        return trpcFailure(
+          "CLINICIAN_REQUIRED",
+          "Recepción no tiene acceso a información clínica.",
+          403,
+        );
       if (!canManageAllAppointments(actor)) {
         return trpcFailure(
           "FORBIDDEN",
@@ -1368,7 +1507,7 @@ export const useAppointment = createTRPCRouter({
           appointment.reason,
           "Motivo actualizado correctamente",
         );
-      } catch (error) {
+      } catch {
         console.error("Unable to update appointment reason");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -1386,7 +1525,7 @@ export const useAppointment = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
       if (!canManageAllAppointments(actor)) {
         return trpcFailure(
           "FORBIDDEN",
@@ -1501,7 +1640,7 @@ export const useAppointment = createTRPCRouter({
   delete: protectedProcedure
     .input(z.object({ id: z.string().cuid() }))
     .mutation(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
       if (actor.role !== "ADMIN") {
         return trpcFailure(
           "FORBIDDEN",
@@ -1526,7 +1665,7 @@ export const useAppointment = createTRPCRouter({
           where: { id: current.id },
         });
         return trpcSuccess(deleted, "Cita eliminada correctamente");
-      } catch (error) {
+      } catch {
         console.error("Unable to delete appointment");
         return trpcFailure(
           "INTERNAL_ERROR",
@@ -1539,7 +1678,7 @@ export const useAppointment = createTRPCRouter({
   getPatientHistory: protectedProcedure
     .input(z.object({ patientId: z.string().min(1) }))
     .query(async ({ input, ctx }) => {
-      const actor = getActor(ctx.session.user);
+      const actor = await getActor(ctx);
       if (actor.role !== "DOCTOR") {
         return trpcFailure(
           "FORBIDDEN",
@@ -1631,7 +1770,7 @@ export const useAppointment = createTRPCRouter({
           })),
           "Historial obtenido correctamente",
         );
-      } catch (error) {
+      } catch {
         console.error("Unable to get patient history");
         return trpcFailure(
           "INTERNAL_ERROR",

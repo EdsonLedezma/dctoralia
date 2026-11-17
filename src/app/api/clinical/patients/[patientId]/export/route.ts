@@ -8,6 +8,7 @@ import {
   ClinicalExportError,
   generateClinicalExport,
 } from "~/server/domain/clinical/export";
+import { PdfDependencyError } from "~/server/domain/clinical/pdf-template";
 import { resolveWorkspaceContext } from "~/server/domain/workspaces/workspace-context";
 import { enforceRateLimit } from "~/server/security/rate-limit";
 
@@ -70,11 +71,11 @@ export async function POST(
 
   try {
     const exported = await generateClinicalExport(db, actor, patientId.data);
-    return new Response(exported.body, {
+    return new Response(new Uint8Array(exported.body), {
       status: 200,
       headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="expediente-clinico-${patientId.data}.json"`,
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="expediente-clinico-${patientId.data}.pdf"`,
         "Content-Length": String(exported.bytes),
         "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
@@ -83,6 +84,13 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof PdfDependencyError)
+      return NextResponse.json(
+        {
+          error: "La exportación PDF requiere instalar PDFKit en el servidor.",
+        },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
     if (error instanceof ClinicalExportError) {
       return NextResponse.json(
         { error: error.message },

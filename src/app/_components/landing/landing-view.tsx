@@ -158,7 +158,7 @@ export function LandingView() {
                   size="lg"
                   className="h-12 px-7"
                 >
-                  <Link href="/patient/doctors">Explorar doctores</Link>
+                  <Link href="/doctores">Agendar</Link>
                 </Button>
               </div>
               <p

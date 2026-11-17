@@ -59,6 +59,7 @@ function dateFromKey(key: string): Date {
 
 function AppointmentActions({
   appointment,
+  canConsult = true,
   isUpdating,
   isRecordingAttendance,
   isRescheduling,
@@ -69,6 +70,7 @@ function AppointmentActions({
   onCancel,
 }: {
   appointment: DailyAppointment;
+  canConsult?: boolean;
   isUpdating: boolean;
   isRecordingAttendance: boolean;
   isRescheduling: boolean;
@@ -111,6 +113,7 @@ function AppointmentActions({
         {(appointment.rawStatus === "PENDING" ||
           appointment.rawStatus === "CONFIRMED") &&
           appointment.checkedInAt &&
+          canConsult &&
           !appointment.consultationStartedAt && (
             <DropdownMenuItem
               disabled={isRecordingAttendance}
@@ -127,14 +130,19 @@ function AppointmentActions({
             <Check className="size-4" /> Confirmar cita
           </DropdownMenuItem>
         )}
-        {appointment.rawStatus === "CONFIRMED" && (
-          <DropdownMenuItem
-            disabled={isUpdating}
-            onSelect={() => onStatusChange(appointment, "COMPLETED")}
-          >
-            <Check className="size-4" /> Marcar como completada
-          </DropdownMenuItem>
-        )}
+        {canConsult &&
+          appointment.consultationStartedAt &&
+          (appointment.rawStatus === "PENDING" ||
+            appointment.rawStatus === "CONFIRMED") && (
+            <DropdownMenuItem asChild>
+              <Link
+                href={`/dashboard/patients/${appointment.patient.id}?appointmentId=${appointment.id}#encounter-form`}
+              >
+                <CalendarClock className="size-4" />
+                Continuar consulta
+              </Link>
+            </DropdownMenuItem>
+          )}
         {(appointment.rawStatus === "PENDING" ||
           appointment.rawStatus === "CONFIRMED") && (
           <>
@@ -179,7 +187,9 @@ export function DoctorAgenda() {
   const [cancelReason, setCancelReason] = useState("");
 
   const { data, isLoading, isError, refetch } =
-    api.appointments.listMine.useQuery();
+    api.appointments.listMine.useQuery(undefined, {
+      refetchOnWindowFocus: true,
+    });
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   const utils = api.useUtils();
   const updateStatus = api.appointments.updateStatus.useMutation();
@@ -187,6 +197,14 @@ export function DoctorAgenda() {
   const rescheduleAppointment = api.appointments.reschedule.useMutation();
   const cancelAppointment = api.appointments.cancel.useMutation();
   const appointmentResults = data?.result;
+  const workspaceQuery = api.workspace.listMine.useQuery();
+  const activeWorkspace = workspaceQuery.data?.result?.workspaces.find(
+    (workspace) =>
+      workspace.clinicId === workspaceQuery.data?.result?.activeClinicId,
+  );
+  const canConsult = Boolean(
+    activeWorkspace && activeWorkspace.membershipRole !== "RECEPTIONIST",
+  );
 
   const allAppointments = useMemo(() => {
     const allAppointments = appointmentResults ?? [];
@@ -282,6 +300,10 @@ export function DoctorAgenda() {
       toast.success(
         action === "CHECK_IN" ? "Llegada registrada" : "Consulta iniciada",
       );
+      if (action === "START_CONSULTATION")
+        router.push(
+          `/dashboard/patients/${appointment.patient.id}?appointmentId=${appointment.id}#encounter-form`,
+        );
       await utils.clinical.operationalAnalytics.invalidate();
       await refreshAppointments();
     } catch (error) {
@@ -475,12 +497,18 @@ export function DoctorAgenda() {
                           </time>
                         </TableCell>
                         <TableCell>
-                          <Link
-                            className="font-medium underline-offset-4 hover:underline"
-                            href={`/dashboard/patients/${appointment.patient.id}`}
-                          >
-                            {appointment.patient.name || "Paciente"}
-                          </Link>
+                          {canConsult ? (
+                            <Link
+                              className="font-medium underline-offset-4 hover:underline"
+                              href={`/dashboard/patients/${appointment.patient.id}`}
+                            >
+                              {appointment.patient.name || "Paciente"}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">
+                              {appointment.patient.name || "Paciente"}
+                            </span>
+                          )}
                           {appointment.checkedInAt && (
                             <span className="text-muted-foreground block text-xs">
                               {appointment.consultationStartedAt
@@ -508,6 +536,7 @@ export function DoctorAgenda() {
                         <TableCell>
                           <AppointmentActions
                             appointment={appointment}
+                            canConsult={canConsult}
                             isUpdating={updateStatus.isPending}
                             isRecordingAttendance={recordAttendance.isPending}
                             isRescheduling={rescheduleAppointment.isPending}

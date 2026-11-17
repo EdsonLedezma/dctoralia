@@ -36,7 +36,7 @@ export function LoginForm() {
         setError(
           result?.error?.toLowerCase().includes("network")
             ? "No pudimos conectar. Revisa tu conexión e inténtalo de nuevo."
-            : "El correo o la contraseña no son correctos.",
+            : "El usuario o la contraseña no son correctos.",
         );
         return;
       }
@@ -81,14 +81,14 @@ export function LoginForm() {
         className="space-y-5"
       >
         <div className="space-y-2">
-          <Label htmlFor="email">Correo electrónico</Label>
+          <Label htmlFor="email">Correo o usuario</Label>
           <Input
             id="email"
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            placeholder="nombre@ejemplo.com"
+            placeholder="Tu correo o nombre de usuario"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required

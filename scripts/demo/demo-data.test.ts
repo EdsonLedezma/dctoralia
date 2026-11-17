@@ -103,7 +103,7 @@ describe("dataset demo sin conexión a base de datos", () => {
     expect(
       data.users.every(
         (item) =>
-          item.email.endsWith(`@${DEMO_DOMAIN}`) &&
+          item.email?.endsWith(`@${DEMO_DOMAIN}`) &&
           item.phone?.startsWith("DEMO-") &&
           item.password === "",
       ),

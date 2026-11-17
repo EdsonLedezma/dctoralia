@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AppointmentLocation } from "~/components/appointments/appointment-location";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -142,6 +143,22 @@ function AppointmentContent({ appointment }: { appointment: Appointment }) {
         </InfoSection>
       </div>
 
+      <InfoSection title="Dónde será tu consulta">
+        <AppointmentLocation
+          location={{
+            name: appointment.locationName ?? appointment.location?.name,
+            address:
+              appointment.locationAddress ?? appointment.location?.address,
+            directions:
+              appointment.locationDirections ??
+              appointment.location?.directions,
+            latitude:
+              appointment.locationLatitude ?? appointment.location?.latitude,
+            longitude:
+              appointment.locationLongitude ?? appointment.location?.longitude,
+          }}
+        />
+      </InfoSection>
       <InfoSection title="Motivo y notas">
         <div className="text-muted-foreground flex items-start gap-2 text-sm">
           <FileText className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />

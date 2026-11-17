@@ -64,7 +64,13 @@ const DAYS_OF_WEEK = [
 
 export function ScheduleView() {
   const [isCreating, setIsCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const locationsQuery = api.workspace.locations.list.useQuery();
+  const locations =
+    locationsQuery.data?.result?.filter((item) => item.isActive) ?? [];
+  const updateSchedule = api.schedule.update.useMutation();
   const [formData, setFormData] = useState({
+    locationId: "",
     dayOfWeek: "",
     startTime: "",
     endTime: "",
@@ -91,15 +97,27 @@ export function ScheduleView() {
       return;
     }
     try {
-      const response = await createSchedule.mutateAsync({
+      const payload = {
+        locationId: formData.locationId,
         dayOfWeek: parseInt(formData.dayOfWeek),
         startTime: formData.startTime,
         endTime: formData.endTime,
-      });
+      };
+      const response = editingId
+        ? await updateSchedule.mutateAsync({ ...payload, id: editingId })
+        : await createSchedule.mutateAsync(payload);
       unwrapTrpcResult(response);
-      toast.success("Horario creado correctamente");
+      toast.success(
+        editingId ? "Horario actualizado" : "Horario creado correctamente",
+      );
       setIsCreating(false);
-      setFormData({ dayOfWeek: "", startTime: "", endTime: "" });
+      setFormData({
+        dayOfWeek: "",
+        startTime: "",
+        endTime: "",
+        locationId: "",
+      });
+      setEditingId(null);
       void refetch();
     } catch (error) {
       toast.error(
@@ -143,7 +161,8 @@ export function ScheduleView() {
 
   const handleCancel = () => {
     setIsCreating(false);
-    setFormData({ dayOfWeek: "", startTime: "", endTime: "" });
+    setFormData({ dayOfWeek: "", startTime: "", endTime: "", locationId: "" });
+    setEditingId(null);
   };
 
   const groupedSchedules = [...DAYS_OF_WEEK]
@@ -182,7 +201,7 @@ export function ScheduleView() {
             <Dialog
               open={isCreating}
               onOpenChange={(open) => {
-                if (!createSchedule.isPending) {
+                if (!(createSchedule.isPending || updateSchedule.isPending)) {
                   if (open) setIsCreating(true);
                   else handleCancel();
                 }
@@ -237,6 +256,32 @@ export function ScheduleView() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="schedule-location">
+                      Consultorio asignado
+                    </Label>
+                    <Select
+                      value={formData.locationId}
+                      onValueChange={(locationId) =>
+                        setFormData((previous) => ({ ...previous, locationId }))
+                      }
+                    >
+                      <SelectTrigger id="schedule-location" className="w-full">
+                        <SelectValue placeholder="Elige dónde atenderás" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map((location) => (
+                          <SelectItem key={location.id} value={location.id}>
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-muted-foreground text-xs">
+                      El paciente verá esta dirección; no podrá cambiarla.
+                      Administra las ubicaciones en Consultorio.
+                    </p>
+                  </div>
                   <fieldset className="space-y-2">
                     <legend className="text-sm font-medium">
                       Día de atención
@@ -255,7 +300,11 @@ export function ScheduleView() {
                             aria-pressed={
                               formData.dayOfWeek === String(day.value)
                             }
-                            disabled={createSchedule.isPending}
+                            disabled={
+                              Boolean(editingId) ||
+                              createSchedule.isPending ||
+                              updateSchedule.isPending
+                            }
                             onClick={() =>
                               setFormData((previous) => ({
                                 ...previous,
@@ -278,7 +327,9 @@ export function ScheduleView() {
                         step={900}
                         required
                         value={formData.startTime}
-                        disabled={createSchedule.isPending}
+                        disabled={
+                          createSchedule.isPending || updateSchedule.isPending
+                        }
                         onChange={(event) =>
                           setFormData((previous) => ({
                             ...previous,
@@ -296,7 +347,9 @@ export function ScheduleView() {
                         min={formData.startTime || undefined}
                         required
                         value={formData.endTime}
-                        disabled={createSchedule.isPending}
+                        disabled={
+                          createSchedule.isPending || updateSchedule.isPending
+                        }
                         onChange={(event) =>
                           setFormData((previous) => ({
                             ...previous,
@@ -310,7 +363,9 @@ export function ScheduleView() {
                     <Button
                       type="button"
                       variant="ghost"
-                      disabled={createSchedule.isPending}
+                      disabled={
+                        createSchedule.isPending || updateSchedule.isPending
+                      }
                       onClick={handleCancel}
                     >
                       Cancelar
@@ -319,12 +374,14 @@ export function ScheduleView() {
                       type="submit"
                       disabled={
                         !formData.dayOfWeek ||
+                        !formData.locationId ||
                         !formData.startTime ||
                         !formData.endTime ||
-                        createSchedule.isPending
+                        createSchedule.isPending ||
+                        updateSchedule.isPending
                       }
                     >
-                      {createSchedule.isPending
+                      {createSchedule.isPending || updateSchedule.isPending
                         ? "Guardando…"
                         : "Guardar horario"}
                     </Button>
@@ -364,6 +421,7 @@ export function ScheduleView() {
                         <TableRow>
                           <TableHead>Día</TableHead>
                           <TableHead>Horario</TableHead>
+                          <TableHead>Consultorio</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead className="w-12" />
                         </TableRow>
@@ -385,6 +443,11 @@ export function ScheduleView() {
                                   </TableCell>
                                   <TableCell className="font-mono text-sm">
                                     {schedule.startTime} – {schedule.endTime}
+                                  </TableCell>
+                                  <TableCell>
+                                    {locations.find(
+                                      (item) => item.id === schedule.locationId,
+                                    )?.name ?? "Por asignar"}
                                   </TableCell>
                                   <TableCell>
                                     <Badge
@@ -411,6 +474,23 @@ export function ScheduleView() {
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          onSelect={() => {
+                                            setEditingId(schedule.id);
+                                            setFormData({
+                                              dayOfWeek: String(
+                                                schedule.dayOfWeek,
+                                              ),
+                                              startTime: schedule.startTime,
+                                              endTime: schedule.endTime,
+                                              locationId:
+                                                schedule.locationId ?? "",
+                                            });
+                                            setIsCreating(true);
+                                          }}
+                                        >
+                                          Editar horario y consultorio
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem
                                           onSelect={() =>
                                             void handleToggleActive(
@@ -450,6 +530,7 @@ export function ScheduleView() {
                                   <TableCell className="text-muted-foreground text-sm">
                                     Sin horario
                                   </TableCell>
+                                  <TableCell>—</TableCell>
                                   <TableCell>
                                     <span className="text-muted-foreground text-xs">
                                       No disponible
@@ -463,6 +544,7 @@ export function ScheduleView() {
                                       onClick={() => {
                                         setFormData({
                                           dayOfWeek: String(group.dayValue),
+                                          locationId: "",
                                           startTime: "",
                                           endTime: "",
                                         });
