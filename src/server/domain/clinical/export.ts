@@ -9,6 +9,7 @@ import {
   type ClinicalActor,
 } from "~/server/domain/clinical/access";
 import { recordClinicalRead } from "~/server/domain/clinical/audit";
+import { buildClinicalPdf, PdfSizeError } from "./pdf-template";
 
 const MAX_RECORDS_PER_SECTION = 1_000;
 const MAX_EXPORT_BYTES = 20 * 1024 * 1024;
@@ -22,7 +23,7 @@ export class ClinicalExportError extends Error {
   }
 }
 
-/** Generate a bounded, clinician-scoped JSON snapshot without Blob credentials or URLs. */
+/** Generate a bounded, clinician-scoped PDF report without Blob credentials or URLs. */
 export async function generateClinicalExport(
   db: PrismaClient,
   actor: ClinicalActor,
@@ -66,6 +67,7 @@ export async function generateClinicalExport(
       const [
         episodes,
         encounters,
+        prescriptions,
         followUps,
         outcomes,
         observations,
@@ -117,6 +119,36 @@ export async function generateClinicalExport(
             },
           },
           orderBy: { encounterAt: "asc" },
+          take: MAX_RECORDS_PER_SECTION + 1,
+        }),
+        tx.clinicalPrescription.findMany({
+          where: {
+            clinicId: actor.clinicId,
+            patientId: patient.id,
+            doctorId: actor.doctorId,
+          },
+          select: {
+            id: true,
+            encounterId: true,
+            instructions: true,
+            issuedAt: true,
+            voidedAt: true,
+            voidReason: true,
+            issuedBy: { select: { name: true } },
+            medications: {
+              select: {
+                name: true,
+                dose: true,
+                route: true,
+                frequency: true,
+                duration: true,
+                notes: true,
+              },
+              orderBy: { id: "asc" },
+              take: MAX_RECORDS_PER_SECTION + 1,
+            },
+          },
+          orderBy: { issuedAt: "asc" },
           take: MAX_RECORDS_PER_SECTION + 1,
         }),
         tx.followUpTask.findMany({
@@ -248,6 +280,7 @@ export async function generateClinicalExport(
       const sections = {
         episodes,
         encounters,
+        prescriptions,
         followUps,
         outcomes,
         observations,
@@ -257,6 +290,10 @@ export async function generateClinicalExport(
       if (
         Object.values(sections).some(
           (items) => items.length > MAX_RECORDS_PER_SECTION,
+        ) ||
+        prescriptions.some(
+          (prescription) =>
+            prescription.medications.length > MAX_RECORDS_PER_SECTION,
         ) ||
         encounters.some(
           (encounter) => encounter.amendments.length > MAX_RECORDS_PER_SECTION,
@@ -276,7 +313,7 @@ export async function generateClinicalExport(
   const generatedAt = new Date().toISOString();
   const { medicalHistory, ...sections } = snapshot;
   const payload = {
-    format: "dopilot-clinical-export-v1",
+    format: "dopilot-clinical-pdf-v1",
     generatedAt,
     scope: { clinicId: actor.clinicId, doctorId: actor.doctorId },
     patient,
@@ -285,14 +322,22 @@ export async function generateClinicalExport(
     // Clinical files are metadata only. Each binary remains behind its authenticated route.
     fileContentsIncluded: false,
   };
-  const body = JSON.stringify(payload, null, 2);
-  const bytes = Buffer.byteLength(body, "utf8");
-  if (bytes > MAX_EXPORT_BYTES) {
+  if (Buffer.byteLength(JSON.stringify(payload), "utf8") > MAX_EXPORT_BYTES) {
     throw new ClinicalExportError(
       413,
       "El expediente supera el tamaño permitido para la descarga directa.",
     );
   }
+
+  let body: Buffer;
+  try {
+    body = await buildClinicalPdf(payload);
+  } catch (error) {
+    if (error instanceof PdfSizeError)
+      throw new ClinicalExportError(413, error.message);
+    throw error;
+  }
+  const bytes = body.length;
 
   await db.clinicalAuditEvent.create({
     data: {
@@ -303,12 +348,15 @@ export async function generateClinicalExport(
       resourceId: patient.id,
       action: "CLINICAL_EXPORT_GENERATED",
       metadata: {
-        format: "json-v1",
+        format: "pdf-v1",
         bytes,
         recordCounts: Object.fromEntries(
           Object.entries(snapshot)
             .filter(([, value]) => Array.isArray(value))
-            .map(([section, value]) => [section, (value as unknown[]).length]),
+            .map(([section, value]) => [
+              section,
+              Array.isArray(value) ? value.length : 0,
+            ]),
         ),
       },
     },

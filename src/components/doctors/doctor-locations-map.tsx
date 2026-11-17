@@ -72,7 +72,7 @@ export function DoctorsMap({ doctors }: { doctors: MapDoctor[] }) {
             Doctores en el mapa
           </h2>
           <p className="text-muted-foreground mt-0.5 text-xs">
-            {locatedDoctors.length} ubicaciones con coordenadas en México
+            {locatedDoctors.length} consultorios en México
           </p>
         </div>
         <span className="border-border text-muted-foreground rounded-full border px-2.5 py-1 text-xs">

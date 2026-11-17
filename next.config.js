@@ -8,6 +8,10 @@ import typegpuPlugin from "unplugin-typegpu/webpack";
 /** @type {import("next").NextConfig} */
 const config = {
   poweredByHeader: false,
+  serverExternalPackages: ["pdfkit", "svg-to-pdfkit"],
+  outputFileTracingIncludes: {
+    "/api/clinical/patients/*/export": ["./public/dopilot-logo.svg"],
+  },
   webpack(webpackConfig) {
     webpackConfig.plugins.push(
       typegpuPlugin({ include: /(?:typegpu-renderer|renderer)\.ts$/ }),

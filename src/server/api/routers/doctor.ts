@@ -61,6 +61,12 @@ export const useDoctor = createTRPCRouter({
   getAll: publicProcedure.query(async ({ ctx }) => {
     try {
       const doctors = await ctx.db.doctor.findMany({
+        where: {
+          OR: [
+            { bookingSettings: null },
+            { bookingSettings: { publicBookingEnabled: true } },
+          ],
+        },
         select: {
           id: true,
           userId: true,

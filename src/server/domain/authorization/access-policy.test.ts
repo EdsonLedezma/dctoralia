@@ -19,7 +19,14 @@ describe("access-policy", () => {
   it("acota las citas de un paciente por su userId", () => {
     expect(
       appointmentScopeForActor({ id: "patient-user", role: "PATIENT" }),
-    ).toEqual({ patient: { userId: "patient-user" } });
+    ).toEqual({
+      patient: {
+        OR: [
+          { userId: "patient-user" },
+          { accountLink: { userId: "patient-user", active: true } },
+        ],
+      },
+    });
   });
 
   it("permite al administrador consultar el conjunto completo", () => {
@@ -57,7 +64,12 @@ describe("access-policy", () => {
   it("limita la lectura del paciente al propio paciente o a su agenda", () => {
     expect(
       patientScopeForActor({ id: "patient-user", role: "PATIENT" }),
-    ).toEqual({ userId: "patient-user" });
+    ).toEqual({
+      OR: [
+        { userId: "patient-user" },
+        { accountLink: { userId: "patient-user", active: true } },
+      ],
+    });
     expect(patientScopeForActor({ id: "doctor-user", role: "DOCTOR" })).toEqual(
       { appointments: { some: { doctor: { userId: "doctor-user" } } } },
     );

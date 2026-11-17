@@ -76,6 +76,7 @@ export const useSchedule = createTRPCRouter({
         dayOfWeek: z.number().int().min(0).max(6),
         startTime: timeSchema,
         endTime: timeSchema,
+        locationId: z.string().cuid(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -98,7 +99,7 @@ export const useSchedule = createTRPCRouter({
       try {
         const doctor = await ctx.db.doctor.findUnique({
           where: { userId: ctx.session.user.id },
-          select: { id: true },
+          select: { id: true, clinicId: true },
         });
         if (!doctor) {
           return trpcFailure(
@@ -108,6 +109,20 @@ export const useSchedule = createTRPCRouter({
           );
         }
 
+        const location = await ctx.db.clinicLocation.findFirst({
+          where: {
+            id: input.locationId,
+            clinicId: doctor.clinicId ?? "",
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        if (!location)
+          return trpcFailure(
+            "INVALID_LOCATION",
+            "Selecciona un consultorio activo de tu clínica.",
+            400,
+          );
         const existing = await ctx.db.schedule.findUnique({
           where: {
             doctorId_dayOfWeek: {
@@ -128,6 +143,8 @@ export const useSchedule = createTRPCRouter({
         const schedule = await ctx.db.schedule.create({
           data: {
             doctorId: doctor.id,
+            clinicId: doctor.clinicId,
+            locationId: location.id,
             dayOfWeek: input.dayOfWeek,
             startTime: input.startTime,
             endTime: input.endTime,
@@ -232,6 +249,7 @@ export const useSchedule = createTRPCRouter({
       scheduleIdSchema.extend({
         startTime: timeSchema,
         endTime: timeSchema,
+        locationId: z.string().cuid(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -251,7 +269,7 @@ export const useSchedule = createTRPCRouter({
       try {
         const ownedSchedule = await ctx.db.schedule.findFirst({
           where,
-          select: { id: true },
+          select: { id: true, doctor: { select: { clinicId: true } } },
         });
         if (!ownedSchedule) {
           return trpcFailure(
@@ -261,9 +279,27 @@ export const useSchedule = createTRPCRouter({
           );
         }
 
+        const location = await ctx.db.clinicLocation.findFirst({
+          where: {
+            id: input.locationId,
+            clinicId: ownedSchedule.doctor.clinicId ?? "",
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        if (!location)
+          return trpcFailure(
+            "INVALID_LOCATION",
+            "Selecciona un consultorio activo de tu clínica.",
+            400,
+          );
         const schedule = await ctx.db.schedule.update({
           where: { id: ownedSchedule.id },
-          data: { startTime: input.startTime, endTime: input.endTime },
+          data: {
+            startTime: input.startTime,
+            endTime: input.endTime,
+            locationId: location.id,
+          },
         });
         return trpcSuccess(schedule, "Horario actualizado correctamente");
       } catch {
@@ -286,7 +322,7 @@ export const useSchedule = createTRPCRouter({
       try {
         const ownedSchedule = await ctx.db.schedule.findFirst({
           where,
-          select: { id: true },
+          select: { id: true, doctor: { select: { clinicId: true } } },
         });
         if (!ownedSchedule) {
           return trpcFailure(
@@ -325,7 +361,7 @@ export const useSchedule = createTRPCRouter({
       try {
         const ownedSchedule = await ctx.db.schedule.findFirst({
           where,
-          select: { id: true },
+          select: { id: true, doctor: { select: { clinicId: true } } },
         });
         if (!ownedSchedule) {
           return trpcFailure(
@@ -405,6 +441,16 @@ export const useSchedule = createTRPCRouter({
         const schedules = await ctx.db.schedule.findMany({
           where: { doctorId: input.doctorId, isActive: true },
           orderBy: { dayOfWeek: "asc" },
+          include: {
+            location: true,
+            doctor: {
+              select: {
+                clinic: {
+                  select: { locations: { where: { isActive: true }, take: 2 } },
+                },
+              },
+            },
+          },
         });
 
         const finalDay = getUtcDayBounds(requestedEnd).end;
@@ -417,7 +463,16 @@ export const useSchedule = createTRPCRouter({
           select: { date: true, time: true, duration: true },
         });
 
-        const availableSlots: Array<{ date: string; time: string }> = [];
+        const availableSlots: Array<{
+          date: string;
+          time: string;
+          location: {
+            name: string;
+            address: string;
+            directions: string | null;
+            mapsUrl: string;
+          };
+        }> = [];
         for (
           let date = new Date(requestedStart);
           date <= requestedEnd;
@@ -430,6 +485,18 @@ export const useSchedule = createTRPCRouter({
             continue;
           }
 
+          const fallbackLocations = schedule.doctor.clinic?.locations ?? [];
+          const location =
+            schedule.location ??
+            (fallbackLocations.length === 1 ? fallbackLocations[0] : null);
+          if (!location?.isActive || !location.address?.trim()) continue;
+          const mapsUrl =
+            "https://www.google.com/maps/dir/?api=1&destination=" +
+            encodeURIComponent(
+              location.latitude !== null && location.longitude !== null
+                ? `${location.latitude},${location.longitude}`
+                : location.address,
+            );
           const startMinutes = timeToMinutes(schedule.startTime);
           const endMinutes = timeToMinutes(schedule.endTime);
           if (startMinutes === null || endMinutes === null) {
@@ -465,7 +532,16 @@ export const useSchedule = createTRPCRouter({
               ) &&
               !hasTimeConflict(time, slotDuration, appointmentsForDay)
             ) {
-              availableSlots.push({ date: dateKey, time });
+              availableSlots.push({
+                date: dateKey,
+                time,
+                location: {
+                  name: location.name,
+                  address: location.address,
+                  directions: location.directions,
+                  mapsUrl,
+                },
+              });
             }
           }
         }

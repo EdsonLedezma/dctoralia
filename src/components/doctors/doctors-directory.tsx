@@ -188,7 +188,7 @@ export function DoctorsDirectory({
     </>
   );
   const query = directoryFilterQuery(filters);
-  const directoryHref = `/patient/doctors${query ? `?${query}` : ""}`;
+  const directoryHref = `${pathname === "/doctores" ? "/doctores" : "/patient/doctors"}${query ? `?${query}` : ""}`;
   return (
     <div className="bg-background text-foreground min-h-dvh px-5 py-7 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-5xl space-y-7">

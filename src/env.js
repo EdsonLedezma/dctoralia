@@ -32,6 +32,13 @@ export const env = createEnv({
     STRIPE_PRICE_PRO: z.string().startsWith("price_").optional(),
     STRIPE_PRICE_ENTERPRISE: z.string().startsWith("price_").optional(),
     STRIPE_PRICE_CUSTOM: z.string().startsWith("price_").optional(),
+    VALIDATION_FEEDBACK_ENABLED: z.enum(["true", "false"]).default("true"),
+    VALIDATION_FEEDBACK_UNTIL: z
+      .string()
+      .datetime()
+      .default("2026-11-22T05:59:59Z"),
+    SENT_APPOINTMENT_CONFIRMATION_TEMPLATE: z.string().min(1).optional(),
+    SENT_PORTAL_INVITATION_TEMPLATE: z.string().min(1).optional(),
     DEMO_MODE: z.enum(["true", "false"]).default("false"),
     SENT_API_KEY: z.string().min(1).optional(),
     SENT_PROFILE_ID: z.string().uuid().optional(),
@@ -55,7 +62,8 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
+    NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: z.string().min(1).optional(),
   },
 
   /**
@@ -63,6 +71,9 @@ export const env = createEnv({
    * middlewares) or client-side so we need to destruct manually.
    */
   runtimeEnv: {
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
+      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
     AUTH_SECRET: process.env.AUTH_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
@@ -82,6 +93,12 @@ export const env = createEnv({
     STRIPE_PRICE_PRO: process.env.STRIPE_PRICE_PRO,
     STRIPE_PRICE_ENTERPRISE: process.env.STRIPE_PRICE_ENTERPRISE,
     STRIPE_PRICE_CUSTOM: process.env.STRIPE_PRICE_CUSTOM,
+    VALIDATION_FEEDBACK_ENABLED: process.env.VALIDATION_FEEDBACK_ENABLED,
+    VALIDATION_FEEDBACK_UNTIL: process.env.VALIDATION_FEEDBACK_UNTIL,
+    SENT_APPOINTMENT_CONFIRMATION_TEMPLATE:
+      process.env.SENT_APPOINTMENT_CONFIRMATION_TEMPLATE,
+    SENT_PORTAL_INVITATION_TEMPLATE:
+      process.env.SENT_PORTAL_INVITATION_TEMPLATE,
     DEMO_MODE: process.env.DEMO_MODE,
     SENT_API_KEY: process.env.SENT_API_KEY,
     SENT_PROFILE_ID: process.env.SENT_PROFILE_ID,

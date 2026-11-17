@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { api } from "~/trpc/react";
 import { unwrapTrpcResult } from "~/types/trpc-response";
+import { OperatingDoctorSelector } from "./operating-doctor-selector";
 import { ProductShellView } from "./product-shell-view";
 
 export function ProductShell({
@@ -67,9 +68,14 @@ export function ProductShell({
       );
     }
   };
+  const isReceptionist =
+    workspaces.find((workspace) => workspace.clinicId === activeClinicId)
+      ?.membershipRole === "RECEPTIONIST";
   return (
     <ProductShellView
       role={role}
+      isReceptionist={isReceptionist}
+      doctorSelector={isReceptionist ? <OperatingDoctorSelector /> : undefined}
       pathname={pathname}
       displayName={
         session?.user?.name ?? (role === "DOCTOR" ? "Consultorio" : "Paciente")

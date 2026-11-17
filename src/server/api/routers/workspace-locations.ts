@@ -18,7 +18,10 @@ import {
 
 const locationInput = z.object({
   name: z.string().trim().min(2).max(80),
-  address: z.string().trim().max(180).optional(),
+  address: z.string().trim().min(5).max(180),
+  directions: z.string().trim().max(400).optional(),
+  latitude: z.number().finite().min(-90).max(90).nullable().optional(),
+  longitude: z.number().finite().min(-180).max(180).nullable().optional(),
   timezone: z
     .string()
     .trim()
@@ -116,6 +119,9 @@ export const workspaceLocationsRouter = createTRPCRouter({
           id: true,
           name: true,
           address: true,
+          directions: true,
+          latitude: true,
+          longitude: true,
           timezone: true,
           isActive: true,
           createdAt: true,
@@ -175,13 +181,19 @@ export const workspaceLocationsRouter = createTRPCRouter({
               data: {
                 clinicId: workspace.clinicId,
                 name: input.name,
-                address: input.address || null,
+                address: input.address,
+                directions: input.directions || null,
+                latitude: input.latitude ?? null,
+                longitude: input.longitude ?? null,
                 timezone: input.timezone || null,
               },
               select: {
                 id: true,
                 name: true,
                 address: true,
+                directions: true,
+                latitude: true,
+                longitude: true,
                 timezone: true,
                 isActive: true,
                 createdAt: true,
@@ -214,7 +226,10 @@ export const workspaceLocationsRouter = createTRPCRouter({
           where: { id: input.locationId, clinicId: managed.workspace.clinicId },
           data: {
             name: input.name,
-            address: input.address || null,
+            address: input.address,
+            directions: input.directions || null,
+            latitude: input.latitude ?? null,
+            longitude: input.longitude ?? null,
             timezone: input.timezone || null,
           },
         });

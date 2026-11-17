@@ -36,8 +36,10 @@ model Session {
 model User {
   id              String    @id @default(cuid())
   name            String
-  email           String    @unique
-  password        String
+  email           String?   @unique
+  password        String?
+  username        String?   @unique
+  isGuest         Boolean   @default(false)
   phone           String?
   emailVerified   DateTime?
   image           String?
@@ -70,6 +72,12 @@ model User {
   addedClinicPatients          ClinicPatient[]              @relation("ClinicPatientAdder")
   uploadedClinicalFiles        ClinicalFile[]               @relation("ClinicalFileUploader")
   receivedNotifications        Notification[]               @relation("NotificationRecipient")
+  validationFeedback ValidationFeedback[]
+  patientUploadReservations PatientUploadReservation[]
+  agendaAdministrations AgendaAdministrator[]
+
+  patientAccountLinks PatientAccountLink[]
+
 }
 
 /// Tenant boundary for a medical practice. Links on current operational
@@ -109,6 +117,12 @@ model Clinic {
   medicalHistoryConsents      MedicalHistoryConsent[]
   patientMessageConsents      PatientMessageConsent[]
   voiceAgentLines             VoiceAgentLine[]
+  bookingSettings DoctorBookingSettings[]
+  portalAccess PatientPortalAccess[]
+  portalInvitations PatientPortalInvitation[]
+  patientUploadGrants PatientUploadGrant[]
+  agendaAdministrators AgendaAdministrator[]
+
 }
 
 /// One public doctor number routes to one verified Vapi DID in one clinic.
@@ -183,6 +197,9 @@ enum VoiceAgentLineStatus {
 }
 
 model ClinicLocation {
+  latitude Float?
+  longitude Float?
+  directions String?
   id        String   @id @default(cuid())
   clinicId  String
   name      String
@@ -194,6 +211,7 @@ model ClinicLocation {
 
   clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   appointments Appointment[] @relation("LocationAppointments")
+  schedules Schedule[]
 
   @@index([clinicId, isActive])
 }
@@ -324,6 +342,12 @@ model Doctor {
   voiceAgentLines            VoiceAgentLine[]
 
   @@index([clinicId])
+  bookingSettings DoctorBookingSettings?
+  portalAccess PatientPortalAccess[]
+  portalInvitations PatientPortalInvitation[]
+  patientUploadGrants PatientUploadGrant[]
+  agendaAdministrators AgendaAdministrator[]
+
 }
 
 model Patient {
@@ -360,6 +384,12 @@ model Patient {
   voiceSessions VoiceCallSession[]
 
   @@index([clinicId])
+  portalAccess PatientPortalAccess[]
+  portalInvitations PatientPortalInvitation[]
+  uploadGrants PatientUploadGrant[]
+
+  accountLink PatientAccountLink?
+
 }
 
 /// Explicit membership of a patient identity in a practice. A patient can
@@ -422,6 +452,11 @@ model Appointment {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   clinicId          String?
+  locationName String?
+  locationAddress String?
+  locationDirections String?
+  locationLatitude Float?
+  locationLongitude Float?
   locationId        String?
 
   doctor            Doctor                      @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
@@ -446,9 +481,11 @@ model Schedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   clinicId  String?
+  locationId String?
 
   doctor Doctor  @relation(fields: [doctorId], references: [id])
   clinic Clinic? @relation("ClinicSchedules", fields: [clinicId], references: [id], onDelete: SetNull)
+  location ClinicLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@unique([doctorId, dayOfWeek])
   @@index([clinicId, isActive])
@@ -692,6 +729,8 @@ model ClinicalEncounter {
   @@index([clinicId, patientId, encounterAt(sort: Desc)])
   @@index([clinicId, doctorId, encounterAt(sort: Desc)])
   @@index([clinicId, episodeId, encounterAt(sort: Desc)])
+  uploadGrant PatientUploadGrant?
+
 }
 
 /// Append-only correction attached to a signed encounter.
@@ -894,6 +933,9 @@ model ClinicalFile {
 
   @@index([clinicId, patientId, createdAt(sort: Desc)])
   @@index([clinicId, episodeId, createdAt(sort: Desc)])
+  uploadReservationId String? @unique
+  uploadReservation PatientUploadReservation? @relation(fields: [uploadReservationId], references: [id], onDelete: SetNull)
+
 }
 
 /// Patient-controlled permission for one clinic to read their self-reported
@@ -1060,6 +1102,8 @@ enum MessageChannel {
 }
 
 enum PatientMessagePurpose {
+  APPOINTMENT_CONFIRMATION
+  PORTAL_INVITATION
   APPOINTMENT_REMINDER
   FOLLOW_UP_REMINDER
 }
@@ -1084,4 +1128,128 @@ enum NotificationType {
   APPOINTMENT_COMPLETED
   FOLLOW_UP_TASK_ASSIGNED
   FOLLOW_UP_TASK_DUE
+}
+
+model ValidationFeedback {
+  id String @id @default(cuid())
+  authorUserId String
+  body String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author User @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  @@index([createdAt])
+  @@index([authorUserId, createdAt])
+}
+
+model DoctorBookingSettings {
+  id String @id @default(cuid())
+  doctorId String @unique
+  clinicId String
+  supportPhone String?
+  publicBookingEnabled Boolean @default(true)
+  autoConfirm Boolean @default(false)
+  sendConfirmation Boolean @default(true)
+  inviteAfterConsultation Boolean @default(true)
+  agendaAdminEnabled Boolean @default(false)
+  confirmationTemplate String?
+  invitationTemplate String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  @@index([clinicId])
+}
+
+model PatientPortalAccess {
+  id String @id @default(cuid())
+  patientId String
+  doctorId String
+  clinicId String
+  active Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  @@unique([patientId, doctorId])
+  @@index([clinicId, active])
+}
+
+model PatientPortalInvitation {
+  id String @id @default(cuid())
+  patientId String
+  doctorId String
+  clinicId String
+  encounterId String @unique
+  tokenHash String @unique
+  claimAttempts Int @default(0)
+  recipientPhone String
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  @@index([patientId, expiresAt])
+}
+
+model PatientUploadGrant {
+  id String @id @default(cuid())
+  patientId String
+  doctorId String
+  clinicId String
+  encounterId String @unique
+  used Int @default(0)
+  capacity Int @default(2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  encounter ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  reservations PatientUploadReservation[]
+  @@index([patientId, doctorId, createdAt])
+}
+
+model PatientUploadReservation {
+  id String @id @default(cuid())
+  grantId String
+  userId String
+  pathname String @unique
+  originalFilename String
+  contentHash String
+  status String @default("RESERVED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  grant PatientUploadGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  file ClinicalFile?
+  @@index([grantId, status])
+}
+
+model AgendaAdministrator {
+  id String @id @default(cuid())
+  doctorId String
+  clinicId String
+  userId String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([doctorId, userId])
+  @@index([userId, active])
+}
+model PatientAccountLink {
+  id String @id @default(cuid())
+  patientId String @unique
+  userId String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, active])
 }

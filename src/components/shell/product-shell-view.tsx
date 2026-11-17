@@ -4,7 +4,7 @@ import { NotificationBell } from "~/components/notifications/notification-bell";
 import { WorkspaceDock } from "./workspace-dock";
 import { NavigationRefraction } from "~/components/liquid-glass/navigation-refraction";
 import { DopilotBrand } from "~/components/brand/dopilot-brand";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import type { LucideIcon } from "lucide-react";
@@ -81,6 +81,7 @@ const doctorNav: NavItem[] = [
 const patientNav: NavItem[] = [
   { label: "Inicio", href: "/patient/dashboard", icon: LayoutDashboard },
   { label: "Mis citas", href: "/patient/appointments", icon: CalendarDays },
+  { label: "Mis estudios", href: "/patient/studies", icon: FileText },
   { label: "Buscar doctores", href: "/patient/doctors", icon: Search },
   {
     label: "Historial médico",
@@ -258,6 +259,8 @@ export function ProductShellView({
   workspaceSwitching = false,
   onWorkspaceSelect,
   onSignOut,
+  isReceptionist = false,
+  doctorSelector,
   children,
 }: {
   role: ShellRole;
@@ -269,9 +272,20 @@ export function ProductShellView({
   workspaceSwitching?: boolean;
   onWorkspaceSelect: (clinicId: string) => void;
   onSignOut: () => void;
+  isReceptionist?: boolean;
+  doctorSelector?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const items = role === "DOCTOR" ? doctorNav : patientNav;
+  const items =
+    role === "DOCTOR"
+      ? isReceptionist
+        ? doctorNav.filter(
+            (item) =>
+              item.href === "/dashboard/appointments" ||
+              item.href === "/dashboard/notifications",
+          )
+        : doctorNav
+      : patientNav;
   const initial = displayName.slice(0, 1).toUpperCase();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -314,13 +328,10 @@ export function ProductShellView({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
-  const commandItems = useMemo(() => {
-    const normalizedQuery = commandQuery.trim().toLowerCase();
-    if (!normalizedQuery) return items;
-    return items.filter((item) =>
-      item.label.toLowerCase().includes(normalizedQuery),
-    );
-  }, [commandQuery, items]);
+  const normalizedQuery = commandQuery.trim().toLowerCase();
+  const commandItems = normalizedQuery
+    ? items.filter((item) => item.label.toLowerCase().includes(normalizedQuery))
+    : items;
 
   const workspaceRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -420,7 +431,11 @@ export function ProductShellView({
           ) : (
             <Link
               href={
-                role === "DOCTOR" ? "/dashboard/workspace" : "/patient/profile"
+                isReceptionist
+                  ? "/dashboard/appointments"
+                  : role === "DOCTOR"
+                    ? "/dashboard/workspace"
+                    : "/patient/profile"
               }
               className={`hover:bg-sidebar-accent focus-visible:ring-sidebar-ring flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-2 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none ${sidebarCollapsed ? "justify-center" : ""}`}
               aria-label={
@@ -442,6 +457,9 @@ export function ProductShellView({
           )}
         </div>
 
+        {doctorSelector && !sidebarCollapsed && (
+          <div className="px-3 pt-2">{doctorSelector}</div>
+        )}
         <div className="px-2 pt-2">
           <button
             type="button"
@@ -655,7 +673,11 @@ export function ProductShellView({
             {children}
           </main>
         </div>
-        <WorkspaceDock role={role} unreadCount={unreadCount} />
+        <WorkspaceDock
+          role={role}
+          unreadCount={unreadCount}
+          isReceptionist={isReceptionist}
+        />
       </div>
     </div>
   );

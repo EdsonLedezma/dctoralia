@@ -1,3 +1,4 @@
+import { ensureAppointmentEncounter } from "~/server/domain/clinical/appointment-encounter";
 import { FollowUpTaskStatus } from "@prisma/client";
 import type { PrismaClient, Role } from "@prisma/client";
 import { z } from "zod";
@@ -401,6 +402,32 @@ export const clinicalRouter = createTRPCRouter({
       }
     }),
 
+  openAppointmentEncounter: protectedProcedure
+    .input(
+      z
+        .object({
+          appointmentId: z.string().cuid(),
+          patientId: z.string().cuid(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const actor = await getActor(ctx);
+      if (!actor)
+        return trpcFailure(
+          "CLINICAL_ACCESS_REQUIRED",
+          "Se requiere un médico con acceso al consultorio.",
+          403,
+        );
+      try {
+        return trpcSuccess(
+          await ensureAppointmentEncounter(ctx.db, actor, input),
+          "Consulta preparada.",
+        );
+      } catch (error) {
+        return workflowFailure(error);
+      }
+    }),
   createEncounterDraft: protectedProcedure
     .input(createEncounterDraftInput)
     .mutation(async ({ input, ctx }) => {

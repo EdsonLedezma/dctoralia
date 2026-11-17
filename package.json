@@ -66,6 +66,8 @@
     "next-auth": "5.0.0-beta.32",
     "next-themes": "^0.4.6",
     "pg": "^8.23.1",
+    "pdfkit": "0.17.2",
+    "svg-to-pdfkit": "0.1.8",
     "radix-ui": "^1.6.7",
     "react": "^19.2.0",
     "react-day-picker": "^10.0.1",

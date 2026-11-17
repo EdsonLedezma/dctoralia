@@ -1,3 +1,6 @@
+import { afterConsultationCompleted } from "~/server/domain/patient-portal/consultation-completed";
+import { recordAppointmentLifecycleEvent } from "~/server/domain/appointments/lifecycle";
+import { cancelPendingAppointmentReminders } from "~/server/domain/messaging/appointment-reminders";
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 
@@ -370,77 +373,128 @@ export async function signClinicalEncounter(
   actor: ClinicalActor,
   encounterId: string,
 ) {
-  const existing = await db.clinicalEncounter.findFirst({
-    where: {
-      id: encounterId,
-      clinicId: actor.clinicId,
-      doctorId: actor.doctorId,
-      authoredByUserId: actor.userId,
-      status: "DRAFT",
-    },
-    select: {
-      id: true,
-      patientId: true,
-      chiefComplaint: true,
-      subjective: true,
-      objective: true,
-      assessment: true,
-      plan: true,
-    },
-  });
-  if (!existing) {
-    throw new ClinicalWorkflowError(
-      "INVALID_STATE",
-      "El borrador no existe, no te pertenece o ya fue firmado.",
-    );
-  }
-  if (
-    ![
-      existing.chiefComplaint,
-      existing.subjective,
-      existing.objective,
-      existing.assessment,
-      existing.plan,
-    ].some((value) => value?.trim())
-  ) {
-    throw new ClinicalWorkflowError(
-      "INVALID_STATE",
-      "Agrega al menos una nota clínica antes de firmar.",
-    );
-  }
-
-  return db.$transaction(async (tx) => {
-    const updated = await tx.clinicalEncounter.updateMany({
-      where: {
-        id: existing.id,
-        clinicId: actor.clinicId,
-        authoredByUserId: actor.userId,
-        status: "DRAFT",
+  return db
+    .$transaction(
+      async (tx) => {
+        const existing = await tx.clinicalEncounter.findFirst({
+          where: {
+            id: encounterId,
+            clinicId: actor.clinicId,
+            doctorId: actor.doctorId,
+            authoredByUserId: actor.userId,
+          },
+        });
+        if (!existing || !["DRAFT", "SIGNED"].includes(existing.status))
+          throw new ClinicalWorkflowError(
+            "INVALID_STATE",
+            "La consulta no existe o no te pertenece.",
+          );
+        if (
+          existing.status === "DRAFT" &&
+          ![
+            existing.chiefComplaint,
+            existing.subjective,
+            existing.objective,
+            existing.assessment,
+            existing.plan,
+          ].some((value) => value?.trim())
+        )
+          throw new ClinicalWorkflowError(
+            "INVALID_STATE",
+            "Agrega al menos una nota clínica antes de finalizar.",
+          );
+        if (existing.status === "DRAFT") {
+          const updated = await tx.clinicalEncounter.updateMany({
+            where: {
+              id: existing.id,
+              clinicId: actor.clinicId,
+              authoredByUserId: actor.userId,
+              status: "DRAFT",
+            },
+            data: { status: "SIGNED", signedAt: new Date() },
+          });
+          if (updated.count !== 1)
+            throw new ClinicalWorkflowError(
+              "CONFLICT",
+              "La consulta cambió; actualiza antes de finalizar.",
+            );
+          await tx.clinicalAuditEvent.create({
+            data: {
+              clinicId: actor.clinicId,
+              patientId: existing.patientId,
+              actorUserId: actor.userId,
+              resourceType: "CLINICAL_ENCOUNTER",
+              resourceId: existing.id,
+              action: "CLINICAL_ENCOUNTER_SIGNED",
+            },
+          });
+        }
+        if (existing.appointmentId) {
+          const appointment = await tx.appointment.findFirst({
+            where: {
+              id: existing.appointmentId,
+              clinicId: actor.clinicId,
+              doctorId: actor.doctorId,
+              patientId: existing.patientId,
+            },
+          });
+          if (
+            !appointment ||
+            !["PENDING", "CONFIRMED", "COMPLETED"].includes(appointment.status)
+          )
+            throw new ClinicalWorkflowError(
+              "INVALID_STATE",
+              "La cita vinculada ya no admite finalizar la atención.",
+            );
+          if (appointment.status !== "COMPLETED") {
+            const completed = await tx.appointment.updateMany({
+              where: { id: appointment.id, status: appointment.status },
+              data: { status: "COMPLETED" },
+            });
+            if (completed.count !== 1)
+              throw new ClinicalWorkflowError(
+                "CONFLICT",
+                "La cita cambió durante la finalización.",
+              );
+            await cancelPendingAppointmentReminders(tx, appointment.id);
+            await recordAppointmentLifecycleEvent(tx, {
+              clinicId: actor.clinicId,
+              doctorId: actor.doctorId,
+              patientId: existing.patientId,
+              appointmentId: appointment.id,
+              actorUserId: actor.userId,
+              eventType: "STATUS_CHANGED",
+              fromStatus: appointment.status,
+              toStatus: "COMPLETED",
+              scheduledAt: appointment.date,
+              scheduledTime: appointment.time,
+              idempotencyKey: "encounter-completed:" + existing.id,
+              metadata: {
+                source: "CLINICAL_ENCOUNTER",
+                encounterId: existing.id,
+              },
+            });
+          }
+        }
+        await afterConsultationCompleted(tx, actor, existing);
+        return tx.clinicalEncounter.findUniqueOrThrow({
+          where: { id: existing.id },
+        });
       },
-      data: { status: "SIGNED", signedAt: new Date() },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    )
+    .catch((error: unknown) => {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2034"
+      )
+        throw new ClinicalWorkflowError(
+          "CONFLICT",
+          "La consulta cambió durante la finalización. Actualiza el expediente antes de reintentar.",
+        );
+      throw error;
     });
-    if (updated.count !== 1) {
-      throw new ClinicalWorkflowError(
-        "CONFLICT",
-        "La consulta cambió antes de firmarse. Actualiza e inténtalo de nuevo.",
-      );
-    }
-    await tx.clinicalAuditEvent.create({
-      data: {
-        clinicId: actor.clinicId,
-        patientId: existing.patientId,
-        actorUserId: actor.userId,
-        resourceType: "CLINICAL_ENCOUNTER",
-        resourceId: existing.id,
-        action: "CLINICAL_ENCOUNTER_SIGNED",
-      },
-    });
-    return tx.clinicalEncounter.findUniqueOrThrow({
-      where: { id: existing.id },
-    });
-  });
 }
-
 export async function amendSignedEncounter(
   db: Db,
   actor: ClinicalActor,

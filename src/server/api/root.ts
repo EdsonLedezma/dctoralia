@@ -1,3 +1,8 @@
+import { patientPortalRouter } from "~/server/api/routers/patient-portal";
+import { agendaAdministratorRouter } from "~/server/api/routers/agenda-administrator";
+import { patientPortalUploadsRouter } from "~/server/api/routers/patient-portal-uploads";
+import { guestBookingRouter } from "~/server/api/routers/guest-booking";
+import { validationFeedbackRouter } from "~/server/api/routers/validation-feedback";
 import { authRouter } from "~/server/api/routers/auth";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { useAppointment } from "~/server/api/routers/appointment";
@@ -21,6 +26,11 @@ import { legalRouter } from "~/server/api/routers/legal";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
+  patientPortal: patientPortalRouter,
+  agendaAdministrator: agendaAdministratorRouter,
+  patientPortalUploads: patientPortalUploadsRouter,
+  guestBooking: guestBookingRouter,
+  validationFeedback: validationFeedbackRouter,
   auth: authRouter,
   appointments: useAppointment,
   patients: usePatients,

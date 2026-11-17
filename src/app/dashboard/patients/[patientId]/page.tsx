@@ -3,11 +3,14 @@
 import {
   use,
   useEffect,
+  useRef,
+  Suspense,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { uploadPresigned } from "@vercel/blob/client";
 import { toast } from "sonner";
 import {
@@ -103,8 +106,12 @@ function followUpPriorityClass(priority: string) {
   return "border-border bg-card text-muted-foreground";
 }
 
-export default function ClinicalPatientPage({ params }: Props) {
+function ClinicalPatientView({ params }: Props) {
   const { patientId } = use(params);
+  const appointmentIntent = useSearchParams().get("appointmentId") ?? "";
+  const openedIntent = useRef("");
+  const [openingError, setOpeningError] = useState("");
+  const [consultationFinalized, setConsultationFinalized] = useState(false);
   const utils = api.useUtils();
   const timeline = api.clinical.patientTimeline.useQuery({ patientId });
   const membersQuery = api.workspace.members.list.useQuery();
@@ -153,6 +160,20 @@ export default function ClinicalPatientPage({ params }: Props) {
   const [exportingRecord, setExportingRecord] = useState(false);
 
   useEffect(() => {
+    openedIntent.current = "";
+    setEncounterId("");
+    setEpisodeId("");
+    setChiefComplaint("");
+    setSubjective("");
+    setObjective("");
+    setAssessment("");
+    setPlan("");
+    setPatientSummary("");
+    setSigningEncounterId("");
+    setOpeningError("");
+    setConsultationFinalized(false);
+  }, [patientId]);
+  useEffect(() => {
     const activeEpisode = timeline.data?.result?.episodes.find(
       (episode) => episode.status === "ACTIVE",
     );
@@ -183,6 +204,47 @@ export default function ClinicalPatientPage({ params }: Props) {
     onError: (error) => toast.error(error.message),
   });
 
+  const openAppointment = api.clinical.openAppointmentEncounter.useMutation({
+    onSuccess: async (response, input) => {
+      if (openedIntent.current !== input.patientId + ":" + input.appointmentId)
+        return;
+      if (response.error || !response.result) {
+        setOpeningError(response.message);
+        return;
+      }
+      const encounter = response.result;
+      setOpeningError("");
+      setConsultationFinalized(encounter.status === "SIGNED");
+      setEncounterId(encounter.status === "DRAFT" ? encounter.id : "");
+      setChiefComplaint(encounter.chiefComplaint ?? "");
+      setSubjective(encounter.subjective ?? "");
+      setObjective(encounter.objective ?? "");
+      setAssessment(encounter.assessment ?? "");
+      setPlan(encounter.plan ?? "");
+      setPatientSummary(encounter.patientSummary ?? "");
+      if (encounter.episodeId) setEpisodeId(encounter.episodeId);
+      await invalidateTimeline();
+      window.requestAnimationFrame(() =>
+        document
+          .getElementById("encounter-form")
+          ?.scrollIntoView({ block: "start" }),
+      );
+    },
+    onError: (error) => setOpeningError(error.message),
+  });
+  const openAppointmentMutation = openAppointment.mutate;
+  useEffect(() => {
+    if (!appointmentIntent || !timeline.data?.result) return;
+    const intent = patientId + ":" + appointmentIntent;
+    if (openedIntent.current === intent) return;
+    openedIntent.current = intent;
+    openAppointmentMutation({ patientId, appointmentId: appointmentIntent });
+  }, [
+    patientId,
+    appointmentIntent,
+    timeline.data?.result,
+    openAppointmentMutation,
+  ]);
   const createEncounter = api.clinical.createEncounterDraft.useMutation();
   const updateEncounter = api.clinical.updateEncounterDraft.useMutation();
   const signEncounter = api.clinical.signEncounter.useMutation({
@@ -198,7 +260,10 @@ export default function ClinicalPatientPage({ params }: Props) {
       setAssessment("");
       setPlan("");
       setPatientSummary("");
-      toast.success("Consulta firmada y cerrada");
+      setSigningEncounterId("");
+      setConsultationFinalized(Boolean(appointmentIntent));
+      toast.success("Consulta finalizada y firmada");
+      await utils.appointments.listMine.invalidate();
       await invalidateTimeline();
     },
     onError: (error) => toast.error(error.message),
@@ -296,6 +361,7 @@ export default function ClinicalPatientPage({ params }: Props) {
         : await createEncounter.mutateAsync({
             patientId,
             episodeId: episodeId || undefined,
+            appointmentId: appointmentIntent || undefined,
             ...values,
           });
       if (response.error || !response.result) {
@@ -445,7 +511,7 @@ export default function ClinicalPatientPage({ params }: Props) {
       const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `expediente-clinico-${patientId}.json`;
+      anchor.download = `expediente-clinico-${patientId}.pdf`;
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
@@ -710,9 +776,11 @@ export default function ClinicalPatientPage({ params }: Props) {
                         <div className="flex items-center gap-2">
                           <FilePlus2 className="text-muted-foreground h-4 w-4" />
                           <h2 className="text-foreground text-sm font-semibold">
-                            {encounterId
-                              ? "Editar borrador clínico"
-                              : "Registrar consulta"}
+                            {consultationFinalized
+                              ? "Consulta finalizada"
+                              : encounterId
+                                ? "Editar borrador clínico"
+                                : "Registrar consulta"}
                           </h2>
                         </div>
                         <p className="text-muted-foreground mt-1 text-xs">
@@ -720,116 +788,161 @@ export default function ClinicalPatientPage({ params }: Props) {
                           acción.
                         </p>
                       </div>
+                      {openingError && (
+                        <div
+                          role="alert"
+                          className="space-y-2 px-5 py-3 text-sm"
+                        >
+                          <p>{openingError}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={openAppointment.isPending}
+                            onClick={() =>
+                              openAppointment.mutate({
+                                patientId,
+                                appointmentId: appointmentIntent,
+                              })
+                            }
+                          >
+                            Reintentar consulta
+                          </Button>
+                        </div>
+                      )}
                       <form
                         onSubmit={submitEncounter}
                         className="space-y-4 p-5"
                       >
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <Field
-                            id="encounter-chief-complaint"
-                            label="Motivo de consulta"
-                          >
-                            <Textarea
-                              id="encounter-chief-complaint"
-                              value={chiefComplaint}
-                              onChange={(event) =>
-                                setChiefComplaint(event.target.value)
-                              }
-                              maxLength={12_000}
-                            />
-                          </Field>
-                          <Field
-                            id="encounter-subjective"
-                            label="Subjetivo / evolución"
-                          >
-                            <Textarea
-                              id="encounter-subjective"
-                              value={subjective}
-                              onChange={(event) =>
-                                setSubjective(event.target.value)
-                              }
-                              maxLength={12_000}
-                            />
-                          </Field>
-                          <Field
-                            id="encounter-objective"
-                            label="Objetivo / hallazgos"
-                          >
-                            <Textarea
-                              id="encounter-objective"
-                              value={objective}
-                              onChange={(event) =>
-                                setObjective(event.target.value)
-                              }
-                              maxLength={12_000}
-                            />
-                          </Field>
-                          <Field
-                            id="encounter-assessment"
-                            label="Evaluación clínica"
-                          >
-                            <Textarea
-                              id="encounter-assessment"
-                              value={assessment}
-                              onChange={(event) =>
-                                setAssessment(event.target.value)
-                              }
-                              maxLength={12_000}
-                            />
-                          </Field>
-                        </div>
-                        <Field id="encounter-plan" label="Plan de atención">
-                          <Textarea
-                            id="encounter-plan"
-                            value={plan}
-                            onChange={(event) => setPlan(event.target.value)}
-                            maxLength={12_000}
-                          />
-                        </Field>
-                        <Field
-                          id="encounter-patient-summary"
-                          label="Resumen para el paciente"
-                        >
-                          <Textarea
-                            id="encounter-patient-summary"
-                            value={patientSummary}
-                            onChange={(event) =>
-                              setPatientSummary(event.target.value)
-                            }
-                            maxLength={12_000}
-                            placeholder="Indicaciones y próximos pasos en lenguaje claro"
-                          />
-                          <p className="text-muted-foreground mt-1 text-xs">
-                            Visible para el paciente al firmar la consulta. Las
-                            demás notas clínicas permanecen en el expediente
-                            profesional.
+                        {consultationFinalized ? (
+                          <p className="text-muted-foreground text-sm">
+                            La atención quedó finalizada. Su nota firmada está
+                            disponible en la cronología y solo admite enmiendas.
                           </p>
-                        </Field>
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {encounterId && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="h-9"
-                              disabled={signEncounter.isPending}
-                              onClick={() => setSigningEncounterId(encounterId)}
+                        ) : (
+                          <>
+                            <fieldset
+                              disabled={
+                                openAppointment.isPending ||
+                                Boolean(openingError)
+                              }
+                              className="space-y-4"
                             >
-                              <Check className="mr-1.5 h-4 w-4" /> Firmar
-                              consulta
-                            </Button>
-                          )}
-                          <Button
-                            type="submit"
-                            className="h-9"
-                            disabled={
-                              createEncounter.isPending ||
-                              updateEncounter.isPending
-                            }
-                          >
-                            <PencilLine className="mr-1.5 h-4 w-4" />
-                            Guardar borrador
-                          </Button>
-                        </div>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <Field
+                                  id="encounter-chief-complaint"
+                                  label="Motivo de consulta"
+                                >
+                                  <Textarea
+                                    id="encounter-chief-complaint"
+                                    value={chiefComplaint}
+                                    onChange={(event) =>
+                                      setChiefComplaint(event.target.value)
+                                    }
+                                    maxLength={12_000}
+                                  />
+                                </Field>
+                                <Field
+                                  id="encounter-subjective"
+                                  label="Subjetivo / evolución"
+                                >
+                                  <Textarea
+                                    id="encounter-subjective"
+                                    value={subjective}
+                                    onChange={(event) =>
+                                      setSubjective(event.target.value)
+                                    }
+                                    maxLength={12_000}
+                                  />
+                                </Field>
+                                <Field
+                                  id="encounter-objective"
+                                  label="Objetivo / hallazgos"
+                                >
+                                  <Textarea
+                                    id="encounter-objective"
+                                    value={objective}
+                                    onChange={(event) =>
+                                      setObjective(event.target.value)
+                                    }
+                                    maxLength={12_000}
+                                  />
+                                </Field>
+                                <Field
+                                  id="encounter-assessment"
+                                  label="Evaluación clínica"
+                                >
+                                  <Textarea
+                                    id="encounter-assessment"
+                                    value={assessment}
+                                    onChange={(event) =>
+                                      setAssessment(event.target.value)
+                                    }
+                                    maxLength={12_000}
+                                  />
+                                </Field>
+                              </div>
+                              <Field
+                                id="encounter-plan"
+                                label="Plan de atención"
+                              >
+                                <Textarea
+                                  id="encounter-plan"
+                                  value={plan}
+                                  onChange={(event) =>
+                                    setPlan(event.target.value)
+                                  }
+                                  maxLength={12_000}
+                                />
+                              </Field>
+                              <Field
+                                id="encounter-patient-summary"
+                                label="Resumen para el paciente"
+                              >
+                                <Textarea
+                                  id="encounter-patient-summary"
+                                  value={patientSummary}
+                                  onChange={(event) =>
+                                    setPatientSummary(event.target.value)
+                                  }
+                                  maxLength={12_000}
+                                  placeholder="Indicaciones y próximos pasos en lenguaje claro"
+                                />
+                                <p className="text-muted-foreground mt-1 text-xs">
+                                  Visible para el paciente al firmar la
+                                  consulta. Las demás notas clínicas permanecen
+                                  en el expediente profesional.
+                                </p>
+                              </Field>
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {encounterId && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-9"
+                                    disabled={signEncounter.isPending}
+                                    onClick={() =>
+                                      setSigningEncounterId(encounterId)
+                                    }
+                                  >
+                                    <Check className="mr-1.5 h-4 w-4" />{" "}
+                                    Finalizar y firmar
+                                  </Button>
+                                )}
+                                <Button
+                                  type="submit"
+                                  className="h-9"
+                                  disabled={
+                                    createEncounter.isPending ||
+                                    updateEncounter.isPending
+                                  }
+                                >
+                                  <PencilLine className="mr-1.5 h-4 w-4" />
+                                  Guardar borrador
+                                </Button>
+                              </div>
+                            </fieldset>
+                          </>
+                        )}
                       </form>
                     </section>
 
@@ -1747,10 +1860,11 @@ export default function ClinicalPatientPage({ params }: Props) {
           >
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Firmar esta consulta</AlertDialogTitle>
+                <AlertDialogTitle>Finalizar y firmar consulta</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Al firmarla, la nota queda cerrada. Las correcciones
-                  posteriores se agregan como enmiendas con motivo y fecha.
+                  Se guardarán tus cambios, se cerrará la cita y la nota quedará
+                  firmada. Las correcciones posteriores se agregan como
+                  enmiendas con motivo y fecha.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -1758,14 +1872,46 @@ export default function ClinicalPatientPage({ params }: Props) {
                   Volver al borrador
                 </AlertDialogCancel>
                 <AlertDialogAction
-                  disabled={signEncounter.isPending}
-                  onClick={() => {
+                  disabled={
+                    signEncounter.isPending || updateEncounter.isPending
+                  }
+                  onClick={async (event) => {
+                    event.preventDefault();
                     const id = signingEncounterId;
-                    setSigningEncounterId("");
-                    signEncounter.mutate({ encounterId: id });
+                    if (
+                      !id ||
+                      signEncounter.isPending ||
+                      updateEncounter.isPending
+                    )
+                      return;
+                    try {
+                      const saved = await updateEncounter.mutateAsync({
+                        encounterId: id,
+                        chiefComplaint: chiefComplaint.trim() || null,
+                        subjective: subjective.trim() || null,
+                        objective: objective.trim() || null,
+                        assessment: assessment.trim() || null,
+                        plan: plan.trim() || null,
+                        patientSummary: patientSummary.trim() || null,
+                      });
+                      if (saved.error) {
+                        toast.error(saved.message);
+                        return;
+                      }
+                      await signEncounter.mutateAsync({ encounterId: id });
+                    } catch (error) {
+                      if (!signEncounter.isError)
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "No se pudo finalizar.",
+                        );
+                    }
                   }}
                 >
-                  Firmar consulta
+                  {signEncounter.isPending || updateEncounter.isPending
+                    ? "Finalizando…"
+                    : "Finalizar y firmar"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -1778,16 +1924,17 @@ export default function ClinicalPatientPage({ params }: Props) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Exportar expediente clínico</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Se descargará un archivo JSON con tus consultas, seguimientos,
-                  mediciones y citas de este paciente en el consultorio actual.
-                  Los documentos se incluyen como metadatos y se descargan por
-                  separado. Guarda el archivo en un lugar seguro.
+                  Se descargará un archivo PDF con tus consultas, recetas,
+                  seguimientos, mediciones y citas de este paciente en el
+                  consultorio actual. Los documentos se incluyen como metadatos
+                  y se descargan por separado. Guarda el archivo en un lugar
+                  seguro.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                 <AlertDialogAction onClick={() => void exportClinicalRecord()}>
-                  Exportar archivo
+                  Descargar PDF
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -2025,4 +2172,12 @@ function clinicalFileCategoryLabel(category: string) {
     OTHER: "Otro",
   };
   return labels[category] ?? "Documento";
+}
+
+export default function ClinicalPatientPage(props: Props) {
+  return (
+    <Suspense fallback={<p className="p-5 text-sm">Preparando expediente…</p>}>
+      <ClinicalPatientView {...props} />
+    </Suspense>
+  );
 }

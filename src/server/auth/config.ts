@@ -38,7 +38,7 @@ export const authConfig = {
       async authorize(credentials) {
         const parsedData = z
           .object({
-            email: z.string().email(),
+            email: z.string().trim().min(3).max(128),
             password: z.string().min(6),
           })
           .safeParse(credentials);
@@ -49,7 +49,7 @@ export const authConfig = {
 
         const user = await db.user.findFirst({
           where: {
-            email,
+            OR: [{ email }, { username: email }],
           },
           select: {
             id: true,
@@ -57,11 +57,12 @@ export const authConfig = {
             email: true,
             image: true,
             password: true,
+            isGuest: true,
             role: true,
           },
         });
 
-        if (!user) {
+        if (!user || user.isGuest || !user.password) {
           return null;
         }
 
